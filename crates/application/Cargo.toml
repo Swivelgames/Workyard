@@ -1,0 +1,19 @@
+[package]
+name = "workyard-application"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+workyard-core.workspace = true
+workyard-git.workspace = true
+workyard-state.workspace = true
+trine.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+smol.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
+tempfile.workspace = true
