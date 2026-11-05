@@ -2,6 +2,19 @@ use crate::Problem;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
+pub struct RecoveryRecord {
+	pub task: Task,
+	pub pending: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecoveryObservation {
+	pub repository: crate::Repository,
+	pub destination: Option<PathBuf>,
+	pub operation_in_progress: bool,
+}
+
+#[derive(Clone, Debug)]
 pub struct RepositoryInput {
 	pub path: PathBuf,
 	pub name: Option<String>,
@@ -51,6 +64,7 @@ pub struct Participant {
 	pub source: PathBuf,
 	pub common_dir: PathBuf,
 	pub backing_identity: String,
+	pub worktree_identity: Option<String>,
 	pub destination: PathBuf,
 	pub remote: Option<String>,
 	pub from: Option<String>,

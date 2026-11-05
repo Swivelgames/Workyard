@@ -1,3 +1,4 @@
+mod support;
 use std::{
 	fs,
 	sync::{
@@ -98,29 +99,17 @@ fn replacing_named_gate_invalidates_old_admission() {
 	);
 }
 
-fn task(root: &std::path::Path, state: &std::path::Path) -> workyard_core::Task {
-	workyard_core::Task {
-		name: "feat/test".into(),
-		root: root.into(),
-		state_dir: state.into(),
-		participants: Vec::new(),
-		checkout: false,
-		no_fetch: true,
-		pull: false,
-		status: workyard_core::TaskStatus::Pending,
-		problem: None,
-	}
-}
-
 #[test]
 fn independent_intent_survives_failed_task_publication_and_blocks_recreation() {
-	let fixture = tempfile::tempdir().unwrap();
-	let root = fixture.path().join("root");
-	let state = root.join(".workyard");
-	let store = Store::open(&root, &state).unwrap();
+	let workspace = support::Workspace::new();
+	let root = &workspace.root;
+	let state = &workspace.state;
+	let store = &workspace.store;
 	let guard = store.admit("feat/test").unwrap();
 	fs::create_dir(&guard.record_path).unwrap();
-	let error = store.begin(&guard, &task(&root, &state)).unwrap_err();
+	let error = store
+		.begin(&guard, &support::task(root, state, "feat/test"))
+		.unwrap_err();
 	assert_eq!(error.code, ProblemCode::PublicationUncertain);
 	assert!(guard.evidence_path.exists());
 	fs::remove_dir(&guard.record_path).unwrap();
@@ -193,4 +182,29 @@ fn case_aliases_and_unicode_resource_names_cannot_bypass_prefix_exclusion() {
 		task_filename("Feat/Payments"),
 		task_filename("feat/payments")
 	);
+}
+
+#[test]
+fn named_lock_modes_interoperate_with_legacy_bool_calls() {
+	use workyard_state::LockMode;
+	let fixture = tempfile::tempdir().unwrap();
+	let path = fixture.path().join("resource.lock");
+	let named = Lock::acquire_mode(&path, LockMode::Shared).unwrap();
+	let legacy = Lock::acquire(&path, true).unwrap();
+	assert_eq!(
+		Lock::acquire_mode(&path, LockMode::Exclusive)
+			.err()
+			.unwrap()
+			.code,
+		ProblemCode::ResourceBusy
+	);
+	drop(named);
+	drop(legacy);
+	let exclusive = Lock::acquire_mode(&path, LockMode::Exclusive).unwrap();
+	assert_eq!(
+		Lock::acquire(&path, true).err().unwrap().code,
+		ProblemCode::ResourceBusy
+	);
+	drop(exclusive);
+	assert!(Lock::acquire(&path, false).is_ok());
 }

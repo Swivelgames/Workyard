@@ -1,79 +1,49 @@
 use trine::InvocationContext;
-use workyard_core::{Control, Observer, Problem, ProblemCode};
+use workyard_core::{Control, ProblemCode, TaskStatus};
 use workyard_git::Runner;
 use workyard_state::Store;
 
-use crate::common::Progress;
+use crate::{
+	common::Progress,
+	invocation::{Events, blocking_action},
+};
 
 use super::{CreateInput, CreateOutcome};
-
-struct Events(InvocationContext<Progress>);
-impl Observer for Events {
-	async fn phase(&self, task: &str, participant: &str, phase: &str) -> Result<(), Problem> {
-		self.0
-			.emit(Progress {
-				task: task.into(),
-				participant: participant.into(),
-				phase: phase.into(),
-			})
-			.await
-			.map_err(|_| {
-				Problem::new(
-					ProblemCode::Cancelled,
-					"Progress delivery ended; operation cancelled.",
-				)
-			})
-	}
-}
 
 pub async fn create(
 	input: CreateInput,
 	context: InvocationContext<Progress>,
 ) -> Result<CreateOutcome, CreateOutcome> {
-	blocking_action(create_on_worker(input, context)).await
+	blocking_action(run(input, context)).await
 }
 
-async fn blocking_action<F>(operation: F) -> F::Output
-where
-	F: std::future::Future + Send + 'static,
-	F::Output: Send + 'static,
-{
-	smol::unblock(move || smol::block_on(operation)).await
-}
-
-async fn create_on_worker(
+async fn run(
 	input: CreateInput,
 	context: InvocationContext<Progress>,
 ) -> Result<CreateOutcome, CreateOutcome> {
 	let name = input.task.clone();
-	let request = input
-		.normalize()
-		.map_err(|problem| CreateOutcome::rejected(name.clone(), problem))?;
+	let rejected = |problem| CreateOutcome::rejected(name.clone(), problem);
+	let request = input.normalize().map_err(rejected)?;
 
 	let cancellation = context.cancellation().clone();
 	let control = Control::new(move || cancellation.is_cancelled());
-	control
-		.check()
-		.map_err(|problem| CreateOutcome::rejected(name.clone(), problem))?;
+	control.check().map_err(rejected)?;
 
-	let store = Store::open(&request.tasks_root, &request.state_dir)
-		.map_err(|problem| CreateOutcome::rejected(name.clone(), problem))?;
+	let store = Store::open(&request.tasks_root, &request.state_dir).map_err(rejected)?;
 	let runner = Runner::default();
 
 	let result = workyard_core::create(request, &runner, &control, &Events(context), &store).await;
 	match result {
 		Ok((task, record)) => {
 			let outcome = CreateOutcome::from_task(task, record);
-			if outcome.status == workyard_core::TaskStatus::Failed {
+			if outcome.status == TaskStatus::Failed {
 				Err(outcome)
 			} else {
 				Ok(outcome)
 			}
 		}
-		Err(problem) if problem.code == ProblemCode::Cancelled => {
-			Ok(CreateOutcome::rejected(name, problem))
-		}
-		Err(problem) => Err(CreateOutcome::rejected(name, problem)),
+		Err(problem) if problem.code == ProblemCode::Cancelled => Ok(rejected(problem)),
+		Err(problem) => Err(rejected(problem)),
 	}
 }
 

@@ -3,7 +3,7 @@
 Workyard creates a task across explicitly selected Git repositories. The same core
 operation is exposed through CLI views and Trine's on-demand stdio RPC host.
 
-This experimental slice implements `create`, its `checkout` alias, and `rpc`.
+This experimental slice implements `create`, its `checkout` alias, `recover`, and `rpc`.
 Other lifecycle commands, MCP and TUI are not implemented yet.
 
 ```sh
@@ -36,8 +36,8 @@ Git's branch/worktree constraints and configuration still apply.
 
 `.workyard/workspace.json` binds placement. `tasks/<slug>-<sha256>.json` contains
 the task's participants and latest outcome; `evidence/` independently preserves
-admission intent. Documents use tabs and a trailing newline. The format is private,
-versioned and experimental; newer or damaged documents fail without reset.
+admission intent and pending/settled effect snapshots. Documents use tabs and a
+trailing newline. The format is private, versioned and experimental; newer or damaged documents fail without reset.
 
 Stable OS locks protect the workspace, task/prefix resources and Git fetches.
 ASCII case aliases share resource locks. Unicode task names conservatively take
@@ -49,8 +49,37 @@ worktree effects; cached paths are observations rather than a separate Git regis
 Failure or cancellation retains successful worktrees and reports each participant's
 last observed phase. Inspect the reported state record and use `git -C <path> status`
 and `git -C <source> worktree list --porcelain` to investigate. Do not rerun create on
-a partial task: recovery is a later slice. A publication error reports uncertainty,
-even if the desired JSON is already visible; visibility does not prove durability.
+a partial task: use `recover` with the original task name. A publication error
+reports uncertainty, even if the desired JSON is already visible; visibility does not prove durability.
+
+## Recovery
+
+```sh
+workyard recover feat/payments --state-dir /workspace/.workyard
+workyard recover feat/payments --accept-pull api --accept-pull web
+```
+
+Recovery requires existing authoritative state. Explicit `--state-dir` wins;
+otherwise the first ancestor `.workyard` of CWD or explicit `--tasks-root` is used.
+Recovery preserves completed trees and authored changes, reconciles verified Git
+moves/repairs, and resumes only remaining safe work. Healthy tasks do not fetch or
+pull for freshness. Branch-valued sources resolve their current tips; explicit
+commit sources retain their exact meaning.
+
+An uncertain pull is never automatically replayed. Inspect `git -C <path> status`,
+finish or abort the native Git operation manually, then name that participant with
+`--accept-pull`. Acceptance preserves your repair and does not bypass unresolved
+Git conflicts, native locks, backing/worktree identity checks or uncertain writers.
+
+A pending add/pull without durable writer-settlement evidence remains diagnostic,
+even when the task lock is free. Inspect the interrupted Workyard/Git process tree
+and preserve the state and worktrees. This slice has no force/unquarantine command:
+manual Git work may continue once you have established that writers stopped;
+restore only genuinely verified backup evidence if available. Do not edit a
+pending marker to manufacture settlement. Legacy completed records can be inspected
+at their verified original location; legacy uncertain creating/pulling records
+cannot acquire historical settlement through an upgrade. Fetch-only uncertainty
+allows explicit recovery retry under the existing native Git coordination rules.
 
 ## RPC
 
@@ -60,15 +89,18 @@ Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout:
 {"jsonrpc":"2.0","id":1,"method":"invoke","params":{"action":["create"],"input":{"task":"feat/payments","repositories":[{"path":"/repos/api"}],"from":"main"},"observe":true}}
 ```
 
+Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
+`{"task":"feat/payments","accept_pull":["api"],"state_dir":"/workspace/.workyard"}`.
+
 RPC uses Trine's shared invocation, progress, cancellation and terminal response
 contract. Native Git output never enters protocol stdout. Clean stdin EOF drains
 accepted work; shutdown, read failure or output failure requests cancellation.
 
 ## Source boundaries and checks
 
-- `core`: create orchestration and its private preflight, task/request contracts,
+- `core`: create/recovery orchestration and its private preflight, task/request contracts,
 	cancellation, problems and narrow effect ports.
-- `application`: capability-owned create input, contract, action and view modules;
+- `application`: capability-owned create/recovery input, contract, action and view modules;
 	the root registers capabilities and preserves public imports.
 - `git`: repository inspection and effects, with private branch planning; the
 	process runner and output contract delegate to bounded capture and supervision.

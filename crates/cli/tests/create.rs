@@ -42,7 +42,7 @@ fn creates_two_repositories_with_external_state_and_keeps_sources_untouched() {
 	assert_eq!(stored["status"], "completed");
 	assert_eq!(stored["participants"].as_array().unwrap().len(), 2);
 	assert!(!root.join(".workyard").exists());
-	assert_eq!(fs::read_dir(state.join("evidence")).unwrap().count(), 1);
+	assert_eq!(fs::read_dir(state.join("evidence")).unwrap().count(), 2);
 }
 
 #[test]
@@ -487,6 +487,6 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 		fs::read_dir(root.join(".workyard/evidence"))
 			.unwrap()
 			.count(),
-		1
+		2
 	);
 }

@@ -1,11 +1,55 @@
 use super::Store;
+use crate::damage::damaged;
 use crate::documents::{publish, read_versioned};
 use crate::records::WorkspaceRecord;
 use crate::{Lock, canonical_future, exists};
 use std::{fs, path::Path};
-use workyard_core::Problem;
+use workyard_core::{Problem, ProblemCode};
 
 impl Store {
+	/// Existing-task operations never create a workspace or repair its structure.
+	pub fn open_existing(state: &Path, requested_root: Option<&Path>) -> Result<Self, Problem> {
+		if !exists(state)? {
+			return Err(Problem::new(ProblemCode::DamagedState, "Authoritative state does not exist.")
+				.remedy("Select the existing --state-dir, or run from beneath its .workyard ancestor. Recovery cannot initialize state."));
+		}
+		let state = canonical_future(state)?;
+		for name in [
+			"workspace.json",
+			"workspace.lock",
+			"tasks",
+			"locks",
+			"evidence",
+		] {
+			if !exists(&state.join(name))? {
+				return Err(damaged(format!(
+					"Existing state is missing {name}. Preserve it and restore its authoritative metadata."
+				)));
+			}
+		}
+		let workspace =
+			crate::Lock::acquire_mode(&state.join("workspace.lock"), crate::LockMode::Shared)?;
+		let record: crate::records::WorkspaceRecord =
+			read_versioned(&state.join("workspace.json"))?;
+		let root = canonical_future(&record.tasks_root.decode()?)?;
+		if let Some(requested) = requested_root
+			&& canonical_future(requested)? != root
+		{
+			return Err(Problem::new(
+				ProblemCode::WorkspaceBindingConflict,
+				"Requested tasks root differs from the selected state.",
+			));
+		}
+		let store = Self {
+			root,
+			state,
+			workspace,
+		};
+		store.verify()?;
+		validate_default(&store.root, &store.state)?;
+		Ok(store)
+	}
+
 	pub fn open(root: &Path, state: &Path) -> Result<Self, Problem> {
 		validate_default(root, state)?;
 		fs::create_dir_all(root).map_err(|e| Problem::io("Create tasks root", e))?;
@@ -15,7 +59,7 @@ impl Store {
 		let gate = state.join("workspace.lock");
 		bootstrap(&root, &state, &gate)?;
 
-		let workspace = Lock::acquire(&gate, true)?;
+		let workspace = Lock::acquire_mode(&gate, crate::LockMode::Shared)?;
 		let store = Self {
 			root,
 			state,
@@ -48,7 +92,7 @@ impl Store {
 	}
 }
 
-fn validate_default(root: &Path, state: &Path) -> Result<(), Problem> {
+pub(super) fn validate_default(root: &Path, state: &Path) -> Result<(), Problem> {
 	let root = canonical_future(root)?;
 	let state = canonical_future(state)?;
 	let default = root.join(".workyard");
@@ -56,7 +100,7 @@ fn validate_default(root: &Path, state: &Path) -> Result<(), Problem> {
 		return Ok(());
 	}
 
-	let _gate = Lock::acquire(&default.join("workspace.lock"), true)?;
+	let _gate = Lock::acquire_mode(&default.join("workspace.lock"), crate::LockMode::Shared)?;
 	let record: WorkspaceRecord = read_versioned(&default.join("workspace.json"))?;
 	if canonical_future(&record.tasks_root.decode()?)? == root {
 		return Err(Problem::new(
@@ -76,7 +120,7 @@ fn bootstrap(root: &Path, state: &Path, gate: &Path) -> Result<(), Problem> {
 		return Ok(());
 	}
 
-	let bootstrap = Lock::acquire(gate, false)?;
+	let bootstrap = Lock::acquire_mode(gate, crate::LockMode::Exclusive)?;
 	bootstrap.verify()?;
 	if exists(&manifest)? {
 		return Ok(());

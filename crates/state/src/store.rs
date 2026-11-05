@@ -1,4 +1,6 @@
 mod admission;
+mod evidence;
+mod recovery;
 mod workspace;
 
 pub use admission::TaskGuard;
@@ -25,6 +27,7 @@ impl Store {
 		let record = TaskRecord::from(task);
 		// Independent immutable admission evidence survives a missing task document.
 		publish(&guard.evidence_path, &record)?;
+		self.publish_effect(guard, task, 0, workyard_core::EffectState::Settled)?;
 		publish(&guard.record_path, &record)
 	}
 
@@ -86,6 +89,21 @@ impl workyard_core::State for Store {
 
 	fn begin(&self, admission: &TaskGuard, task: &Task) -> Result<(), Problem> {
 		Store::begin(self, admission, task)
+	}
+
+	fn effect(
+		&self,
+		admission: &TaskGuard,
+		task: &Task,
+		index: usize,
+		settled: bool,
+	) -> Result<(), Problem> {
+		let state = if settled {
+			workyard_core::EffectState::Settled
+		} else {
+			workyard_core::EffectState::Pending
+		};
+		self.publish_effect(admission, task, index, state)
 	}
 
 	fn save(&self, admission: &TaskGuard, task: &Task) -> Result<(), Problem> {

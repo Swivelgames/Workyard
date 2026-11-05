@@ -78,7 +78,14 @@ async fn run_participants<S: State>(
 		if !task.no_fetch && repository.remote.is_some() {
 			phase(task, index, Phase::Fetching, store, guard, context, control).await?;
 			runner.revalidate(repository, control).await?;
-			runner.fetch(repository, control).await?;
+			store.record_effect(guard, task, index, crate::EffectState::Pending)?;
+			let result = runner.fetch(repository, control).await;
+			let mut settled = task.clone();
+			if result.is_ok() {
+				settled.participants[index].phase = Phase::Creating;
+			}
+			store.record_effect(guard, &settled, index, crate::EffectState::Settled)?;
+			result?;
 		}
 
 		prepare_worktree(task, index, repository, runner, control, store).await?;
@@ -88,9 +95,11 @@ async fn run_participants<S: State>(
 		let (destination, plan) =
 			prepare_worktree(task, index, repository, runner, control, store).await?;
 		control.check()?;
-		runner
+		store.record_effect(guard, task, index, crate::EffectState::Pending)?;
+		let result = runner
 			.add(repository, &task.name, &destination, &plan, control)
-			.await?;
+			.await;
+		crate::settle_add::settle_add(result, task, index, runner, store, guard).await?;
 		phase(
 			task,
 			index,
@@ -104,7 +113,9 @@ async fn run_participants<S: State>(
 
 		if task.pull {
 			phase(task, index, Phase::Pulling, store, guard, context, control).await?;
-			runner.pull(repository, &destination, control).await?;
+			store.record_effect(guard, task, index, crate::EffectState::Pending)?;
+			let result = runner.pull(repository, &destination, control).await;
+			crate::publication::settle_pull(result, task, index, store, guard)?;
 		}
 
 		phase(
@@ -161,14 +172,6 @@ async fn phase<S: State>(
 	if !observed {
 		control.check()?;
 	}
-	task.participants[index].phase = phase;
-	store.save(guard, task)?;
-	context
-		.phase(
-			&task.name,
-			&task.participants[index].name,
-			task.participants[index].phase.as_str(),
-		)
-		.await?;
+	crate::publication::phase(task, index, phase, store, guard, context).await?;
 	control.check()
 }

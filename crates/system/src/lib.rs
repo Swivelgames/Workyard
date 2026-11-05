@@ -3,4 +3,4 @@ mod identity;
 mod lock;
 
 pub use identity::{directory_identity, file_identity};
-pub use lock::Lock;
+pub use lock::{Lock, LockMode};

@@ -143,14 +143,32 @@ fn utf8(bytes: &[u8]) -> Result<&str, Problem> {
 }
 
 fn decode_path(bytes: &[u8]) -> Result<PathBuf, Problem> {
-	let bytes = bytes.strip_suffix(b"\n").unwrap_or(bytes);
-	#[cfg(unix)]
-	{
-		use std::os::unix::ffi::OsStringExt;
-		Ok(std::ffi::OsString::from_vec(bytes.to_vec()).into())
+	crate::output::path_line(bytes).map_err(|_| {
+		Problem::new(
+			workyard_core::ProblemCode::InvalidGitOutput,
+			"Git returned non-Unicode ref metadata.",
+		)
+	})
+}
+
+impl From<Repository> for workyard_core::Repository {
+	fn from(repository: Repository) -> Self {
+		Self {
+			source: repository.source,
+			common_dir: repository.common_dir,
+			remote: repository.remote,
+			identity: repository.identity,
+		}
 	}
-	#[cfg(windows)]
-	{
-		Ok(utf8(bytes)?.trim_end_matches('\r').into())
+}
+
+impl From<&workyard_core::Repository> for Repository {
+	fn from(repository: &workyard_core::Repository) -> Self {
+		Self {
+			source: repository.source.clone(),
+			common_dir: repository.common_dir.clone(),
+			remote: repository.remote.clone(),
+			identity: repository.identity.clone(),
+		}
 	}
 }

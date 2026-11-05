@@ -2,16 +2,21 @@ use crate::{Repository, Runner};
 use std::path::Path;
 use workyard_core::{BranchPlan, Control, Git, Problem, ProblemCode};
 
-fn local(repository: &workyard_core::Repository) -> Repository {
-	Repository {
-		source: repository.source.clone(),
-		common_dir: repository.common_dir.clone(),
-		remote: repository.remote.clone(),
-		identity: repository.identity.clone(),
-	}
-}
-
 impl Git for Runner {
+	async fn worktree_identity(&self, path: &Path) -> Result<Option<String>, Problem> {
+		let output = self
+			.checked(
+				path,
+				&crate::process::args(&["rev-parse", "--path-format=absolute", "--git-dir"]),
+				&Control::new(|| false),
+			)
+			.await?;
+		let directory = crate::output::path_line(&output).map_err(|_| {
+			Problem::new(ProblemCode::RepositoryChanged, "Invalid Git path output.").remedy("Inspect git worktree list --porcelain and git status at the recorded paths. Repair Git relationships manually; preserve worktrees and native Git locks.")
+		})?;
+		Ok(Some(workyard_system::directory_identity(&directory)?))
+	}
+
 	async fn validate_branch(
 		&self,
 		root: &Path,
@@ -38,12 +43,7 @@ impl Git for Runner {
 		control: &Control,
 	) -> Result<workyard_core::Repository, Problem> {
 		let repository = Repository::inspect(self, path, remote, control).await?;
-		Ok(workyard_core::Repository {
-			source: repository.source,
-			common_dir: repository.common_dir,
-			remote: repository.remote,
-			identity: repository.identity,
-		})
+		Ok(repository.into())
 	}
 
 	async fn revalidate(
@@ -51,7 +51,7 @@ impl Git for Runner {
 		repository: &workyard_core::Repository,
 		control: &Control,
 	) -> Result<(), Problem> {
-		local(repository).revalidate(self, control).await
+		Repository::from(repository).revalidate(self, control).await
 	}
 
 	async fn plan(
@@ -63,7 +63,7 @@ impl Git for Runner {
 		resolution: workyard_core::SourceResolution,
 		control: &Control,
 	) -> Result<BranchPlan, Problem> {
-		local(repository)
+		Repository::from(repository)
 			.plan(self, task, checkout, from, resolution, control)
 			.await
 	}
@@ -75,7 +75,7 @@ impl Git for Runner {
 	) -> Result<(), Problem> {
 		let _lock = fetch_lock(repository, control).await?;
 		self.revalidate(repository, control).await?;
-		local(repository).fetch(self, control).await
+		Repository::from(repository).fetch(self, control).await
 	}
 
 	async fn add(
@@ -86,7 +86,7 @@ impl Git for Runner {
 		plan: &BranchPlan,
 		control: &Control,
 	) -> Result<(), Problem> {
-		local(repository)
+		Repository::from(repository)
 			.add(self, task, destination, plan, control)
 			.await
 	}
@@ -99,7 +99,9 @@ impl Git for Runner {
 	) -> Result<(), Problem> {
 		let _lock = fetch_lock(repository, control).await?;
 		self.revalidate(repository, control).await?;
-		local(repository).pull(self, destination, control).await
+		Repository::from(repository)
+			.pull(self, destination, control)
+			.await
 	}
 }
 

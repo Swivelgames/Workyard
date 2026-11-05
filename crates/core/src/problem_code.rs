@@ -72,3 +72,42 @@ impl std::fmt::Display for ProblemCode {
 		f.write_str(self.as_str())
 	}
 }
+
+impl std::str::FromStr for ProblemCode {
+	type Err = ();
+
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		match value {
+			"branch_exists" => Ok(Self::BranchExists),
+			"branch_in_use" => Ok(Self::BranchInUse),
+			"cancelled" => Ok(Self::Cancelled),
+			"damaged_state" => Ok(Self::DamagedState),
+			"default_branch_unknown" => Ok(Self::DefaultBranchUnknown),
+			"git_failed" => Ok(Self::GitFailed),
+			"git_output_limit" => Ok(Self::GitOutputLimit),
+			"incompatible_state" => Ok(Self::IncompatibleState),
+			"invalid_git_output" => Ok(Self::InvalidGitOutput),
+			"invalid_input" => Ok(Self::InvalidInput),
+			"invalid_participant_name" => Ok(Self::InvalidParticipantName),
+			"invalid_remote" => Ok(Self::InvalidRemote),
+			"invalid_task" => Ok(Self::InvalidTask),
+			"launch_failed" => Ok(Self::LaunchFailed),
+			"participant_name_conflict" => Ok(Self::ParticipantNameConflict),
+			"participant_name_required" => Ok(Self::ParticipantNameRequired),
+			"path_overlap" => Ok(Self::PathOverlap),
+			"publication_uncertain" => Ok(Self::PublicationUncertain),
+			"remote_required" => Ok(Self::RemoteRequired),
+			"repository_alias_conflict" => Ok(Self::RepositoryAliasConflict),
+			"repository_changed" => Ok(Self::RepositoryChanged),
+			"resource_busy" => Ok(Self::ResourceBusy),
+			"serialization_failed" => Ok(Self::SerializationFailed),
+			"source_missing" => Ok(Self::SourceMissing),
+			"stale_identity" => Ok(Self::StaleIdentity),
+			"supervision_failed" => Ok(Self::SupervisionFailed),
+			"task_exists" => Ok(Self::TaskExists),
+			"workspace_binding_conflict" => Ok(Self::WorkspaceBindingConflict),
+			"io_error" => Ok(Self::IoError),
+			_ => Err(()),
+		}
+	}
+}

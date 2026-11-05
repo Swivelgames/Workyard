@@ -5,7 +5,7 @@ use trine::{
 };
 use workyard_core::TaskStatus;
 
-use crate::common::Progress;
+use crate::{common::Progress, terminal};
 
 use super::CreateOutcome;
 
@@ -20,7 +20,7 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
 		self.output
 			.stderr
-			.write_all(format!("{}: {}\n", progress.participant, progress.phase).as_bytes())
+			.write_all(terminal::progress(&progress).as_bytes())
 	}
 
 	async fn finish(
@@ -30,28 +30,25 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
-		let mut summary = format!("Task {}: {}\n", outcome.task, outcome.status.as_str());
+
+		let mut summary = String::new();
+
+		terminal::task(&mut summary, &outcome.task, outcome.status);
+
 		for participant in &outcome.participants {
-			summary.push_str(&format!(
-				"  {}: {} ({:?})\n",
-				participant.name,
-				participant.phase,
-				participant.path.as_path()
-			));
+			terminal::participant(&mut summary, participant);
 		}
 
 		if let Some(problem) = &outcome.problem {
-			summary.push_str(&format!(
-				"{}: {}\n{}\n",
-				problem.code, problem.message, problem.remedy
-			));
+			terminal::problem(&mut summary, problem);
 		}
 
 		if let Some(record) = &outcome.record {
-			summary.push_str(&format!("State record: {:?}\n", record.as_path()));
+			terminal::state_location(&mut summary, record);
 		}
 
 		self.output.stdout.write_all(summary.as_bytes())?;
+
 		Ok(CliCompletion::exit(
 			if outcome.status == TaskStatus::Completed {
 				0

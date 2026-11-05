@@ -28,7 +28,12 @@ impl Store {
 		// filesystem equivalence varies by volume; conservatively exclude other
 		// mutations for those names until native equivalence is resolved.
 		let spelling = self.state.join("locks").join("path-spelling.lock");
-		let mut locks = vec![Lock::acquire(&spelling, name.is_ascii())?];
+		let spelling_mode = if name.is_ascii() {
+			crate::LockMode::Shared
+		} else {
+			crate::LockMode::Exclusive
+		};
+		let mut locks = vec![Lock::acquire_mode(&spelling, spelling_mode)?];
 		let parts: Vec<_> = name.split('/').collect();
 		for length in 1..=parts.len() {
 			let prefix = parts[..length].join("/").to_ascii_lowercase();
@@ -37,7 +42,12 @@ impl Store {
 				.join("locks")
 				.join(task_filename(&prefix))
 				.with_extension("lock");
-			locks.push(Lock::acquire(&path, length < parts.len())?);
+			let prefix_mode = if length < parts.len() {
+				crate::LockMode::Shared
+			} else {
+				crate::LockMode::Exclusive
+			};
+			locks.push(Lock::acquire_mode(&path, prefix_mode)?);
 		}
 
 		let filename = task_filename(name);

@@ -6,6 +6,12 @@ use std::{
 };
 use workyard_core::{Control, Problem};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LockMode {
+	Shared,
+	Exclusive,
+}
+
 /// Locks a stable coordination inode, never a replaceable JSON document.
 pub struct Lock {
 	file: File,
@@ -13,7 +19,17 @@ pub struct Lock {
 }
 
 impl Lock {
+	/// Compatibility entry point; new callers can make the mode explicit.
 	pub fn acquire(path: &Path, shared: bool) -> Result<Self, Problem> {
+		let mode = if shared {
+			LockMode::Shared
+		} else {
+			LockMode::Exclusive
+		};
+		Self::acquire_mode(path, mode)
+	}
+
+	pub fn acquire_mode(path: &Path, mode: LockMode) -> Result<Self, Problem> {
 		let file = OpenOptions::new()
 			.create(true)
 			.truncate(false)
@@ -21,10 +37,9 @@ impl Lock {
 			.write(true)
 			.open(path)
 			.map_err(|e| Problem::io(format!("Open lock {path:?}"), e))?;
-		let attempt = if shared {
-			file.try_lock_shared()
-		} else {
-			file.try_lock()
+		let attempt = match mode {
+			LockMode::Shared => file.try_lock_shared(),
+			LockMode::Exclusive => file.try_lock(),
 		};
 		attempt.map_err(|error| match error {
 			std::fs::TryLockError::WouldBlock => Problem::new(
@@ -47,7 +62,7 @@ impl Lock {
 	pub async fn wait(path: &Path, control: &Control) -> Result<Self, Problem> {
 		loop {
 			control.check()?;
-			match Self::acquire(path, false) {
+			match Self::acquire_mode(path, LockMode::Exclusive) {
 				Ok(lock) => return Ok(lock),
 				Err(error) if error.code == workyard_core::ProblemCode::ResourceBusy => {}
 				Err(error) => return Err(error),

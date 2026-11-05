@@ -37,6 +37,8 @@ pub struct ParticipantRecord {
 	pub source: StoredPath,
 	pub common_dir: StoredPath,
 	pub backing_identity: String,
+	#[serde(default)]
+	pub worktree_identity: Option<String>,
 	pub destination: StoredPath,
 	pub remote: Option<String>,
 	pub from: Option<String>,
@@ -95,6 +97,7 @@ impl From<&Task> for TaskRecord {
 					source: participant.source.as_path().into(),
 					common_dir: participant.common_dir.as_path().into(),
 					backing_identity: participant.backing_identity.clone(),
+					worktree_identity: participant.worktree_identity.clone(),
 					destination: participant.destination.as_path().into(),
 					remote: participant.remote.clone(),
 					from: participant.from.clone(),

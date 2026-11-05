@@ -1,18 +1,15 @@
 //! Create/checkout inputs, outcomes and handler. Interface assembly stays internal.
-use std::num::NonZeroUsize;
-use trine::{
-	Action, RegistrationError,
-	application::{CliBinding, Entry},
-	cli::{Alias, Bindings},
-	structured::StructuredBinding,
-};
-
 mod action;
 mod contract;
 mod input;
 mod view;
 
 use crate::common::Progress;
+use trine::{
+	Action, RegistrationError,
+	application::{CliBinding, Entry},
+	cli::{Alias, Bindings},
+};
 
 pub use action::create;
 pub use contract::{CreateOutcome, ParticipantOutcome};
@@ -21,7 +18,7 @@ use view::CreateView;
 
 type CreateEntry = Entry<CreateInput, CreateOutcome, CreateOutcome, Progress>;
 
-pub(crate) fn create_action() -> Result<CreateEntry, RegistrationError> {
+pub(crate) fn build_entry() -> Result<CreateEntry, RegistrationError> {
 	let handler = Action::new(
 		"create",
 		"Create a task across explicit Git Repositories",
@@ -30,21 +27,16 @@ pub(crate) fn create_action() -> Result<CreateEntry, RegistrationError> {
 
 	let checkout_shorthand = Alias::new("checkout").set("checkout", true);
 
-	let cli = CliBinding::new(gen_args()).alias(checkout_shorthand);
+	let cli = CliBinding::new(cli_bindings()).alias(checkout_shorthand);
+
+	let rpc = crate::structured::progress_binding();
 
 	Ok(Entry::new(handler)
 		.cli(cli, |output| Ok(CreateView { output }))
-		.rpc(StructuredBinding::serde_with_progress(
-			|event: Progress| {
-				serde_json::to_value(event).map_err(|error| {
-					trine::error::Failure::new(trine::error::FailureKind::EncodingFailed, error)
-				})
-			},
-			NonZeroUsize::new(16).expect("nonzero capacity"),
-		)))
+		.rpc(rpc))
 }
 
-fn gen_args() -> Bindings {
+fn cli_bindings() -> Bindings {
 	let bindings = Bindings::new();
 
 	// Target branch name

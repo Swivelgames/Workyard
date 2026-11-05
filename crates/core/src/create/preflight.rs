@@ -90,6 +90,7 @@ pub(crate) async fn preflight(
 
 		identities.insert(repository.common_dir.clone(), participants.len());
 		participants.push(Participant {
+			worktree_identity: None,
 			name: name.clone(),
 			source: repository.source.clone(),
 			common_dir: repository.common_dir.clone(),

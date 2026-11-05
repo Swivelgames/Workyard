@@ -27,6 +27,13 @@ pub enum SourceResolution {
 }
 
 pub trait Git: Sync {
+	fn worktree_identity(
+		&self,
+		_path: &Path,
+	) -> impl Future<Output = Result<Option<String>, Problem>> + Send {
+		async { Ok(None) }
+	}
+
 	fn validate_branch(
 		&self,
 		root: &Path,
@@ -74,6 +81,13 @@ pub trait Git: Sync {
 	) -> impl Future<Output = Result<(), Problem>> + Send;
 }
 
+/// Whether managed writers for the recorded effect have stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectState {
+	Pending,
+	Settled,
+}
+
 pub trait State: Sync {
 	type Admission: Send + Sync;
 	fn verify(&self) -> Result<(), Problem>;
@@ -84,6 +98,44 @@ pub trait State: Sync {
 	fn record_path(&self, admission: &Self::Admission) -> PathBuf;
 	fn begin(&self, admission: &Self::Admission, task: &Task) -> Result<(), Problem>;
 	fn save(&self, admission: &Self::Admission, task: &Task) -> Result<(), Problem>;
+	/// Named entry point; delegates to the legacy hook for existing adapters.
+	fn record_effect(
+		&self,
+		admission: &Self::Admission,
+		task: &Task,
+		index: usize,
+		state: EffectState,
+	) -> Result<(), Problem> {
+		self.effect(admission, task, index, state == EffectState::Settled)
+	}
+
+	/// Compatibility hook for existing state adapters.
+	fn effect(
+		&self,
+		_admission: &Self::Admission,
+		_task: &Task,
+		_index: usize,
+		_settled: bool,
+	) -> Result<(), Problem> {
+		Ok(())
+	}
+}
+
+pub trait RecoveryState: State {
+	fn load(
+		&self,
+		admission: &Self::Admission,
+		name: &str,
+	) -> Result<crate::RecoveryRecord, Problem>;
+}
+
+pub trait RecoveryGit: Git {
+	fn reconcile(
+		&self,
+		participant: &crate::Participant,
+		task: &str,
+		control: &Control,
+	) -> impl Future<Output = Result<crate::RecoveryObservation, Problem>> + Send;
 }
 
 pub trait Observer: Sync {

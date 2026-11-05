@@ -4,19 +4,8 @@ use workyard_core::{Problem, Task, TaskStatus};
 
 use crate::common::ProblemOutcome;
 
-fn serialize_status<S: serde::Serializer>(
-	status: &TaskStatus,
-	serializer: S,
-) -> Result<S::Ok, S::Error> {
-	serializer.serialize_str(status.as_str())
-}
-
-#[derive(Serialize)]
-pub struct ParticipantOutcome {
-	pub name: String,
-	pub path: NativePath,
-	pub phase: String,
-}
+pub use crate::reporting::ParticipantOutcome;
+use crate::reporting::serialize_status;
 
 #[derive(Serialize)]
 pub struct CreateOutcome {
@@ -49,16 +38,7 @@ impl CreateOutcome {
 			status: task.status,
 			task: task.name,
 			record: Some(NativePath::new(record).expect("validated filesystem path")),
-			participants: task
-				.participants
-				.into_iter()
-				.map(|participant| ParticipantOutcome {
-					name: participant.name,
-					path: NativePath::new(participant.destination)
-						.expect("validated filesystem path"),
-					phase: participant.phase.as_str().into(),
-				})
-				.collect(),
+			participants: task.participants.into_iter().map(Into::into).collect(),
 			problem: task.problem.map(Into::into),
 		}
 	}
