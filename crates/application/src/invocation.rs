@@ -1,7 +1,10 @@
 //! Shared execution boundary and progress adapter for lifecycle actions.
 use crate::common::Progress;
 
-pub(crate) struct Events(pub(crate) trine::InvocationContext<Progress>);
+pub(crate) struct Events(
+	pub(crate) trine::InvocationContext<Progress>,
+	pub(crate) &'static str,
+);
 
 impl workyard_core::Observer for Events {
 	async fn phase(
@@ -12,6 +15,7 @@ impl workyard_core::Observer for Events {
 	) -> Result<(), workyard_core::Problem> {
 		self.0
 			.emit(Progress {
+				action: self.1,
 				task: task.into(),
 				participant: participant.into(),
 				phase: phase.into(),

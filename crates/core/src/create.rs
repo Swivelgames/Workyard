@@ -1,7 +1,8 @@
 mod preflight;
 
 use crate::{
-	Control, CreateRequest, Git, Observer, Phase, Problem, Repository, State, Task, TaskStatus,
+	Control, CreateRequest, Git, Observer, OperationOutcome, Phase, Problem, Repository, State,
+	Task,
 };
 use preflight::{preflight, validate_plans};
 
@@ -36,10 +37,10 @@ pub async fn create(
 	.await;
 
 	if let Err(mut problem) = operation {
-		task.status = if problem.code == crate::ProblemCode::Cancelled {
-			TaskStatus::Cancelled
+		task.operation.outcome = if problem.code == crate::ProblemCode::Cancelled {
+			OperationOutcome::Cancelled
 		} else {
-			TaskStatus::Failed
+			OperationOutcome::Failed
 		};
 		problem.remedy.push_str(&format!(
 			" Inspect {record_path:?} and Git worktree/status output for each listed path. \
@@ -47,11 +48,11 @@ pub async fn create(
 		));
 		task.problem = Some(problem);
 	} else {
-		task.status = TaskStatus::Completed;
+		task.operation.outcome = OperationOutcome::Succeeded;
 	}
 
 	if let Err(problem) = store.save(&guard, &task) {
-		task.status = TaskStatus::Failed;
+		task.operation.outcome = OperationOutcome::Failed;
 		task.problem = Some(problem);
 	}
 

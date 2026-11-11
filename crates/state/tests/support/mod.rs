@@ -1,5 +1,5 @@
 use std::path::{Path, PathBuf};
-use workyard_core::{Task, TaskStatus};
+use workyard_core::Task;
 use workyard_state::Store;
 
 pub fn task(root: &Path, state: &Path, name: &str) -> Task {
@@ -11,7 +11,8 @@ pub fn task(root: &Path, state: &Path, name: &str) -> Task {
 		checkout: false,
 		no_fetch: true,
 		pull: false,
-		status: TaskStatus::Pending,
+		lifecycle: workyard_core::TaskLifecycle::Active,
+		operation: workyard_core::Operation::create(),
 		problem: None,
 	}
 }

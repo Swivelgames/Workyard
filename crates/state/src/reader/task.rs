@@ -1,0 +1,58 @@
+use super::Reader;
+use crate::{exists, task_filename};
+use std::{collections::BTreeSet, path::Path};
+use workyard_core::{Problem, ProblemCode, TaskSnapshot};
+
+impl Reader {
+	pub fn tasks(&self, selected: Option<&str>) -> Result<Vec<TaskSnapshot>, Problem> {
+		self.verify()?;
+		if let Some(name) = selected {
+			workyard_core::validate_task(name)?;
+			let filename = task_filename(name);
+			if !exists(&self.state.join("tasks").join(&filename))?
+				&& !exists(&self.state.join("evidence").join(&filename))?
+				&& !exists(
+					&self
+						.state
+						.join("evidence")
+						.join(&filename)
+						.with_extension("effects"),
+				)? {
+				return Err(Problem::new(
+					ProblemCode::TaskUnknown,
+					format!("Task {name:?} is unknown in this state directory."),
+				)
+				.remedy("Run workyard list with the same --state-dir to see known tasks."));
+			}
+			return Ok(vec![self.snapshot(&filename, Some(name))?]);
+		}
+		let mut filenames = BTreeSet::new();
+		for directory in ["tasks", "evidence"] {
+			for entry in std::fs::read_dir(self.state.join(directory))
+				.map_err(|e| Problem::io("Enumerate task records", e))?
+			{
+				let path = entry
+					.map_err(|e| Problem::io("Read record entry", e))?
+					.path();
+				if path
+					.extension()
+					.is_some_and(|e| e == "json" || (directory == "evidence" && e == "effects"))
+				{
+					filenames.insert(
+						path.with_extension("json")
+							.file_name()
+							.expect("record name")
+							.to_owned(),
+					);
+				}
+			}
+		}
+		let mut tasks = Vec::new();
+		for filename in filenames {
+			tasks.push(self.snapshot(Path::new(&filename), None)?);
+		}
+		tasks.sort_by(|a, b| a.name.cmp(&b.name).then(a.record.cmp(&b.record)));
+		self.verify()?;
+		Ok(tasks)
+	}
+}

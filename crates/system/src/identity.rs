@@ -9,7 +9,9 @@ pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 	use windows_sys::Win32::Storage::FileSystem::{
 		BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
 	};
+
 	let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+
 	// SAFETY: File owns the valid handle and info is a correctly sized output.
 	if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
 		return Err(Problem::io(
@@ -27,15 +29,18 @@ pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 #[cfg(unix)]
 pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 	use std::os::unix::fs::MetadataExt;
+
 	let metadata = file
 		.metadata()
 		.map_err(|e| Problem::io("Inspect file identity", e))?;
+
 	Ok((metadata.dev(), metadata.ino()))
 }
 
 pub fn directory_identity(path: &Path) -> Result<String, Problem> {
 	#[cfg(unix)]
 	let directory = File::open(path).map_err(|e| Problem::io("Open repository identity", e))?;
+
 	#[cfg(windows)]
 	let directory = {
 		use std::os::windows::fs::OpenOptionsExt;
@@ -45,6 +50,8 @@ pub fn directory_identity(path: &Path) -> Result<String, Problem> {
 			.open(path)
 			.map_err(|e| Problem::io("Open repository identity", e))?
 	};
+
 	let (volume, file) = file_identity(&directory)?;
+
 	Ok(format!("{volume:x}:{file:x}"))
 }

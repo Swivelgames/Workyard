@@ -1,5 +1,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProblemCode {
+	TaskUnknown,
 	BranchExists,
 	BranchInUse,
 	Cancelled,
@@ -34,6 +35,7 @@ pub enum ProblemCode {
 impl ProblemCode {
 	pub fn as_str(self) -> &'static str {
 		match self {
+			Self::TaskUnknown => "task_unknown",
 			Self::BranchExists => "branch_exists",
 			Self::BranchInUse => "branch_in_use",
 			Self::Cancelled => "cancelled",
@@ -78,6 +80,7 @@ impl std::str::FromStr for ProblemCode {
 
 	fn from_str(value: &str) -> Result<Self, Self::Err> {
 		match value {
+			"task_unknown" => Ok(Self::TaskUnknown),
 			"branch_exists" => Ok(Self::BranchExists),
 			"branch_in_use" => Ok(Self::BranchInUse),
 			"cancelled" => Ok(Self::Cancelled),

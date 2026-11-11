@@ -1,7 +1,7 @@
-//! Recovery document vocabulary and validation independent of store admission.
+//! Task document validation and decoding independent of lifecycle operations.
 use crate::{TaskRecord, damage::damaged};
 use std::path::Path;
-use workyard_core::{Participant, Phase, Problem, ProblemCode, Task, TaskStatus};
+use workyard_core::{Participant, Phase, Problem, ProblemCode, Task, TaskLifecycle};
 
 pub(crate) fn match_intent(intent: &TaskRecord, current: &TaskRecord) -> Result<(), Problem> {
 	let same = intent.checkout == current.checkout
@@ -32,7 +32,7 @@ pub(crate) fn validate(
 	root: &Path,
 	state: &Path,
 ) -> Result<(), Problem> {
-	if record.version != 1 {
+	if !matches!(record.version, 1 | 2) {
 		return Err(Problem::new(
 			ProblemCode::IncompatibleState,
 			"Unsupported task version in recovery evidence.",
@@ -66,12 +66,10 @@ pub(crate) fn validate(
 		}
 		parse_phase(&p.phase)?;
 	}
-	if !matches!(
-		record.status.as_str(),
-		"pending" | "completed" | "failed" | "cancelled"
-	) {
-		return Err(damaged("Invalid task status."));
+	if record.lifecycle != "active" {
+		return Err(damaged("Invalid task lifecycle."));
 	}
+	record.operation.decode()?;
 	Ok(())
 }
 
@@ -83,7 +81,8 @@ pub(crate) fn decode(record: TaskRecord) -> Result<Task, Problem> {
 		checkout: record.checkout,
 		no_fetch: record.no_fetch,
 		pull: record.pull,
-		status: parse_status(&record.status)?,
+		lifecycle: TaskLifecycle::Active,
+		operation: record.operation.decode()?,
 		problem: record.problem.map(decode_problem).transpose()?,
 		participants: record
 			.participants
@@ -114,16 +113,6 @@ fn parse_phase(value: &str) -> Result<Phase, Problem> {
 		"pulling" => Ok(Phase::Pulling),
 		"completed" => Ok(Phase::Completed),
 		_ => Err(damaged("Invalid participant phase.")),
-	}
-}
-
-fn parse_status(value: &str) -> Result<TaskStatus, Problem> {
-	match value {
-		"pending" => Ok(TaskStatus::Pending),
-		"completed" => Ok(TaskStatus::Completed),
-		"cancelled" => Ok(TaskStatus::Cancelled),
-		"failed" => Ok(TaskStatus::Failed),
-		_ => Err(damaged("Invalid task status.")),
 	}
 }
 

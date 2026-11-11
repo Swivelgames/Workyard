@@ -1,7 +1,7 @@
 use std::path::Path;
 use workyard_core::Problem;
 
-pub(super) fn operations_present(git_dir: &Path, common: &Path) -> Result<bool, Problem> {
+pub(crate) fn operations_present(git_dir: &Path, common: &Path) -> Result<bool, Problem> {
 	for directory in [git_dir, common] {
 		for name in [
 			"index.lock",

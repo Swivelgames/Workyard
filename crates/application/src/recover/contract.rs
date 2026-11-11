@@ -1,17 +1,18 @@
 use serde::Serialize;
 use trine::NativePath;
-use workyard_core::{Problem, Task, TaskStatus};
+use workyard_core::{Operation, OperationKind, OperationOutcome, Problem, Task};
 
 use crate::common::ProblemOutcome;
-
-pub use crate::reporting::ParticipantOutcome;
-use crate::reporting::serialize_status;
+pub use crate::reporting::{OperationReport, ParticipantOutcome};
 
 #[derive(Serialize)]
 pub struct RecoverOutcome {
-	#[serde(serialize_with = "serialize_status")]
-	pub status: TaskStatus,
+	pub operation: OperationReport,
+	/// None when this invocation could not establish task membership.
+	pub lifecycle: Option<&'static str>,
 	pub task: String,
+	pub tasks_root: Option<NativePath>,
+	pub state_dir: Option<NativePath>,
 	pub record: Option<NativePath>,
 	pub participants: Vec<ParticipantOutcome>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -20,13 +21,22 @@ pub struct RecoverOutcome {
 
 impl RecoverOutcome {
 	pub fn rejected(task: String, problem: Problem) -> Self {
+		let outcome = if problem.code == workyard_core::ProblemCode::Cancelled {
+			OperationOutcome::Cancelled
+		} else {
+			OperationOutcome::Failed
+		};
 		Self {
-			status: if problem.code == workyard_core::ProblemCode::Cancelled {
-				TaskStatus::Cancelled
-			} else {
-				TaskStatus::Failed
-			},
+			operation: Operation {
+				kind: Some(OperationKind::Recover),
+				continues: None,
+				outcome,
+			}
+			.into(),
+			lifecycle: None,
 			task,
+			tasks_root: None,
+			state_dir: None,
 			record: None,
 			participants: Vec::new(),
 			problem: Some(problem.into()),
@@ -35,8 +45,11 @@ impl RecoverOutcome {
 
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
 		Self {
-			status: task.status,
+			operation: task.operation.into(),
+			lifecycle: Some(task.lifecycle.as_str()),
 			task: task.name,
+			tasks_root: Some(NativePath::new(task.root).expect("validated root path")),
+			state_dir: Some(NativePath::new(task.state_dir).expect("validated state path")),
 			record: Some(NativePath::new(record).expect("validated filesystem path")),
 			participants: task.participants.into_iter().map(Into::into).collect(),
 			problem: task.problem.map(Into::into),

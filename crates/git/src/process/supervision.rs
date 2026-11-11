@@ -13,6 +13,12 @@ use std::{
 };
 use workyard_core::{Control, Problem};
 
+struct Completion {
+	status: ExitStatus,
+	interrupted: bool,
+	failure: Option<Problem>,
+}
+
 pub(super) fn supervise(
 	executable: &Path,
 	directory: &Path,
@@ -43,9 +49,9 @@ pub(super) fn supervise(
 		send_err
 			.send(managed.child.stderr.take().expect("piped stderr"))
 			.expect("stderr worker awaits its pipe");
-		let (status, interrupted, supervision_error) = wait_for_completion(&mut managed, control);
+		let completion = wait_for_completion(&mut managed, control);
 
-		let (stdout, out_truncated) = out
+		let stdout = out
 			.join()
 			.map_err(|_| {
 				Problem::new(
@@ -54,7 +60,7 @@ pub(super) fn supervise(
 				)
 			})?
 			.map_err(|e| Problem::io("Drain Git stdout", e))?;
-		let (stderr, err_truncated) = err
+		let stderr = err
 			.join()
 			.map_err(|_| {
 				Problem::new(
@@ -63,39 +69,37 @@ pub(super) fn supervise(
 				)
 			})?
 			.map_err(|e| Problem::io("Drain Git stderr", e))?;
-		if let Some(error) = supervision_error {
+		if let Some(error) = completion.failure {
 			return Err(error);
 		}
 
-		if interrupted && !status.success() {
+		if completion.interrupted && !completion.status.success() {
 			return Err(Problem::new(
 				workyard_core::ProblemCode::Cancelled,
 				format!(
 					"Git interrupted in {directory:?}; managed writers stopped. {}",
-					String::from_utf8_lossy(&stderr)
+					String::from_utf8_lossy(&stderr.bytes)
 				),
 			));
 		}
 
 		Ok(CommandOutput {
-			status,
-			stdout,
-			stderr,
-			truncated: out_truncated || err_truncated,
-			interrupted,
+			status: completion.status,
+			stdout: stdout.bytes,
+			stderr: stderr.bytes,
+			truncated: stdout.truncated || stderr.truncated,
+			interrupted: completion.interrupted,
 		})
 	})
 }
 
 /// Keep protection until both the root and managed descendants have settled.
 /// Observation failures retain protection; cancellation never triggers a timeout.
-fn wait_for_completion(
-	managed: &mut Managed,
-	control: &Control,
-) -> (ExitStatus, bool, Option<Problem>) {
+fn wait_for_completion(managed: &mut Managed, control: &Control) -> Completion {
 	let mut interrupted = false;
 	let mut failure = None;
 	let mut status = None;
+
 	loop {
 		if control.cancelled() && !interrupted {
 			interrupted = true;
@@ -113,7 +117,13 @@ fn wait_for_completion(
 
 		if let Some(status) = status {
 			match managed.alive() {
-				Ok(false) => return (status, interrupted, failure),
+				Ok(false) => {
+					return Completion {
+						status,
+						interrupted,
+						failure,
+					};
+				}
 				Ok(true) => {}
 				Err(error) => failure = Some(error),
 			}

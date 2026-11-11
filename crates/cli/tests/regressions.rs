@@ -282,7 +282,7 @@ impl workyard_core::Observer for MutatingObserver {
 
 #[test]
 fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation() {
-	use workyard_core::{Control, CreateRequest, ProblemCode, RepositoryInput, TaskStatus};
+	use workyard_core::{Control, CreateRequest, OperationOutcome, ProblemCode, RepositoryInput};
 	for (mutation, expected) in [
 		(
 			MutationDuringProgress::ReplaceRepository,
@@ -333,7 +333,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 			&store,
 		))
 		.unwrap();
-		assert_eq!(task.status, TaskStatus::Failed);
+		assert_eq!(task.operation.outcome, OperationOutcome::Failed);
 		assert_eq!(task.problem.unwrap().code, expected);
 		assert!(!root.join("feat/revalidate/api/.git").exists());
 		assert_eq!(

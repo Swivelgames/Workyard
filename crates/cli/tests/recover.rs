@@ -44,11 +44,18 @@ fn healthy_recovery_preserves_commits_and_reconstructs_missing_record() {
 	let evidence = state_file(&root, "evidence", "effects");
 	let bytes = fs::read(&evidence).unwrap();
 	fs::remove_file(state_file(&root, "tasks", "json")).unwrap();
-	assert_ok(&workyard(&tree, &["recover", "feat/task"]));
-	assert_ok(&workyard(&root, &["recover", "feat/task"]));
+	for cwd in [&tree, &root] {
+		assert_ok(&workyard(cwd, &["recover", "feat/task"]));
+		let saved = record(&root.join(".workyard"));
+		assert_eq!(saved["operation"]["kind"], "recover");
+		assert_eq!(saved["operation"]["continues"], "create");
+	}
 	assert_eq!(git(&tree, &["rev-parse", "HEAD"]), before);
 	assert_eq!(fs::read(evidence).unwrap(), bytes);
-	assert_eq!(record(&root.join(".workyard"))["status"], "completed");
+	assert_eq!(
+		record(&root.join(".workyard"))["operation"]["outcome"],
+		"succeeded"
+	);
 }
 
 #[test]
@@ -208,21 +215,27 @@ fn rpc_recovery_returns_same_completed_participants_as_cli() {
 	let root = fixture.path().join("workspace");
 	fs::create_dir(&root).unwrap();
 	create(&root, &api, "feat/task");
-	assert_ok(&workyard(&root, &["recover", "feat/task"]));
-	let mut child = Command::new(env!("CARGO_BIN_EXE_workyard"))
-		.current_dir(&root)
-		.arg("rpc")
-		.stdin(std::process::Stdio::piped())
-		.stdout(std::process::Stdio::piped())
-		.spawn()
-		.unwrap();
-	let request = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"invoke","params":{"action":["recover"],"input":{"task":"feat/task"}}});
-	writeln!(child.stdin.take().unwrap(), "{request}").unwrap();
-	let output = child.wait_with_output().unwrap();
-	assert_ok(&output);
-	let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-	assert_eq!(response["result"]["status"], "completed");
-	assert_eq!(response["result"]["participants"][0]["phase"], "completed");
+	for _ in 0..2 {
+		let mut child = Command::new(env!("CARGO_BIN_EXE_workyard"))
+			.current_dir(&root)
+			.arg("rpc")
+			.stdin(std::process::Stdio::piped())
+			.stdout(std::process::Stdio::piped())
+			.spawn()
+			.unwrap();
+		let request = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"invoke","params":{"action":["recover"],"input":{"task":"feat/task"}}});
+		writeln!(child.stdin.take().unwrap(), "{request}").unwrap();
+		let output = child.wait_with_output().unwrap();
+		assert_ok(&output);
+		let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+		assert_eq!(response["result"]["operation"]["outcome"], "succeeded");
+		assert_eq!(response["result"]["operation"]["kind"], "recover");
+		assert_eq!(response["result"]["operation"]["continues"], "create");
+		assert_eq!(response["result"]["participants"][0]["phase"], "completed");
+		let saved = record(&root.join(".workyard"));
+		assert_eq!(saved["operation"]["kind"], "recover");
+		assert_eq!(saved["operation"]["continues"], "create");
+	}
 }
 
 #[cfg(unix)]
@@ -432,10 +445,16 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 		&store,
 	))
 	.unwrap();
-	assert_eq!(task.status, workyard_core::TaskStatus::Cancelled);
+	assert_eq!(
+		task.operation.outcome,
+		workyard_core::OperationOutcome::Cancelled
+	);
 	assert_eq!(task.participants[0].phase, workyard_core::Phase::Completed);
 	assert!(!root.join("feat/task/web").exists());
-	assert_eq!(record(&root.join(".workyard"))["status"], "cancelled");
+	assert_eq!(
+		record(&root.join(".workyard"))["operation"]["outcome"],
+		"cancelled"
+	);
 	drop(store);
 	assert!(!workyard(&root, &["recover", "feat/task"]).status.success());
 	assert_ok(&workyard(
@@ -484,11 +503,39 @@ fn failed_fetch_recovers_against_restored_advanced_remote() {
 		expected
 	);
 	let durable = record(&root.join(".workyard"));
-	assert_eq!(durable["status"], "completed");
+	assert_eq!(durable["operation"]["outcome"], "succeeded");
 	assert_eq!(durable["participants"][0]["phase"], "completed");
 	let effects: serde_json::Value =
 		serde_json::from_slice(&fs::read(state_file(&root, "evidence", "effects")).unwrap())
 			.unwrap();
 	assert!(effects["pending"].is_null());
 	assert_eq!(effects["task"]["participants"][0]["phase"], "completed");
+}
+
+#[test]
+fn missing_completed_participant_never_claims_current_availability() {
+	let fixture = tempfile::tempdir().unwrap();
+	let api = repo(fixture.path(), "infra");
+	let root = fixture.path().join("workspace");
+	fs::create_dir(&root).unwrap();
+	create(&root, &api, "feat/task");
+	fs::remove_dir_all(root.join("feat/task/infra")).unwrap();
+
+	let output = workyard(&root, &["recover", "feat/task"]);
+	assert!(!output.status.success());
+	let output = String::from_utf8(output.stdout).unwrap();
+	assert!(output.contains("Recovery failed"), "{output}");
+	assert!(!output.contains("Recorded progress"), "{output}");
+	assert!(!output.contains("available"), "{output}");
+	assert!(output.contains("workyard status"), "{output}");
+	assert!(output.contains("--state-dir"), "{output}");
+	assert!(output.contains("feat/task"), "{output}");
+
+	let status = workyard(&root, &["status"]);
+	let status = String::from_utf8(status.stdout).unwrap();
+	assert!(
+		status.contains("Recorded operation: recover (failed)"),
+		"{status}"
+	);
+	assert!(status.contains("infra:"), "{status}");
 }

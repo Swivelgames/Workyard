@@ -39,7 +39,7 @@ fn root_and_capability_imports_support_direct_invocation() {
 }
 
 #[test]
-fn action_outcomes_keep_distinct_types_and_existing_wire_fields() {
+fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields() {
 	let task = workyard_core::Task {
 		name: "feat/test".into(),
 		root: "workspace".into(),
@@ -58,14 +58,18 @@ fn action_outcomes_keep_distinct_types_and_existing_wire_fields() {
 		checkout: false,
 		no_fetch: true,
 		pull: false,
-		status: workyard_core::TaskStatus::Completed,
+		lifecycle: workyard_core::TaskLifecycle::Active,
+		operation: workyard_core::Operation {
+			outcome: workyard_core::OperationOutcome::Succeeded,
+			..workyard_core::Operation::create()
+		},
 		problem: None,
 	};
 	let create = CreateOutcome::from_task(task.clone(), "state/task.json".into());
 	let recover =
 		workyard_application::recover::RecoverOutcome::from_task(task, "state/task.json".into());
 	let expected = serde_json::json!({
-		"status": "completed", "task": "feat/test", "record": "state/task.json",
+		"operation": {"kind":"create","continues":null,"outcome":"succeeded"}, "lifecycle":"active", "task": "feat/test", "tasks_root":"workspace", "state_dir":"state", "record": "state/task.json",
 		"participants": [{"name":"api", "path":"workspace/api", "phase":"completed"}]
 	});
 	assert_eq!(serde_json::to_value(create).unwrap(), expected);

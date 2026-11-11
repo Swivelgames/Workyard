@@ -1,5 +1,7 @@
 //! Installed Git is authoritative for repository and worktree relationships.
 mod adapter;
+mod observation;
+mod operations;
 mod output;
 mod process;
 mod recovery;

@@ -1,5 +1,5 @@
 use trine::InvocationContext;
-use workyard_core::{Control, ProblemCode, TaskStatus};
+use workyard_core::{Control, OperationOutcome, ProblemCode};
 use workyard_git::Runner;
 use workyard_state::Store;
 
@@ -32,11 +32,18 @@ async fn run(
 	let store = Store::open(&request.tasks_root, &request.state_dir).map_err(rejected)?;
 	let runner = Runner::default();
 
-	let result = workyard_core::create(request, &runner, &control, &Events(context), &store).await;
+	let result = workyard_core::create(
+		request,
+		&runner,
+		&control,
+		&Events(context, "create"),
+		&store,
+	)
+	.await;
 	match result {
 		Ok((task, record)) => {
 			let outcome = CreateOutcome::from_task(task, record);
-			if outcome.status == TaskStatus::Failed {
+			if outcome.operation.outcome == OperationOutcome::Failed {
 				Err(outcome)
 			} else {
 				Ok(outcome)

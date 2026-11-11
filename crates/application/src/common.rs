@@ -3,6 +3,7 @@ use workyard_core::Problem;
 
 #[derive(Serialize)]
 pub struct Progress {
+	pub action: &'static str,
 	pub task: String,
 	pub participant: String,
 	pub phase: String,

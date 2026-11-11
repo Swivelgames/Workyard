@@ -2,6 +2,7 @@
 mod control;
 mod create;
 mod model;
+mod observation;
 mod paths;
 mod ports;
 mod problem;
@@ -13,6 +14,7 @@ mod settle_add;
 pub use control::Control;
 pub use create::create;
 pub use model::*;
+pub use observation::*;
 pub use paths::*;
 pub use ports::*;
 pub use problem::Problem;

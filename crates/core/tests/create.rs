@@ -194,7 +194,7 @@ fn cancellation_racing_success_records_known_worktree_and_stops_next_repo() {
 	let control = Control::new(move || cancelled.load(Ordering::SeqCst));
 	let (task, _) =
 		smol::block_on(create(request(), &fixture, &control, &Quiet, &fixture)).unwrap();
-	assert_eq!(task.status, TaskStatus::Cancelled);
+	assert_eq!(task.operation.outcome, OperationOutcome::Cancelled);
 	assert_eq!(task.participants[0].phase, Phase::WorktreeCreated);
 	assert_eq!(task.participants[1].phase, Phase::NotStarted);
 	assert_eq!(fixture.added.lock().unwrap().len(), 1);
@@ -215,7 +215,7 @@ fn post_effect_publication_failure_preserves_evidence_and_stops_later_effects() 
 		&fixture,
 	))
 	.unwrap();
-	assert_eq!(task.status, TaskStatus::Failed);
+	assert_eq!(task.operation.outcome, OperationOutcome::Failed);
 	assert_eq!(
 		task.problem.unwrap().code,
 		ProblemCode::PublicationUncertain
@@ -240,11 +240,18 @@ fn broken_presentation_stops_before_effect_and_records_cancellation() {
 		&fixture,
 	))
 	.unwrap();
-	assert_eq!(task.status, TaskStatus::Cancelled);
+	assert_eq!(task.operation.outcome, OperationOutcome::Cancelled);
 	assert!(fixture.added.lock().unwrap().is_empty());
 	assert_eq!(
-		fixture.saved.lock().unwrap().last().unwrap().status,
-		TaskStatus::Cancelled
+		fixture
+			.saved
+			.lock()
+			.unwrap()
+			.last()
+			.unwrap()
+			.operation
+			.outcome,
+		OperationOutcome::Cancelled
 	);
 }
 
@@ -278,7 +285,7 @@ impl RecoveryGit for Fixture {
 }
 
 fn assert_identity_failure_settled(task: &Task, fixture: &Fixture) {
-	assert_eq!(task.status, TaskStatus::Failed);
+	assert_eq!(task.operation.outcome, OperationOutcome::Failed);
 	assert_eq!(task.problem.as_ref().unwrap().code, ProblemCode::IoError);
 	assert!(
 		task.problem
@@ -373,7 +380,7 @@ fn named_effect_modes_reach_existing_bool_adapter_hook() {
 
 #[test]
 fn recovery_publishes_new_attempt_without_erasing_participant_facts() {
-	for status in [TaskStatus::Failed, TaskStatus::Cancelled] {
+	for status in [OperationOutcome::Failed, OperationOutcome::Cancelled] {
 		let fixture = Fixture::new(false, false);
 		let (mut stored, _) = smol::block_on(create(
 			request(),
@@ -383,7 +390,7 @@ fn recovery_publishes_new_attempt_without_erasing_participant_facts() {
 			&fixture,
 		))
 		.unwrap();
-		stored.status = status;
+		stored.operation.outcome = status;
 		stored.problem = Some(Problem::new(ProblemCode::GitFailed, "previous attempt"));
 		stored.participants[0].phase = Phase::Creating;
 		*fixture.saved.lock().unwrap() = vec![stored.clone()];
@@ -405,7 +412,7 @@ fn recovery_publishes_new_attempt_without_erasing_participant_facts() {
 		let effects = fixture.effects.lock().unwrap();
 		assert!(effects[0].1);
 		for published in [&saved[1], &effects[0].0] {
-			assert_eq!(published.status, TaskStatus::Pending);
+			assert_eq!(published.operation.outcome, OperationOutcome::Pending);
 			assert!(published.problem.is_none());
 			assert_eq!(published.participants.len(), stored.participants.len());
 

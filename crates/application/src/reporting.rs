@@ -1,7 +1,10 @@
 //! Small fact representations shared by action contracts.
-use serde::{Serialize, Serializer};
+mod operation;
+pub use operation::OperationReport;
+
+use serde::Serialize;
 use trine::NativePath;
-use workyard_core::{Participant, TaskStatus};
+use workyard_core::Participant;
 
 #[derive(Serialize)]
 pub struct ParticipantOutcome {
@@ -18,11 +21,4 @@ impl From<Participant> for ParticipantOutcome {
 			phase: participant.phase.as_str().into(),
 		}
 	}
-}
-
-pub(crate) fn serialize_status<S: Serializer>(
-	status: &TaskStatus,
-	serializer: S,
-) -> Result<S::Ok, S::Error> {
-	serializer.serialize_str(status.as_str())
 }

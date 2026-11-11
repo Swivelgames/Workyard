@@ -1,6 +1,7 @@
 //! Workyard orchestration and interface DTOs; Git and state remain focused adapters.
 use trine::application::Application;
 
+mod command_hint;
 mod common;
 mod invocation;
 mod reporting;
@@ -9,8 +10,10 @@ mod terminal;
 
 // Action modules
 pub mod create;
+pub mod list;
+pub mod observation;
 pub mod recover;
-// mod list;
+pub mod status;
 // etc...
 
 // Preserve the original imports while exposing capability-scoped APIs.
@@ -22,6 +25,8 @@ pub fn application() -> Result<Application, Box<dyn std::error::Error>> {
 
 	app.register(create::build_entry()?)?;
 	app.register(recover::build_entry()?)?;
+	app.register(list::build_entry()?)?;
+	app.register(status::build_entry()?)?;
 
 	Ok(app)
 }

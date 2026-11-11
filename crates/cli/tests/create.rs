@@ -39,7 +39,7 @@ fn creates_two_repositories_with_external_state_and_keeps_sources_untouched() {
 		);
 	}
 	let stored = record(&state);
-	assert_eq!(stored["status"], "completed");
+	assert_eq!(stored["operation"]["outcome"], "succeeded");
 	assert_eq!(stored["participants"].as_array().unwrap().len(), 2);
 	assert!(!root.join(".workyard").exists());
 	assert_eq!(fs::read_dir(state.join("evidence")).unwrap().count(), 2);
@@ -162,7 +162,7 @@ fn pull_failure_preserves_created_tree_and_pending_participants() {
 	assert!(root.join("feat/pull/api/.git").is_file());
 	assert!(!root.join("feat/pull/web").exists());
 	let stored = record(&root.join(".workyard"));
-	assert_eq!(stored["status"], "failed");
+	assert_eq!(stored["operation"]["outcome"], "failed");
 	assert_eq!(stored["participants"][0]["phase"], "pulling");
 	assert_eq!(stored["participants"][1]["phase"], "not_started");
 }
@@ -312,7 +312,7 @@ fn rpc_and_cli_create_equivalent_task_outcomes() {
 		.collect();
 	assert!(lines.iter().any(|message| message["method"] == "progress"));
 	let terminal = lines.iter().find(|message| message["id"] == 1).unwrap();
-	assert_eq!(terminal["result"]["status"], "completed");
+	assert_eq!(terminal["result"]["operation"]["outcome"], "succeeded");
 	assert_eq!(terminal["result"]["participants"][0]["phase"], "completed");
 	assert_eq!(
 		git(&root.join("feat/cli/api"), &["rev-parse", "HEAD"]),
@@ -476,7 +476,7 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 	assert!(!output.status.success());
 	let summary = String::from_utf8_lossy(&output.stdout);
 	assert!(summary.contains("publication_uncertain"), "{summary}");
-	assert!(summary.contains("worktree_created"), "{summary}");
+	assert!(summary.contains("created"), "{summary}");
 	assert!(root.join("feat/publication/api/.git").exists());
 	assert!(!root.join("feat/publication/web").exists());
 	assert_eq!(

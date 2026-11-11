@@ -1,5 +1,5 @@
 use trine::InvocationContext;
-use workyard_core::{Control, ProblemCode, TaskStatus};
+use workyard_core::{Control, OperationOutcome, ProblemCode};
 use workyard_git::Runner;
 use workyard_state::Store;
 
@@ -40,14 +40,14 @@ async fn run(
 		&accepted,
 		&runner,
 		&control,
-		&Events(context),
+		&Events(context, "recover"),
 		&store,
 	)
 	.await;
 	match result {
 		Ok((task, record)) => {
 			let outcome = RecoverOutcome::from_task(task, record);
-			if outcome.status == TaskStatus::Failed {
+			if outcome.operation.outcome == OperationOutcome::Failed {
 				Err(outcome)
 			} else {
 				Ok(outcome)

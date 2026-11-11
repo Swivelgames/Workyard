@@ -1,7 +1,7 @@
 use super::evidence::effect_path;
 use super::{Store, TaskGuard};
 use crate::documents::read_versioned;
-use crate::recovery_record::{decode, match_intent, validate};
+use crate::records::task::{decode, match_intent, validate};
 use crate::{TaskRecord, exists};
 use crate::{damage::damaged, evidence::EffectRecord};
 use workyard_core::{Problem, RecoveryRecord, RecoveryState};
@@ -15,10 +15,10 @@ impl RecoveryState for Store {
 				"No independent admission evidence exists for this task.",
 			));
 		}
-		let intent: TaskRecord = read_versioned(&guard.evidence_path)?;
+		let intent: TaskRecord = crate::documents::read_supported(&guard.evidence_path, &[1, 2])?;
 		validate(&intent, name, &self.root, &self.state)?;
 		let recorded = if exists(&guard.record_path)? {
-			let record: TaskRecord = read_versioned(&guard.record_path)?;
+			let record: TaskRecord = crate::documents::read_supported(&guard.record_path, &[1, 2])?;
 			validate(&record, name, &self.root, &self.state)?;
 			match_intent(&intent, &record)?;
 			Some(record)

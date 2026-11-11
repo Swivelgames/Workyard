@@ -3,7 +3,8 @@
 Workyard creates a task across explicitly selected Git repositories. The same core
 operation is exposed through CLI views and Trine's on-demand stdio RPC host.
 
-This experimental slice implements `create`, its `checkout` alias, `recover`, and `rpc`.
+This experimental slice implements `create`, its `checkout` alias, `recover`,
+`list`, `status`, and `rpc`.
 Other lifecycle commands, MCP and TUI are not implemented yet.
 
 ```sh
@@ -81,6 +82,31 @@ at their verified original location; legacy uncertain creating/pulling records
 cannot acquire historical settlement through an upgrade. Fetch-only uncertainty
 allows explicit recovery retry under the existing native Git coordination rules.
 
+## Inspection
+
+```sh
+workyard list
+workyard status
+workyard status feat/payments --state-dir /workspace/.workyard
+```
+
+List summarizes all known tasks and their recorded participants. Bare status adds
+current Git observations for every task, including damaged and incomplete tasks;
+an explicit task selects only that record. Saved outcomes, independent effect
+evidence, task-lock contention and current Git facts are reported separately.
+Lock availability and recorded phases do not establish that Git writers stopped.
+
+Explicit state takes precedence over ancestor `.workyard` discovery. Missing state
+returns no tasks with a create example; existing damage and unknown tasks have
+distinct diagnostics. Inspection does not initialize state, fetch, repair worktrees,
+refresh the Git index or publish cached locations. Verified moved worktree paths
+appear in the response while the saved path remains visible. Listings are
+per-record observations, not a global workspace snapshot.
+
+Closed-task history and filters await removal support. Once that history exists,
+default status will include at most the five most recently closed tasks in addition
+to all active tasks. The optional global state-locator cache is also deferred.
+
 ## RPC
 
 Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout:
@@ -91,6 +117,8 @@ Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout:
 
 Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
 `{"task":"feat/payments","accept_pull":["api"],"state_dir":"/workspace/.workyard"}`.
+Inspection uses `action: ["list"]` or `["status"]` with optional `state_dir` and
+`tasks_root`; status additionally accepts optional `task`.
 
 RPC uses Trine's shared invocation, progress, cancellation and terminal response
 contract. Native Git output never enters protocol stdout. Clean stdin EOF drains

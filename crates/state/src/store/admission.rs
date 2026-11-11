@@ -1,5 +1,5 @@
 use super::Store;
-use crate::documents::read_versioned;
+use crate::documents::read_supported;
 use crate::records::task_filename;
 use crate::{Lock, TaskRecord, canonical_future, exists};
 use std::{fs, path::PathBuf};
@@ -67,7 +67,7 @@ impl Store {
 				continue;
 			}
 
-			let record: TaskRecord = read_versioned(path)?;
+			let record: TaskRecord = read_supported(path, &[1, 2])?;
 			if record.task != name {
 				return Err(Problem::new(
 					workyard_core::ProblemCode::DamagedState,
@@ -98,7 +98,7 @@ impl Store {
 					continue;
 				}
 
-				let record: TaskRecord = read_versioned(&path)?;
+				let record: TaskRecord = read_supported(&path, &[1, 2])?;
 				if path.file_name() != Some(std::ffi::OsStr::new(&task_filename(&record.task))) {
 					return Err(Problem::new(
 						workyard_core::ProblemCode::DamagedState,

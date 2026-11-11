@@ -4,6 +4,13 @@ use std::{fs, io::Write, path::Path};
 use workyard_core::Problem;
 
 pub(crate) fn read_versioned<T: DeserializeOwned>(path: &Path) -> Result<T, Problem> {
+	read_supported(path, &[1])
+}
+
+pub(crate) fn read_supported<T: DeserializeOwned>(
+	path: &Path,
+	versions: &[u64],
+) -> Result<T, Problem> {
 	let bytes = fs::read(path).map_err(|e| Problem::io(format!("Read {path:?}"), e))?;
 	let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
 		Problem::new(
@@ -11,7 +18,11 @@ pub(crate) fn read_versioned<T: DeserializeOwned>(path: &Path) -> Result<T, Prob
 			format!("Invalid JSON at {path:?}: {e}"),
 		)
 	})?;
-	if value.get("version").and_then(|v| v.as_u64()) != Some(1) {
+	if !value
+		.get("version")
+		.and_then(|v| v.as_u64())
+		.is_some_and(|version| versions.contains(&version))
+	{
 		return Err(Problem::new(
 			workyard_core::ProblemCode::IncompatibleState,
 			format!("Unsupported state version at {path:?}."),

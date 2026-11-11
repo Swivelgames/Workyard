@@ -1,6 +1,6 @@
 use crate::{
-	Control, CreateRequest, Git, Participant, Phase, Problem, Repository, Task, TaskStatus,
-	overlaps, safe_component,
+	Control, CreateRequest, Git, Participant, Phase, Problem, Repository, Task, overlaps,
+	safe_component,
 };
 use std::collections::HashMap;
 
@@ -111,7 +111,8 @@ pub(crate) async fn preflight(
 		checkout: request.checkout,
 		no_fetch: request.no_fetch,
 		pull: request.pull,
-		status: TaskStatus::Pending,
+		lifecycle: crate::TaskLifecycle::Active,
+		operation: crate::Operation::create(),
 		problem: None,
 	};
 	Ok((task, repositories))

@@ -37,10 +37,12 @@ impl Lock {
 			.write(true)
 			.open(path)
 			.map_err(|e| Problem::io(format!("Open lock {path:?}"), e))?;
+
 		let attempt = match mode {
 			LockMode::Shared => file.try_lock_shared(),
 			LockMode::Exclusive => file.try_lock(),
 		};
+
 		attempt.map_err(|error| match error {
 			std::fs::TryLockError::WouldBlock => Problem::new(
 				workyard_core::ProblemCode::ResourceBusy,
@@ -51,28 +53,57 @@ impl Lock {
 			),
 			std::fs::TryLockError::Error(error) => Problem::io(format!("Lock {path:?}"), error),
 		})?;
+
 		let lock = Self {
 			file,
 			path: path.into(),
 		};
+
 		lock.verify()?;
+
+		Ok(lock)
+	}
+
+	/// Shared admission on an existing gate, without creating files or requiring write access.
+	pub fn read_existing(path: &Path) -> Result<Self, Problem> {
+		let file =
+			File::open(path).map_err(|e| Problem::io(format!("Open existing gate {path:?}"), e))?;
+
+		file.try_lock_shared().map_err(|error| match error {
+			std::fs::TryLockError::WouldBlock => Problem::new(
+				workyard_core::ProblemCode::ResourceBusy,
+				format!("Resource is busy: {path:?}"),
+			),
+			std::fs::TryLockError::Error(e) => Problem::io("Read-lock existing gate", e),
+		})?;
+
+		let lock = Self {
+			file,
+			path: path.into(),
+		};
+
+		lock.verify()?;
+
 		Ok(lock)
 	}
 
 	pub async fn wait(path: &Path, control: &Control) -> Result<Self, Problem> {
 		loop {
 			control.check()?;
+
 			match Self::acquire_mode(path, LockMode::Exclusive) {
 				Ok(lock) => return Ok(lock),
 				Err(error) if error.code == workyard_core::ProblemCode::ResourceBusy => {}
 				Err(error) => return Err(error),
 			}
+
 			smol::Timer::after(Duration::from_millis(20)).await;
 		}
 	}
 
 	pub fn verify(&self) -> Result<(), Problem> {
 		let named = File::open(&self.path).map_err(|e| Problem::io("Open named lock", e))?;
+
 		let same = file_identity(&self.file)? == file_identity(&named)?;
 		if !same {
 			return Err(Problem::new(
@@ -103,7 +134,9 @@ mod tests {
 	fn dropping_guard_releases_lock_even_with_a_duplicate_descriptor() {
 		let directory = tempfile::tempdir().unwrap();
 		let path = directory.path().join("resource.lock");
+
 		let guard = super::Lock::acquire(&path, false).unwrap();
+
 		// A fork-before-exec inherits this same open file description.
 		let inherited = guard.file.try_clone().unwrap();
 		drop(guard);

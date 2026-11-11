@@ -1,8 +1,7 @@
-mod operations;
 mod registrations;
 
+use crate::operations::operations_present;
 use crate::{Repository, Runner, process::args};
-use operations::operations_present;
 use registrations::registrations;
 use std::path::PathBuf;
 use workyard_core::{Control, Participant, Problem, ProblemCode, RecoveryGit, RecoveryObservation};
