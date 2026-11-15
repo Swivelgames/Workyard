@@ -4,7 +4,8 @@ use std::path::Path;
 use workyard_core::{Participant, Phase, Problem, ProblemCode, Task, TaskLifecycle};
 
 pub(crate) fn match_intent(intent: &TaskRecord, current: &TaskRecord) -> Result<(), Problem> {
-	let same = intent.checkout == current.checkout
+	let same = intent.generation == current.generation
+		&& intent.checkout == current.checkout
 		&& intent.no_fetch == current.no_fetch
 		&& intent.pull == current.pull
 		&& intent.participants.len() == current.participants.len()
@@ -32,7 +33,7 @@ pub(crate) fn validate(
 	root: &Path,
 	state: &Path,
 ) -> Result<(), Problem> {
-	if !matches!(record.version, 1 | 2) {
+	if !matches!(record.version, 1..=3) {
 		return Err(Problem::new(
 			ProblemCode::IncompatibleState,
 			"Unsupported task version in recovery evidence.",
@@ -66,8 +67,28 @@ pub(crate) fn validate(
 		}
 		parse_phase(&p.phase)?;
 	}
-	if record.lifecycle != "active" {
+	if !matches!(record.lifecycle.as_str(), "active" | "retired") {
 		return Err(damaged("Invalid task lifecycle."));
+	}
+	if let Some(removal) = &record.removal {
+		let removal = removal.decode()?;
+		if removal.participants.len() != record.participants.len() {
+			return Err(damaged(
+				"Removal membership does not match task membership.",
+			));
+		}
+		if record.lifecycle == "retired"
+			&& (removal.retired_at.is_none()
+				|| removal.direction != workyard_core::RemovalDirection::Remove
+				|| removal
+					.participants
+					.iter()
+					.any(|p| p.phase != workyard_core::RemovalPhase::Removed))
+		{
+			return Err(damaged("Retirement lacks complete removal evidence."));
+		}
+	} else if record.lifecycle == "retired" {
+		return Err(damaged("Retirement lacks removal evidence."));
 	}
 	record.operation.decode()?;
 	Ok(())
@@ -75,13 +96,19 @@ pub(crate) fn validate(
 
 pub(crate) fn decode(record: TaskRecord) -> Result<Task, Problem> {
 	Ok(Task {
+		generation: record.generation,
+		removal: record.removal.as_ref().map(|r| r.decode()).transpose()?,
 		name: record.task,
 		root: record.tasks_root.decode()?,
 		state_dir: record.state_dir.decode()?,
 		checkout: record.checkout,
 		no_fetch: record.no_fetch,
 		pull: record.pull,
-		lifecycle: TaskLifecycle::Active,
+		lifecycle: if record.lifecycle == "retired" {
+			TaskLifecycle::Retired
+		} else {
+			TaskLifecycle::Active
+		},
 		operation: record.operation.decode()?,
 		problem: record.problem.map(decode_problem).transpose()?,
 		participants: record

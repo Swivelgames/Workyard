@@ -2,10 +2,13 @@
 mod creation;
 mod operation;
 mod recovery;
+mod removal;
 mod task;
 
 pub use creation::{CreateRequest, RepositoryInput};
-pub use recovery::{RecoveryObservation, RecoveryRecord};
+pub use recovery::{RecoveryObservation, RecoveryRecord, RecoveryResult};
 pub use task::{Participant, Phase, Task, TaskLifecycle};
 
 pub use operation::{Operation, OperationKind, OperationOutcome};
+
+pub use removal::{Removal, RemovalDirection, RemovalParticipant, RemovalPhase, RemovalResult};

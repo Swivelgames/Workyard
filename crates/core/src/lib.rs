@@ -9,6 +9,7 @@ mod problem;
 mod problem_code;
 mod publication;
 mod recover;
+mod remove;
 mod settle_add;
 
 pub use control::Control;
@@ -20,3 +21,5 @@ pub use ports::*;
 pub use problem::Problem;
 pub use problem_code::ProblemCode;
 pub use recover::recover;
+
+pub use remove::{recover_removal, remove};

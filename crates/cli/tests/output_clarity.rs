@@ -12,7 +12,7 @@ fn empty_workspace_messages_belong_at_workspace_level() {
 		assert_ok(&output);
 		let output = String::from_utf8(output.stdout).unwrap();
 		assert!(
-			output.contains("\n\nNo Workyard state found.\nGet started: workyard create"),
+			output.contains("No Workyard state found.\nGet started: workyard create"),
 			"{output}"
 		);
 		assert!(!output.contains("        No Workyard"), "{output}");
@@ -52,8 +52,8 @@ fn summaries_omit_repetition_but_keep_branch_exceptions() {
 	let output = workyard(&root, &["list"]);
 	assert_ok(&output);
 	let output = String::from_utf8(output.stdout).unwrap();
-	assert!(output.contains("[not inspected]"), "{output}");
-	assert!(output.contains("registered"), "{output}");
+	assert!(output.contains("feat/example [healthy]  api"), "{output}");
+	assert!(!output.contains("Repository  State"), "{output}");
 	assert!(!output.contains("Recorded participants"), "{output}");
 
 	let output = workyard(&root, &["status", "feat/example"]);
@@ -82,6 +82,6 @@ fn workspace_errors_are_not_indented_as_participant_diagnostics() {
 	let output = workyard(fixture.path(), &["status"]);
 	assert!(!output.status.success());
 	let output = String::from_utf8(output.stdout).unwrap();
-	assert!(output.contains("\n\ndamaged_state:"), "{output}");
+	assert!(output.starts_with("damaged_state:"), "{output}");
 	assert!(!output.contains("        damaged_state:"), "{output}");
 }

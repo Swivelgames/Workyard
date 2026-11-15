@@ -55,3 +55,13 @@ Use focused regression checks for changed boundaries, then the required workspac
 checks. Linux checks do not establish native Windows/macOS behavior. Record actual
 platform evidence and remaining checks honestly. Finish with a complete-file
 readability pass and compare equivalent capability modules side by side.
+
+## Preserve usability across operations
+
+Recovery is a last resort for actual incomplete effects or unresolved uncertainty.
+Refusal, cancellation, validation failure or missing consent must not itself turn
+usable state into damaged state. Preserve persisted history and evidence when no
+effects occurred; keep invocation outcomes separate from resource condition, and
+support ordinary retry. After effects begin, preserve successful work and truthful
+pending evidence; never hide damage or discard user work to avoid recovery.
+Apply the detailed rule in the code organization and readability guide.

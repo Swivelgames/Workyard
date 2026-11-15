@@ -1,6 +1,8 @@
 mod codec;
 mod compatibility;
 mod operation;
+mod removal;
+pub use removal::RemovalRecord;
 
 pub(crate) use codec::{decode, match_intent, validate};
 pub use operation::OperationRecord;
@@ -43,6 +45,8 @@ impl From<&Problem> for ProblemRecord {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct TaskRecord {
+	pub generation: u64,
+	pub removal: Option<RemovalRecord>,
 	pub version: u32,
 	pub task: String,
 	pub tasks_root: StoredPath,
@@ -59,7 +63,9 @@ pub struct TaskRecord {
 impl From<&Task> for TaskRecord {
 	fn from(task: &Task) -> Self {
 		Self {
-			version: 2,
+			version: 3,
+			generation: task.generation,
+			removal: task.removal.as_ref().map(Into::into),
 			task: task.name.clone(),
 			tasks_root: task.root.as_path().into(),
 			state_dir: task.state_dir.as_path().into(),

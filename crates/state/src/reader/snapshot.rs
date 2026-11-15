@@ -166,6 +166,9 @@ fn decoded(mut record: TaskRecord, problems: &mut Vec<Problem>) -> Option<workya
 /// The last normal effect snapshot can still say pending: success is published
 /// afterward. Only concrete unfinished phases or failure contradict that success.
 fn effect_contradicts_success(saved: &TaskRecord, effect: &TaskRecord) -> bool {
+	if saved.lifecycle == "retired" && effect.lifecycle == "retired" {
+		return false;
+	}
 	if saved.operation.outcome != "succeeded" {
 		return false;
 	}

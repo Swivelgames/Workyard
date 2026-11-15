@@ -53,6 +53,8 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 				|| participant.common_dir != previous.common_dir
 				|| participant.destination != previous.destination;
 			if cache_changed {
+				self.publication_attempted
+					.store(true, std::sync::atomic::Ordering::Relaxed);
 				self.store
 					.record_effect(self.guard, task, index, crate::EffectState::Settled)?;
 			}

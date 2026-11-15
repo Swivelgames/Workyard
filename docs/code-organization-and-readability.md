@@ -427,6 +427,29 @@ contracts retain deliberate semantics, stable codes and precise resource identit
 Use contextual hierarchy, concise exception-focused detail and executable command
 hints. Shared renderers own presentation mechanics, while actions retain policy.
 
+## Preserve usability; recovery is a last resort
+
+Apply this rule to every operation. A declined confirmation, cancelled request,
+validation failure or missing consent must not itself damage the managed resource
+or create a recovery obligation. Separate the invocation outcome from the object's
+lifecycle and condition: an unsuccessful invocation does not imply unhealthy state.
+
+- Validate and obtain consent before publishing mutation intent or applying effects
+	where possible. If nothing changed, preserve existing task records, evidence,
+	operation history and diagnostics; allow ordinary retry.
+- Handle routine refusal and cancellation as normal control flow. Do not require
+	recover merely because an operation was requested or a user changed their mind.
+- When effects have begun, settle them safely and preserve successful work. Resume
+	through the ordinary operation where safe and supported. Require recovery only
+	for actual incomplete effects or unresolved uncertainty that needs reconciliation.
+- Never hide existing damage, discard pending-writer evidence, claim an unsafe
+	rollback succeeded or erase authored files to make the result look healthy.
+- Present what changed and what remains usable. Recommend recovery only when the
+	observed state requires it, with a specific reason and actionable next step.
+- Test refusal before the first effect, later consent refusal, cancellation and
+	ordinary retry. Assert unchanged persistent state for no-effect exits and preserve
+	truthful partial-effect evidence when interruption follows real changes.
+
 ## Apply the guidance during implementation and review
 
 Read complete changed files in their final state, not only diff fragments. Examine

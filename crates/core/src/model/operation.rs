@@ -3,6 +3,7 @@
 pub enum OperationKind {
 	Create,
 	Recover,
+	Remove,
 }
 
 impl OperationKind {
@@ -10,6 +11,7 @@ impl OperationKind {
 		match self {
 			Self::Create => "create",
 			Self::Recover => "recover",
+			Self::Remove => "remove",
 		}
 	}
 }

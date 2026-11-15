@@ -25,6 +25,31 @@ Success banners belong to the invocation that succeeded. A list shown days later
 must not announce “Creation succeeded” as if the list command performed work.
 Relevant past failures may still appear, clearly identified as recorded history.
 
+## Give each command a distinct presentation
+
+Share styles and focused rendering components, not an entire report layout across
+commands. Choose content from the user's purpose:
+
+- `list` is a compact inventory: active task names, repositories and a short truthful
+	condition, followed by up to five recent closures when present. No primary title
+	or workspace metadata. Current health requires observation, not saved membership.
+- `status` explains active task and participant condition, including dirty or missing
+	worktrees and actionable problems. No primary title, workspace metadata or closed
+	history section. Keep unresolved-record diagnostics visible.
+- `info` provides workspace context and diagnostic facts, such as root, state directory
+	and discovery source. Report only facts the implementation can establish.
+- Mutation commands present one coherent operation flow: relevant context and risks,
+	consent when needed, progress and a concise result. Do not append a status report
+	to every successful or cancelled operation.
+
+Removal presents the affected participants and all relevant risks before one
+initial task-level confirmation. Include explicit file-loss wording when consent
+would discard files. Do not ask the same removal question once per repository.
+Changed destructive facts require fresh disclosure and consent before those effects.
+Keep flag policy intact: --yes does not authorize file discard; --force authorizes
+disclosed discard and implies --yes. A no-effect cancellation reports that no
+worktrees changed without implying task damage or suggesting unnecessary recovery.
+
 ## Separate internal facts, external contracts and presentation
 
 | Boundary | Owns | Avoid |

@@ -4,6 +4,8 @@ use workyard_state::Store;
 
 pub fn task(root: &Path, state: &Path, name: &str) -> Task {
 	Task {
+		generation: 0,
+		removal: None,
 		name: name.into(),
 		root: root.into(),
 		state_dir: state.into(),

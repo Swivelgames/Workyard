@@ -30,13 +30,20 @@ pub(crate) fn path(path: &Path) -> Option<String> {
 	argument(path.to_str()?)
 }
 
-pub(crate) fn status(task: &str, state: Option<&Path>) -> Option<String> {
+pub(crate) fn workspace_status(state: Option<&Path>) -> Option<String> {
 	let mut command = String::from("workyard status");
 	if let Some(state) = state {
 		command.push_str(&format!(" --state-dir={}", path(state)?));
 	}
-	command.push_str(&format!(" -- {}", argument(task)?));
 	Some(command)
+}
+
+pub(crate) fn status(task: &str, state: Option<&Path>) -> Option<String> {
+	Some(format!(
+		"{} -- {}",
+		workspace_status(state)?,
+		argument(task)?
+	))
 }
 
 #[cfg(test)]

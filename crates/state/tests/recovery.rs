@@ -27,7 +27,7 @@ fn recovery_requires_admission_and_preserves_corrupt_effect_evidence() {
 	let guard = store.admit("feat/task").unwrap();
 	assert_eq!(
 		store.load(&guard, "feat/task").unwrap_err().code,
-		ProblemCode::DamagedState
+		ProblemCode::TaskUnknown
 	);
 	store.begin(&guard, &completed_task(&workspace)).unwrap();
 	let effect = guard.evidence_path.with_extension("effects");
@@ -134,7 +134,14 @@ fn loading_preserves_status_and_problem_before_recovery_prepares_attempt() {
 		assert_eq!(problem.remedy, "inspect worktree");
 	}
 
-	store.begin(&guard, &original).unwrap();
+	workyard_core::State::record_effect(
+		store,
+		&guard,
+		&original,
+		0,
+		workyard_core::EffectState::Settled,
+	)
+	.unwrap();
 
 	let effect = guard.evidence_path.with_extension("effects");
 	let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&effect).unwrap()).unwrap();
@@ -149,17 +156,19 @@ fn loading_preserves_status_and_problem_before_recovery_prepares_attempt() {
 }
 
 #[test]
-fn legacy_task_normalization_serializes_canonical_v2_and_rejects_mixed_fields() {
+fn legacy_task_normalization_serializes_canonical_v3_and_rejects_mixed_fields() {
 	let workspace = support::Workspace::new();
 	let task = completed_task(&workspace);
 	let mut value = serde_json::to_value(workyard_state::TaskRecord::from(&task)).unwrap();
 	value.as_object_mut().unwrap().remove("lifecycle");
 	value.as_object_mut().unwrap().remove("operation");
+	value.as_object_mut().unwrap().remove("generation");
+	value.as_object_mut().unwrap().remove("removal");
 	value["version"] = 1.into();
 	value["status"] = "completed".into();
 	let normalized: workyard_state::TaskRecord = serde_json::from_value(value.clone()).unwrap();
 	let canonical = serde_json::to_value(normalized).unwrap();
-	assert_eq!(canonical["version"], 2);
+	assert_eq!(canonical["version"], 3);
 	assert_eq!(canonical["lifecycle"], "active");
 	assert_eq!(canonical["operation"]["outcome"], "succeeded");
 	assert!(canonical["operation"]["kind"].is_null());

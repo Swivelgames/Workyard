@@ -1,5 +1,6 @@
 mod admission;
 mod evidence;
+mod history;
 mod recovery;
 mod workspace;
 
@@ -24,6 +25,7 @@ impl Store {
 	pub fn begin(&self, guard: &TaskGuard, task: &Task) -> Result<(), Problem> {
 		self.verify()?;
 		guard.verify()?;
+		self.archive_previous(guard, &task.name)?;
 		let record = TaskRecord::from(task);
 		// Independent immutable admission evidence survives a missing task document.
 		publish(&guard.evidence_path, &record)?;
@@ -81,6 +83,35 @@ impl workyard_core::State for Store {
 
 	fn ensure_new(&self, admission: &TaskGuard, name: &str) -> Result<(), Problem> {
 		Store::ensure_new(self, admission, name)
+	}
+
+	fn next_generation(&self, admission: &TaskGuard) -> Result<u64, Problem> {
+		if !exists(&admission.record_path)? {
+			return Ok(1);
+		}
+		let previous: TaskRecord =
+			crate::documents::read_supported(&admission.record_path, &[1, 2, 3])?;
+		previous
+			.generation
+			.checked_add(1)
+			.ok_or_else(|| crate::damage::damaged("Task generation exhausted."))
+	}
+
+	fn cleanup_retired(&self, admission: &TaskGuard, task: &Task) -> Result<(), Problem> {
+		self.verify()?;
+		admission.verify()?;
+		match fs::remove_dir(task.root.join(&task.name)) {
+			Ok(()) => Ok(()),
+			Err(error)
+				if matches!(
+					error.kind(),
+					std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+				) =>
+			{
+				Ok(())
+			}
+			Err(error) => Err(Problem::io("Remove empty retired task directory", error)),
+		}
 	}
 
 	fn record_path(&self, admission: &TaskGuard) -> PathBuf {

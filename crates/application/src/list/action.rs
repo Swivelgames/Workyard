@@ -17,7 +17,7 @@ async fn run(
 		None,
 		input.tasks_root,
 		input.state_dir,
-		crate::observation::Detail::Summary,
+		crate::observation::Selection::Inventory,
 		context,
 	)
 	.await

@@ -16,6 +16,12 @@ pub struct RecoverInput {
 	pub state_dir: Option<NativePath>,
 	#[serde(default)]
 	pub accept_pull: Vec<String>,
+	#[serde(default)]
+	pub undo: bool,
+	#[serde(default)]
+	pub yes: bool,
+	#[serde(default)]
+	pub force: bool,
 }
 
 impl RecoverInput {

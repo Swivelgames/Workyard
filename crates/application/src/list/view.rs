@@ -26,7 +26,7 @@ impl View<ListOutcome, ListOutcome, Progress> for ListView {
 			Ok(outcome) | Err(outcome) => &outcome.0,
 		};
 		let mut terminal = crate::terminal::Terminal::for_output(&self.output.stdout);
-		crate::observation::render::workspace(&mut terminal, outcome, "Workyard List");
+		crate::observation::render::list(&mut terminal, outcome);
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
 
 		Ok(CliCompletion::exit(if result.is_err() { 1 } else { 0 }))

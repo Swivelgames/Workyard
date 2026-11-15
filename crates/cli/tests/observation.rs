@@ -468,6 +468,8 @@ fn legacy_task(value: &mut Value) {
 		}),
 	);
 	object.remove("lifecycle");
+	object.remove("generation");
+	object.remove("removal");
 	object.insert("version".into(), json!(1));
 }
 
@@ -511,7 +513,7 @@ fn legacy_documents_observe_without_writes_and_recover_with_mixed_versions() {
 
 	assert_ok(&workyard(&root, &["recover", "feat/legacy"]));
 	let saved: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
-	assert_eq!(saved["version"], 2);
+	assert_eq!(saved["version"], 3);
 	assert_eq!(saved["lifecycle"], "active");
 	assert_eq!(saved["operation"]["kind"], "recover");
 	assert!(saved["operation"]["continues"].is_null());
@@ -538,8 +540,8 @@ fn clean_worktrees_do_not_hide_coordination_uncertainty_and_modified_is_healthy(
 		"modified"
 	);
 	let listed = rpc(&root, "list", json!({}));
-	assert_eq!(listed["result"]["tasks"][0]["condition"], "unknown");
-	assert_eq!(listed["result"]["tasks"][0]["provenance"], "recorded");
+	assert_eq!(listed["result"]["tasks"][0]["condition"], "healthy");
+	assert_eq!(listed["result"]["tasks"][0]["provenance"], "inspected");
 
 	let state = root.join(".workyard");
 	let name = workyard_state::task_filename("feat/task");
@@ -655,5 +657,118 @@ fn mismatched_record_filename_is_identified_without_cluttering_healthy_tasks() {
 	let output = String::from_utf8(output.stdout).unwrap();
 	assert!(output.contains("wrong-name.json"), "{output}");
 	assert!(output.contains("State record:"), "{output}");
+	assert_eq!(before, snapshot(fixture.path()));
+}
+
+#[test]
+fn command_roles_keep_inventory_compact_status_active_and_info_read_only() {
+	let fixture = tempfile::tempdir().unwrap();
+	let source = repo(fixture.path(), "api");
+	let root = fixture.path().join("workspace");
+	fs::create_dir(&root).unwrap();
+	for index in 0..6 {
+		let name = format!("closed/{index}");
+		create(&root, &source, &name);
+		assert_ok(&workyard(&root, &["remove", &name, "--yes"]));
+	}
+	create(&root, &source, "feat/active");
+	fs::write(root.join("feat/active/api/file"), "modified").unwrap();
+	let before = snapshot(fixture.path());
+
+	let listed = rpc(&root, "list", json!({}));
+	let tasks = listed["result"]["tasks"].as_array().unwrap();
+	assert_eq!(
+		tasks
+			.iter()
+			.filter(|task| task["lifecycle"] == "retired")
+			.count(),
+		5
+	);
+	let listing = workyard(&root, &["list"]);
+	assert_ok(&listing);
+	let listing = String::from_utf8(listing.stdout).unwrap();
+	assert!(listing.contains("feat/active [healthy]  api"), "{listing}");
+	assert!(!listing.contains("Repository  State"));
+	assert!(listing.contains("Recently closed tasks"));
+
+	let status = workyard(&root, &["status"]);
+	assert_ok(&status);
+	let status = String::from_utf8(status.stdout).unwrap();
+	assert!(status.contains("modified"), "{status}");
+	assert!(!status.contains("closed/"));
+	for output in [&listing, &status] {
+		assert!(!output.contains("Workyard "));
+		assert!(!output.contains("Root:"));
+		assert!(!output.contains("State:"));
+	}
+
+	let info = rpc(&root, "info", json!({}));
+	assert_eq!(info["result"]["discovery"], "ancestor");
+	assert_eq!(info["result"]["active_tasks"], 1);
+	assert_eq!(info["result"]["retired_tasks"], 6);
+	assert_eq!(info["result"]["tasks_root"], json!(root));
+	let info = rpc(&root, "info", json!({"state_dir":root.join(".workyard")}));
+	assert_eq!(info["result"]["discovery"], "explicit");
+	let info = workyard(&root, &["info"]);
+	assert_ok(&info);
+	assert!(String::from_utf8_lossy(&info.stdout).contains("State: .workyard"));
+	assert_eq!(before, snapshot(fixture.path()));
+}
+
+#[test]
+fn rpc_remove_reports_task_scoped_discard_decision_without_changes() {
+	let fixture = tempfile::tempdir().unwrap();
+	let source = repo(fixture.path(), "api");
+	let root = fixture.path().join("workspace");
+	fs::create_dir(&root).unwrap();
+	create(&root, &source, "feat/task");
+	fs::write(root.join("feat/task/api/file"), "modified").unwrap();
+	let before = snapshot(fixture.path());
+	let response = rpc(&root, "remove", json!({"task":"feat/task", "yes":true}));
+	let outcome = &response["error"]["data"];
+	assert_eq!(
+		outcome["problem"]["code"], "decision_required",
+		"{response}"
+	);
+	assert_eq!(outcome["decision"]["kind"], "discard_task");
+	assert_eq!(outcome["decision"]["task"], "feat/task");
+	assert_eq!(outcome["condition"], "healthy");
+	assert_eq!(before, snapshot(fixture.path()));
+}
+
+#[test]
+fn info_preserves_absent_and_damaged_state_while_list_keeps_diagnostics_compact() {
+	let fixture = tempfile::tempdir().unwrap();
+	let before = snapshot(fixture.path());
+	let absent = rpc(fixture.path(), "info", json!({"state_dir":"absent"}));
+	assert!(absent["result"]["discovery"].is_null());
+	assert!(
+		absent["result"]["guidance"]
+			.as_str()
+			.unwrap()
+			.contains("--state-dir=absent")
+	);
+	assert_eq!(before, snapshot(fixture.path()));
+
+	let source = repo(fixture.path(), "api");
+	let root = fixture.path().join("workspace");
+	fs::create_dir(&root).unwrap();
+	create(&root, &source, "feat/task");
+	let state = root.join(".workyard");
+	let path = state
+		.join("tasks")
+		.join(workyard_state::task_filename("feat/task"));
+	fs::write(&path, "invalid json").unwrap();
+	let before = snapshot(fixture.path());
+
+	let info = rpc(&root, "info", json!({}));
+	assert_eq!(info["result"]["unresolved_records"], 1);
+	let output = workyard(&root, &["list"]);
+	assert_ok(&output);
+	let output = String::from_utf8(output.stdout).unwrap();
+	assert!(output.contains("[needs attention]"), "{output}");
+	assert!(output.contains("State record:"), "{output}");
+	assert!(output.contains("Inspect: workyard status"), "{output}");
+	assert!(!output.contains("Invalid JSON"), "{output}");
 	assert_eq!(before, snapshot(fixture.path()));
 }

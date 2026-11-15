@@ -1,5 +1,6 @@
 //! Existing-only state reader; observations never enter mutation admission.
 mod coordination;
+mod history;
 mod snapshot;
 mod task;
 mod validation;

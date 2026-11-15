@@ -17,7 +17,7 @@ async fn run(
 		input.task,
 		input.tasks_root,
 		input.state_dir,
-		crate::observation::Detail::Git,
+		crate::observation::Selection::Active,
 		context,
 	)
 	.await

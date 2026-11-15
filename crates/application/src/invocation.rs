@@ -15,6 +15,7 @@ impl workyard_core::Observer for Events {
 	) -> Result<(), workyard_core::Problem> {
 		self.0
 			.emit(Progress {
+				disclosure: None,
 				action: self.1,
 				task: task.into(),
 				participant: participant.into(),

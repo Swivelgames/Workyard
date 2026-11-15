@@ -2,7 +2,7 @@
 use crate::command_hint;
 use std::path::Path;
 
-pub(super) fn missing_state(root: Option<&Path>, explicit: Option<&Path>) -> String {
+pub(crate) fn missing_state(root: Option<&Path>, explicit: Option<&Path>) -> String {
 	getting_started("No Workyard state found.", root, explicit)
 }
 

@@ -41,6 +41,8 @@ fn root_and_capability_imports_support_direct_invocation() {
 #[test]
 fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields() {
 	let task = workyard_core::Task {
+		generation: 0,
+		removal: None,
 		name: "feat/test".into(),
 		root: "workspace".into(),
 		state_dir: "state".into(),
@@ -73,5 +75,7 @@ fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields()
 		"participants": [{"name":"api", "path":"workspace/api", "phase":"completed"}]
 	});
 	assert_eq!(serde_json::to_value(create).unwrap(), expected);
+	let mut expected = expected;
+	expected["nothing_to_recover"] = false.into();
 	assert_eq!(serde_json::to_value(recover).unwrap(), expected);
 }

@@ -11,14 +11,25 @@ impl RecoveryState for Store {
 		self.verify()?;
 		guard.verify()?;
 		if !exists(&guard.evidence_path)? {
-			return Err(damaged(
-				"No independent admission evidence exists for this task.",
-			));
+			return Err(
+				if !exists(&guard.record_path)? && !exists(&effect_path(guard))? {
+					Problem::new(
+						workyard_core::ProblemCode::TaskUnknown,
+						"Task is unknown in this state directory.",
+					)
+				} else {
+					damaged("No independent admission evidence exists for this task.")
+				},
+			);
 		}
-		let intent: TaskRecord = crate::documents::read_supported(&guard.evidence_path, &[1, 2])?;
+		let intent: TaskRecord =
+			crate::documents::read_supported(&guard.evidence_path, &[1, 2, 3])?;
 		validate(&intent, name, &self.root, &self.state)?;
+		let mut needs_publication = true;
 		let recorded = if exists(&guard.record_path)? {
-			let record: TaskRecord = crate::documents::read_supported(&guard.record_path, &[1, 2])?;
+			let (record, version): (TaskRecord, _) =
+				crate::documents::read_supported_with_version(&guard.record_path, &[1, 2, 3])?;
+			needs_publication = version != 3;
 			validate(&record, name, &self.root, &self.state)?;
 			match_intent(&intent, &record)?;
 			Some(record)
@@ -39,7 +50,7 @@ impl RecoveryState for Store {
 			}
 			(effect.task, effect.pending)
 		} else {
-			let record = recorded.ok_or_else(|| damaged("Missing task metadata has no independent effect evidence. Restore a verified record; do not recreate worktrees."))?;
+			let record = recorded.clone().ok_or_else(|| damaged("Missing task metadata has no independent effect evidence. Restore a verified record; do not recreate worktrees."))?;
 			if record
 				.participants
 				.iter()
@@ -52,6 +63,8 @@ impl RecoveryState for Store {
 			(record, None)
 		};
 		Ok(RecoveryRecord {
+			needs_publication,
+			recorded: recorded.map(decode).transpose()?,
 			task: decode(record)?,
 			pending,
 		})

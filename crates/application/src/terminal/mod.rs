@@ -1,8 +1,11 @@
 //! Shared presentation components; views choose content and completion policy.
+mod confirmation;
 mod operation;
 mod paths;
 mod style;
 mod table;
+
+pub(crate) use confirmation::confirmation_message;
 
 use crate::common::{ProblemOutcome, Progress};
 use std::{fmt::Write, path::Path};
@@ -137,6 +140,37 @@ impl Terminal {
 	}
 
 	pub fn progress(&mut self, event: &Progress) {
+		if let Some(disclosure) = &event.disclosure {
+			self.disclosure(disclosure);
+			return;
+		}
+		if event.phase == "disclosed_changes_will_be_discarded" {
+			writeln!(
+				self.output,
+				"    Removing this task will discard the disclosed files. These changes cannot be restored."
+			)
+			.unwrap();
+			return;
+		}
+		if event.phase == "discarded_changes_not_restorable" {
+			writeln!(self.output, "    Discarded changes cannot be restored.").unwrap();
+			return;
+		}
+		if event.action == "recover" || (event.action == "remove" && event.phase == "removed") {
+			let phase = match event.phase.as_str() {
+				"completed" => "recovery step finished",
+				"worktree_created" => "worktree created",
+				phase => phase,
+			};
+			writeln!(
+				self.output,
+				"    {}: {}",
+				text(&event.participant),
+				text(phase)
+			)
+			.unwrap();
+			return;
+		}
 		writeln!(
 			self.output,
 			"{} · {}: {}",

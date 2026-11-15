@@ -4,7 +4,7 @@ Workyard creates a task across explicitly selected Git repositories. The same co
 operation is exposed through CLI views and Trine's on-demand stdio RPC host.
 
 This experimental slice implements `create`, its `checkout` alias, `recover`,
-`list`, `status`, and `rpc`.
+`remove`, `list`, `status`, `info`, and `rpc`.
 Other lifecycle commands, MCP and TUI are not implemented yet.
 
 ```sh
@@ -21,7 +21,7 @@ contains the state files directly. Each state directory belongs to one tasks roo
 Use `--repo-name`, `--repo-remote` and `--repo-from` immediately after their `--repo`
 to override that participant. Common `--remote` and `--from` apply irrespective of
 argument position. Repeated aliases of one repository must have compatible names
-and options. An existing final task directory or task record is never adopted.
+and options. An existing final task directory or active task record is never adopted.
 
 Creation fetches the selected remote by default, then creates each worktree and
 optionally runs plain `git pull` there. `--no-fetch` disables the preliminary fetch;
@@ -87,14 +87,24 @@ allows explicit recovery retry under the existing native Git coordination rules.
 ```sh
 workyard list
 workyard status
+workyard info
 workyard status feat/payments --state-dir /workspace/.workyard
 ```
 
-List summarizes all known tasks and their recorded participants. Bare status adds
-current Git observations for every task, including damaged and incomplete tasks;
-an explicit task selects only that record. Saved outcomes, independent effect
-evidence, task-lock contention and current Git facts are reported separately.
-Lock availability and recorded phases do not establish that Git writers stopped.
+List inspects active tasks and presents a compact inventory: task name, condition
+and repository names. It also includes up to five recent closures. Status presents
+current participant detail for active tasks, including modified or missing worktrees;
+an explicit task selects that active record. Both retain actionable diagnostics for
+unresolved state. Neither prints a primary title or workspace metadata.
+
+Use info for workspace root, state directory, discovery source and current record
+counts. Explicit state and ancestor `.workyard` are the implemented discovery
+sources; the optional user-global locator cache remains deferred. Info reads existing
+state only and never initializes a store or mutates Git.
+
+Saved outcomes, independent effect evidence, task-lock contention and current Git
+facts remain distinct in structured responses. Lock availability and recorded phases
+do not establish that Git writers stopped.
 
 Explicit state takes precedence over ancestor `.workyard` discovery. Missing state
 returns no tasks with a create example; existing damage and unknown tasks have
@@ -103,9 +113,28 @@ refresh the Git index or publish cached locations. Verified moved worktree paths
 appear in the response while the saved path remains visible. Listings are
 per-record observations, not a global workspace snapshot.
 
-Closed-task history and filters await removal support. Once that history exists,
-default status will include at most the five most recently closed tasks in addition
-to all active tasks. The optional global state-locator cache is also deferred.
+## Removing tasks
+
+```sh
+workyard remove feat/payments
+workyard remove feat/payments --yes
+workyard recover feat/payments --undo
+```
+
+Removal discloses participant facts before one initial task-level confirmation.
+When files would be discarded, it explains that loss before asking. `--yes` skips
+ordinary confirmation but does not authorize file discard. `--force` authorizes
+disclosed discard and implies `--yes`. Noninteractive clean removal proceeds;
+noninteractive dirty removal without force returns a typed decision requirement.
+Fresh destructive facts discovered afterward require renewed consent for that
+participant, even with force. Branches and commits are retained.
+
+Declining before effects leaves task history and evidence unchanged and allows
+ordinary retry. Partial removal preserves successful work and reports what remains.
+Recover can continue an interrupted removal; undo recreates worktrees from retained
+branches and cannot restore discarded files. Interrupted publication/recreation
+edge cases and native-platform verification remain unfinished in this experimental
+slice; a passing ordinary scenario is not a claim of production readiness.
 
 ## RPC
 
@@ -117,7 +146,7 @@ Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout:
 
 Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
 `{"task":"feat/payments","accept_pull":["api"],"state_dir":"/workspace/.workyard"}`.
-Inspection uses `action: ["list"]` or `["status"]` with optional `state_dir` and
+Inspection uses `action: ["list"]`, `["status"]` or `["info"]` with optional `state_dir` and
 `tasks_root`; status additionally accepts optional `task`.
 
 RPC uses Trine's shared invocation, progress, cancellation and terminal response

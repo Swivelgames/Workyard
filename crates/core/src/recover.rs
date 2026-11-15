@@ -6,7 +6,7 @@ use crate::{
 	Control, Observer, OperationOutcome, Phase, Problem, ProblemCode, RecoveryGit, RecoveryState,
 	Task,
 };
-use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 struct Recovery<'a, G, S: RecoveryState, O> {
 	runner: &'a G,
@@ -14,6 +14,7 @@ struct Recovery<'a, G, S: RecoveryState, O> {
 	observer: &'a O,
 	store: &'a S,
 	guard: &'a S::Admission,
+	publication_attempted: AtomicBool,
 }
 
 pub async fn recover(
@@ -23,12 +24,12 @@ pub async fn recover(
 	control: &Control,
 	observer: &impl Observer,
 	store: &impl RecoveryState,
-) -> Result<(Task, PathBuf), Problem> {
+) -> Result<crate::RecoveryResult, Problem> {
 	crate::validate_task(name)?;
 	control.check()?;
 	let guard = store.admit(name)?;
 	let record = store.load(&guard, name)?;
-	let mut task = prepare_recovery(record.task);
+	let mut task = prepare_recovery(record.task.clone());
 
 	for accepted in accept_pull {
 		if !task
@@ -63,8 +64,22 @@ pub async fn recover(
 		observer,
 		store,
 		guard: &guard,
+		publication_attempted: AtomicBool::new(false),
 	};
 	let result = recovery.resume(&mut task, accept_pull).await;
+
+	if result.is_ok()
+		&& !recovery.publication_attempted.load(Ordering::Relaxed)
+		&& record.matches_published(&task)
+	{
+		control.check()?;
+		store.verify()?;
+		return Ok(crate::RecoveryResult {
+			task: record.recorded.expect("verified published task"),
+			record: path,
+			nothing_to_recover: true,
+		});
+	}
 
 	task.operation.outcome = match &result {
 		Ok(()) => OperationOutcome::Succeeded,
@@ -76,7 +91,11 @@ pub async fn recover(
 		task.operation.outcome = OperationOutcome::Failed;
 		task.problem = Some(problem);
 	}
-	Ok((task, path))
+	Ok(crate::RecoveryResult {
+		task,
+		record: path,
+		nothing_to_recover: false,
+	})
 }
 
 impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
@@ -90,6 +109,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 	}
 
 	async fn phase(&self, task: &mut Task, index: usize, phase: Phase) -> Result<(), Problem> {
+		self.publication_attempted.store(true, Ordering::Relaxed);
 		// Reconciled observations are published before cancellation is returned.
 		crate::publication::phase(task, index, phase, self.store, self.guard, self.observer)
 			.await?;

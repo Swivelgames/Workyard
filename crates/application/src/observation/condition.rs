@@ -29,6 +29,13 @@ pub enum Provenance {
 
 impl TaskReport {
 	pub(super) fn classify(&mut self) {
+		if self.lifecycle == Some("retired")
+			&& self.problems.is_empty()
+			&& self.pending_participant.is_none()
+		{
+			self.condition = Condition::Healthy;
+			return;
+		}
 		self.condition = if self.needs_attention() {
 			Condition::NeedsAttention
 		} else if self.is_uncertain() {

@@ -107,9 +107,19 @@ fn independent_intent_survives_failed_task_publication_and_blocks_recreation() {
 	let store = &workspace.store;
 	let guard = store.admit("feat/test").unwrap();
 	fs::create_dir(&guard.record_path).unwrap();
-	let error = store
-		.begin(&guard, &support::task(root, state, "feat/test"))
-		.unwrap_err();
+	let mut task = support::task(root, state, "feat/test");
+	task.participants.push(workyard_core::Participant {
+		name: "api".into(),
+		source: root.join("source"),
+		common_dir: root.join("source/.git"),
+		backing_identity: "fixture-backing".into(),
+		worktree_identity: None,
+		destination: root.join("feat/test/api"),
+		remote: None,
+		from: None,
+		phase: workyard_core::Phase::NotStarted,
+	});
+	let error = store.begin(&guard, &task).unwrap_err();
 	assert_eq!(error.code, ProblemCode::PublicationUncertain);
 	assert!(guard.evidence_path.exists());
 	fs::remove_dir(&guard.record_path).unwrap();

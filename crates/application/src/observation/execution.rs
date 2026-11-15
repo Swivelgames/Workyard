@@ -1,27 +1,21 @@
-use super::{Observation, guidance};
+use super::{Observation, Selection, guidance};
 use crate::common::Progress;
 use std::path::Path;
 use trine::{InvocationContext, NativePath};
 use workyard_core::{Control, Problem};
 
-#[derive(Clone, Copy)]
-pub(crate) enum Detail {
-	Summary,
-	Git,
-}
-
 pub(crate) async fn read(
 	task: Option<String>,
 	root: Option<NativePath>,
 	state: Option<NativePath>,
-	detail: Detail,
+	selection: Selection,
 	context: InvocationContext<Progress>,
 ) -> Result<Observation, Observation> {
 	let result = observe(
 		task.as_deref(),
 		root.as_ref().map(NativePath::as_path),
 		state.as_ref().map(NativePath::as_path),
-		detail,
+		selection,
 		context,
 	)
 	.await;
@@ -35,7 +29,7 @@ async fn observe(
 	task: Option<&str>,
 	root: Option<&Path>,
 	explicit: Option<&Path>,
-	detail: Detail,
+	selection: Selection,
 	context: InvocationContext<Progress>,
 ) -> Result<Observation, Problem> {
 	if let Some(task) = task {
@@ -62,9 +56,15 @@ async fn observe(
 		..Observation::default()
 	};
 
-	for snapshot in reader.tasks(task)? {
+	let snapshots = selection.snapshots(&reader, task)?;
+
+	for snapshot in snapshots {
 		control.check()?;
-		let report: super::TaskReport = if matches!(detail, Detail::Git) {
+		let report: super::TaskReport = if !snapshot
+			.task
+			.as_ref()
+			.is_some_and(|task| task.lifecycle == workyard_core::TaskLifecycle::Retired)
+		{
 			workyard_core::inspect(snapshot, &workyard_git::Runner::default(), &control)
 				.await?
 				.into()
@@ -75,7 +75,10 @@ async fn observe(
 	}
 
 	if observation.tasks.is_empty() {
-		observation.guidance = Some(guidance::empty_workspace(reader.state(), reader.root()));
+		observation.guidance = Some(match selection {
+			Selection::Active => "No active tasks found.".into(),
+			Selection::Inventory => guidance::empty_workspace(reader.state(), reader.root()),
+		});
 	}
 
 	Ok(observation)

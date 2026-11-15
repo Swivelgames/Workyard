@@ -62,21 +62,15 @@ impl Store {
 	}
 
 	pub fn ensure_new(&self, guard: &TaskGuard, name: &str) -> Result<(), Problem> {
-		for path in [&guard.record_path, &guard.evidence_path] {
-			if !exists(path)? {
-				continue;
+		if exists(&guard.record_path)? || exists(&guard.evidence_path)? {
+			let previous = workyard_core::RecoveryState::load(self, guard, name)?;
+			if previous.pending.is_some()
+				|| previous.task.lifecycle != workyard_core::TaskLifecycle::Retired
+			{
+				return Err(Problem::new(workyard_core::ProblemCode::TaskExists,
+					format!("Task {name:?} already exists."))
+					.remedy("Inspect the task or recover its interrupted operation; create/checkout cannot replace active membership."));
 			}
-
-			let record: TaskRecord = read_supported(path, &[1, 2])?;
-			if record.task != name {
-				return Err(Problem::new(
-					workyard_core::ProblemCode::DamagedState,
-					format!("Task identity does not match record {path:?}."),
-				));
-			}
-			let message = format!("Task {name:?} already exists (record/evidence {path:?}).");
-			return Err(Problem::new(workyard_core::ProblemCode::TaskExists, message)
-				.remedy("Inspect the existing record and its Git worktrees; create/checkout cannot resume or replace it."));
 		}
 
 		guard.verify()?;
@@ -98,12 +92,29 @@ impl Store {
 					continue;
 				}
 
-				let record: TaskRecord = read_supported(&path, &[1, 2])?;
+				let record: TaskRecord = read_supported(&path, &[1, 2, 3])?;
 				if path.file_name() != Some(std::ffi::OsStr::new(&task_filename(&record.task))) {
 					return Err(Problem::new(
 						workyard_core::ProblemCode::DamagedState,
 						format!("Task identity does not match record {path:?}."),
 					));
+				}
+
+				// A retired current record releases its path, including its immutable
+				// admission evidence. A missing or inconsistent current record does not.
+				let current_path = self.state.join("tasks").join(task_filename(&record.task));
+				if exists(&current_path)? {
+					let current: TaskRecord = read_supported(&current_path, &[1, 2, 3])?;
+					crate::records::task::validate(
+						&current,
+						&record.task,
+						&self.root,
+						&self.state,
+					)?;
+					crate::records::task::match_intent(&record, &current)?;
+					if current.lifecycle == "retired" {
+						continue;
+					}
 				}
 
 				let existing = canonical_future(&self.root.join(&record.task))?;

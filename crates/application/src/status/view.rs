@@ -26,7 +26,7 @@ impl View<StatusOutcome, StatusOutcome, Progress> for StatusView {
 			Ok(outcome) | Err(outcome) => &outcome.0,
 		};
 		let mut terminal = crate::terminal::Terminal::for_output(&self.output.stdout);
-		crate::observation::render::workspace(&mut terminal, outcome, "Workyard Status");
+		crate::observation::render::status(&mut terminal, outcome);
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
 
 		Ok(CliCompletion::exit(if result.is_err() { 1 } else { 0 }))

@@ -16,7 +16,9 @@ pub(super) fn render(
 		Condition::NeedsAttention => Tone::Attention,
 		Condition::Unknown => Tone::Neutral,
 	};
-	let label = if task.provenance == Provenance::Recorded
+	let label = if task.lifecycle == Some("retired") {
+		"retired"
+	} else if task.provenance == Provenance::Recorded
 		&& task.condition == Condition::Unknown
 		&& !task.busy
 		&& task.pending_participant.is_none()

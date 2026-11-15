@@ -31,6 +31,10 @@ impl Terminal {
 			.map(|participant| {
 				let state = match participant.phase.as_str() {
 					"completed" => completed_label,
+					"present" => "present",
+					"removed" => "removed",
+					"restored" => "restored",
+					"restoration_unconfirmed" => "restoration unconfirmed",
 					"worktree_created" => "worktree created (recorded)",
 					"pulling" => "pull needs review",
 					"not_started" | "fetching" => "creation unconfirmed",

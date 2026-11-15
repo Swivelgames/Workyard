@@ -44,8 +44,17 @@ fn healthy_recovery_preserves_commits_and_reconstructs_missing_record() {
 	let evidence = state_file(&root, "evidence", "effects");
 	let bytes = fs::read(&evidence).unwrap();
 	fs::remove_file(state_file(&root, "tasks", "json")).unwrap();
-	for cwd in [&tree, &root] {
-		assert_ok(&workyard(cwd, &["recover", "feat/task"]));
+	for (index, cwd) in [&tree, &root].into_iter().enumerate() {
+		let output = workyard(cwd, &["recover", "feat/task"]);
+		assert_ok(&output);
+		assert_eq!(
+			String::from_utf8(output.stdout).unwrap(),
+			if index == 0 {
+				"Recovery succeeded: feat/task\n"
+			} else {
+				"Nothing to recover: feat/task\n"
+			}
+		);
 		let saved = record(&root.join(".workyard"));
 		assert_eq!(saved["operation"]["kind"], "recover");
 		assert_eq!(saved["operation"]["continues"], "create");
@@ -233,8 +242,9 @@ fn rpc_recovery_returns_same_completed_participants_as_cli() {
 		assert_eq!(response["result"]["operation"]["continues"], "create");
 		assert_eq!(response["result"]["participants"][0]["phase"], "completed");
 		let saved = record(&root.join(".workyard"));
-		assert_eq!(saved["operation"]["kind"], "recover");
-		assert_eq!(saved["operation"]["continues"], "create");
+		assert_eq!(response["result"]["nothing_to_recover"], true);
+		assert_eq!(saved["operation"]["kind"], "create");
+		assert!(saved["operation"]["continues"].is_null());
 	}
 }
 
@@ -436,7 +446,7 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 	let signal = cancelled.clone();
 	let control = workyard_core::Control::new(move || signal.load(Ordering::SeqCst));
 	let store = workyard_state::Store::open_existing(&root.join(".workyard"), None).unwrap();
-	let (task, _) = smol::block_on(workyard_core::recover(
+	let result = smol::block_on(workyard_core::recover(
 		"feat/task",
 		&["api".into()],
 		&workyard_git::Runner::default(),
@@ -445,6 +455,7 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 		&store,
 	))
 	.unwrap();
+	let task = result.task;
 	assert_eq!(
 		task.operation.outcome,
 		workyard_core::OperationOutcome::Cancelled

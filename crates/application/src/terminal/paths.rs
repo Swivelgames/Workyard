@@ -46,7 +46,7 @@ impl Paths {
 	}
 }
 
-fn display(path: &Path) -> String {
+pub(super) fn display(path: &Path) -> String {
 	match path.to_str() {
 		Some(value) => text(value),
 		None => format!("{:?}", path.as_os_str()),

@@ -24,7 +24,7 @@ impl Phase {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Participant {
 	pub name: String,
 	pub source: PathBuf,
@@ -40,18 +40,22 @@ pub struct Participant {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskLifecycle {
 	Active,
+	Retired,
 }
 
 impl TaskLifecycle {
 	pub fn as_str(self) -> &'static str {
 		match self {
 			Self::Active => "active",
+			Self::Retired => "retired",
 		}
 	}
 }
 
 #[derive(Clone, Debug)]
 pub struct Task {
+	pub generation: u64,
+	pub removal: Option<super::removal::Removal>,
 	pub name: String,
 	pub root: PathBuf,
 	pub state_dir: PathBuf,

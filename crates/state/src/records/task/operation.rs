@@ -49,6 +49,7 @@ fn parse_kind(kind: &str) -> Result<OperationKind, Problem> {
 	match kind {
 		"create" => Ok(OperationKind::Create),
 		"recover" => Ok(OperationKind::Recover),
+		"remove" => Ok(OperationKind::Remove),
 		_ => Err(damaged("Invalid operation kind.")),
 	}
 }

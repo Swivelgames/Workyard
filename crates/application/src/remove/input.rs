@@ -1,0 +1,37 @@
+use schemars::JsonSchema;
+use serde::Deserialize;
+use trine::NativePath;
+
+/// Resolved placement for an existing task; this never initializes a workspace.
+pub(super) struct RemovalLocation {
+	pub root: Option<std::path::PathBuf>,
+	pub state: std::path::PathBuf,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RemoveInput {
+	pub task: String,
+	pub tasks_root: Option<NativePath>,
+	pub state_dir: Option<NativePath>,
+	#[serde(default)]
+	pub yes: bool,
+	#[serde(default)]
+	pub force: bool,
+}
+
+impl RemoveInput {
+	pub(super) fn location(&self) -> Result<RemovalLocation, workyard_core::Problem> {
+		let cwd = std::env::current_dir()
+			.map_err(|error| workyard_core::Problem::io("Read current directory", error))?;
+		let root = self
+			.tasks_root
+			.as_ref()
+			.map(|path| path.as_path().to_path_buf());
+		let state = workyard_state::discover_state(
+			root.as_deref().unwrap_or(&cwd),
+			self.state_dir.as_ref().map(|path| path.as_path()),
+		)?;
+		Ok(RemovalLocation { root, state })
+	}
+}

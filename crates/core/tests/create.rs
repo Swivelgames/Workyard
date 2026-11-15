@@ -110,6 +110,9 @@ impl State for Fixture {
 	}
 
 	type Admission = ();
+	fn next_generation(&self, _admission: &Self::Admission) -> Result<u64, Problem> {
+		Ok(1)
+	}
 	fn verify(&self) -> Result<(), Problem> {
 		Ok(())
 	}
@@ -258,6 +261,8 @@ fn broken_presentation_stops_before_effect_and_records_cancellation() {
 impl RecoveryState for Fixture {
 	fn load(&self, _: &(), _: &str) -> Result<RecoveryRecord, Problem> {
 		Ok(RecoveryRecord {
+			recorded: None,
+			needs_publication: true,
 			task: self.saved.lock().unwrap()[0].clone(),
 			pending: None,
 		})
@@ -333,7 +338,7 @@ fn recovery_identity_read_failure_retains_success_and_writer_settlement() {
 	))
 	.unwrap();
 	fixture.fail_identity = true;
-	let (task, _) = smol::block_on(recover(
+	let result = smol::block_on(recover(
 		"feat/test",
 		&[],
 		&fixture,
@@ -342,7 +347,7 @@ fn recovery_identity_read_failure_retains_success_and_writer_settlement() {
 		&fixture,
 	))
 	.unwrap();
-	assert_identity_failure_settled(&task, &fixture);
+	assert_identity_failure_settled(&result.task, &fixture);
 }
 
 #[test]

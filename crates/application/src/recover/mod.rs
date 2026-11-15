@@ -26,7 +26,12 @@ pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 	let rpc = crate::structured::progress_binding();
 
 	Ok(Entry::new(handler)
-		.cli(cli, |output| Ok(RecoverView { output }))
+		.cli(cli, |output| {
+			Ok(RecoverView {
+				output,
+				started: false,
+			})
+		})
 		.rpc(rpc))
 }
 
@@ -37,7 +42,11 @@ fn cli_bindings() -> Bindings {
 	let bindings = bindings.positional("task");
 
 	// Side-effects
-	let bindings = bindings.option("accept_pull", "accept-pull");
+	let bindings = bindings
+		.option("accept_pull", "accept-pull")
+		.option("undo", "undo")
+		.option("yes", "yes")
+		.option("force", "force");
 
 	// Global arguments
 	bindings

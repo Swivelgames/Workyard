@@ -4,15 +4,18 @@ use trine::application::Application;
 mod command_hint;
 mod common;
 mod invocation;
+mod removal;
 mod reporting;
 mod structured;
 mod terminal;
 
 // Action modules
 pub mod create;
+pub mod info;
 pub mod list;
 pub mod observation;
 pub mod recover;
+pub mod remove;
 pub mod status;
 // etc...
 
@@ -25,7 +28,9 @@ pub fn application() -> Result<Application, Box<dyn std::error::Error>> {
 
 	app.register(create::build_entry()?)?;
 	app.register(recover::build_entry()?)?;
+	app.register(remove::build_entry()?)?;
 	app.register(list::build_entry()?)?;
+	app.register(info::build_entry()?)?;
 	app.register(status::build_entry()?)?;
 
 	Ok(app)

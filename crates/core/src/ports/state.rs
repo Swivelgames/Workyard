@@ -15,9 +15,22 @@ pub trait State: Sync {
 	fn reserve(&self, path: &Path) -> Result<(), Problem>;
 	fn admit(&self, name: &str) -> Result<Self::Admission, Problem>;
 	fn ensure_new(&self, admission: &Self::Admission, name: &str) -> Result<(), Problem>;
+
+	fn next_generation(&self, _admission: &Self::Admission) -> Result<u64, Problem> {
+		Err(Problem::new(
+			crate::ProblemCode::IncompatibleState,
+			"State adapter must allocate a fresh task generation.",
+		))
+	}
+
+	fn cleanup_retired(&self, _admission: &Self::Admission, _task: &Task) -> Result<(), Problem> {
+		Ok(())
+	}
+
 	fn record_path(&self, admission: &Self::Admission) -> PathBuf;
 	fn begin(&self, admission: &Self::Admission, task: &Task) -> Result<(), Problem>;
 	fn save(&self, admission: &Self::Admission, task: &Task) -> Result<(), Problem>;
+
 	/// Named entry point; delegates to the legacy hook for existing adapters.
 	fn record_effect(
 		&self,

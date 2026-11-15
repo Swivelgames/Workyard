@@ -104,6 +104,8 @@ pub(crate) async fn preflight(
 	}
 
 	let task = Task {
+		generation: 0,
+		removal: None,
 		name: request.task.clone(),
 		root: request.tasks_root.clone(),
 		state_dir: request.state_dir.clone(),

@@ -7,6 +7,10 @@ use serde::{Deserialize, Deserializer, de::Error};
 #[serde(deny_unknown_fields)]
 struct Document {
 	version: u32,
+	#[serde(default)]
+	generation: u64,
+	#[serde(default)]
+	removal: Option<super::RemovalRecord>,
 	task: String,
 	tasks_root: StoredPath,
 	state_dir: StoredPath,
@@ -28,8 +32,22 @@ impl<'de> Deserialize<'de> for TaskRecord {
 		let value = serde_json::Value::deserialize(deserializer)?;
 		let version = value.get("version").and_then(serde_json::Value::as_u64);
 		let mixed = match version {
-			Some(1) => value.get("lifecycle").is_some() || value.get("operation").is_some(),
-			Some(2) => value.get("status").is_some(),
+			Some(1) => {
+				value.get("lifecycle").is_some()
+					|| value.get("operation").is_some()
+					|| value.get("generation").is_some()
+					|| value.get("removal").is_some()
+			}
+			Some(2) => {
+				value.get("status").is_some()
+					|| value.get("generation").is_some()
+					|| value.get("removal").is_some()
+			}
+			Some(3) => {
+				value.get("status").is_some()
+					|| value.get("generation").is_none()
+					|| value.get("removal").is_none()
+			}
 			_ => true,
 		};
 		if mixed {
@@ -58,7 +76,7 @@ impl<'de> Deserialize<'de> for TaskRecord {
 					},
 				)
 			}
-			2 if document.status.is_none() => {
+			2 | 3 if document.status.is_none() => {
 				let lifecycle = document
 					.lifecycle
 					.ok_or_else(|| D::Error::custom("Missing task lifecycle"))?;
@@ -76,7 +94,9 @@ impl<'de> Deserialize<'de> for TaskRecord {
 
 		Ok(TaskRecord {
 			// In-memory normalization also makes subsequent serialization canonical.
-			version: 2,
+			version: 3,
+			generation: document.generation,
+			removal: document.removal,
 			task: document.task,
 			tasks_root: document.tasks_root,
 			state_dir: document.state_dir,

@@ -17,6 +17,7 @@ pub async fn create(
 	let guard = store.admit(&request.task)?;
 	let (mut task, repositories) = preflight(&request, runner, control).await?;
 	store.ensure_new(&guard, &request.task)?;
+	task.generation = store.next_generation(&guard)?;
 
 	let record_path = store.record_path(&guard);
 	let destination = request.tasks_root.join(&request.task);
