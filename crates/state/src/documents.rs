@@ -60,13 +60,17 @@ pub(crate) fn publish(path: &Path, record: &impl Serialize) -> Result<(), Proble
 	})?;
 	bytes.push(b'\n');
 
+	publish_bytes(path, &bytes)
+}
+
+pub(crate) fn publish_bytes(path: &Path, bytes: &[u8]) -> Result<(), Problem> {
 	let result = AtomicFile::new(path, AllowOverwrite).write(|file| {
-		file.write_all(&bytes)?;
+		file.write_all(bytes)?;
 		file.sync_all()
 	});
 	if let Err(error) = result {
 		// Atomic replacement can succeed before durability reporting fails.
-		let visible = fs::read(path).ok().as_deref() == Some(bytes.as_slice());
+		let visible = fs::read(path).ok().as_deref() == Some(bytes);
 		let message = format!(
 			"Could not confirm durable publication at {path:?} \
 			(expected bytes visible: {visible}): {error}"

@@ -2,6 +2,7 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OperationKind {
 	Create,
+	Amend,
 	Recover,
 	Remove,
 }
@@ -9,6 +10,7 @@ pub enum OperationKind {
 impl OperationKind {
 	pub fn as_str(self) -> &'static str {
 		match self {
+			Self::Amend => "amend",
 			Self::Create => "create",
 			Self::Recover => "recover",
 			Self::Remove => "remove",

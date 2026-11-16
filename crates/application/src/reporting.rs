@@ -1,6 +1,8 @@
 //! Small fact representations shared by action contracts.
 mod operation;
+mod pull;
 pub use operation::OperationReport;
+pub use pull::PullFailure;
 
 use serde::Serialize;
 use trine::NativePath;

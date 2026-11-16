@@ -1,4 +1,5 @@
 mod admission;
+mod amendment;
 mod evidence;
 mod history;
 mod recovery;
@@ -29,6 +30,11 @@ impl Store {
 		let record = TaskRecord::from(task);
 		// Independent immutable admission evidence survives a missing task document.
 		publish(&guard.evidence_path, &record)?;
+		let revision = crate::revision::path(&guard.evidence_path);
+		if exists(&revision)? {
+			std::fs::remove_file(revision)
+				.map_err(|error| Problem::io("Release archived membership revision", error))?;
+		}
 		self.publish_effect(guard, task, 0, workyard_core::EffectState::Settled)?;
 		publish(&guard.record_path, &record)
 	}
@@ -36,6 +42,7 @@ impl Store {
 	pub fn save(&self, guard: &TaskGuard, task: &Task) -> Result<(), Problem> {
 		self.verify()?;
 		guard.verify()?;
+		self.revise(guard, task, crate::revision::WriterUpdate::Preserve)?;
 		publish(&guard.record_path, &TaskRecord::from(task))
 	}
 }
@@ -90,7 +97,7 @@ impl workyard_core::State for Store {
 			return Ok(1);
 		}
 		let previous: TaskRecord =
-			crate::documents::read_supported(&admission.record_path, &[1, 2, 3])?;
+			crate::documents::read_supported(&admission.record_path, &[1, 2, 3, 4])?;
 		previous
 			.generation
 			.checked_add(1)

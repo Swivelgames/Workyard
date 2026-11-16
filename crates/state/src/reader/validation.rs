@@ -10,7 +10,7 @@ impl Reader {
 		filename: &Path,
 		selected: Option<&str>,
 	) -> Result<TaskRecord, Problem> {
-		let record: TaskRecord = crate::documents::read_supported(path, &[1, 2, 3])?;
+		let record: TaskRecord = crate::documents::read_supported(path, &[1, 2, 3, 4])?;
 		self.validate_record(&record, filename, selected)?;
 		Ok(record)
 	}

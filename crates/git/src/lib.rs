@@ -5,6 +5,7 @@ mod operations;
 mod output;
 mod process;
 mod recovery;
+mod relationships;
 mod removal;
 mod repository;
 #[cfg(unix)]

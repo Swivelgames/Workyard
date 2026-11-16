@@ -26,6 +26,7 @@ impl Phase {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Participant {
+	pub creation: Option<super::creation::CreationOptions>,
 	pub name: String,
 	pub source: PathBuf,
 	pub common_dir: PathBuf,
@@ -66,4 +67,16 @@ pub struct Task {
 	pub lifecycle: TaskLifecycle,
 	pub operation: super::operation::Operation,
 	pub problem: Option<Problem>,
+}
+
+impl Task {
+	pub fn creation_options(&self, index: usize) -> super::creation::CreationOptions {
+		self.participants[index]
+			.creation
+			.unwrap_or(super::creation::CreationOptions {
+				checkout: self.checkout,
+				no_fetch: self.no_fetch,
+				pull: self.pull,
+			})
+	}
 }

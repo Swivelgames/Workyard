@@ -9,15 +9,11 @@ impl Reader {
 		if let Some(name) = selected {
 			workyard_core::validate_task(name)?;
 			let filename = task_filename(name);
-			if !exists(&self.state.join("tasks").join(&filename))?
-				&& !exists(&self.state.join("evidence").join(&filename))?
-				&& !exists(
-					&self
-						.state
-						.join("evidence")
-						.join(&filename)
-						.with_extension("effects"),
-				)? {
+			let record = self.state.join("tasks").join(&filename);
+			let intent = self.state.join("evidence").join(&filename);
+			let revision = intent.with_extension("revision");
+			let effects = intent.with_extension("effects");
+			if !exists(&record)? && !exists(&intent)? && !exists(&revision)? && !exists(&effects)? {
 				return Err(Problem::new(
 					ProblemCode::TaskUnknown,
 					format!("Task {name:?} is unknown in this state directory."),
@@ -34,10 +30,9 @@ impl Reader {
 				let path = entry
 					.map_err(|e| Problem::io("Read record entry", e))?
 					.path();
-				if path
-					.extension()
-					.is_some_and(|e| e == "json" || (directory == "evidence" && e == "effects"))
-				{
+				if path.extension().is_some_and(|e| {
+					e == "json" || (directory == "evidence" && (e == "effects" || e == "revision"))
+				}) {
 					filenames.insert(
 						path.with_extension("json")
 							.file_name()

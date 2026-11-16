@@ -20,17 +20,3 @@ pub(crate) async fn phase<S: State>(
 		)
 		.await
 }
-
-pub(crate) fn settle_pull<S: State>(
-	result: Result<(), Problem>,
-	task: &mut Task,
-	index: usize,
-	store: &S,
-	guard: &S::Admission,
-) -> Result<(), Problem> {
-	if result.is_ok() {
-		task.participants[index].phase = Phase::Completed;
-	}
-	store.record_effect(guard, task, index, EffectState::Settled)?;
-	result
-}

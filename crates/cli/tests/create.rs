@@ -138,7 +138,7 @@ fn missing_default_requires_source_and_conflicting_flags_do_not_initialize_state
 }
 
 #[test]
-fn pull_failure_preserves_created_tree_and_pending_participants() {
+fn pull_failure_preserves_created_trees_and_continues_participants() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
@@ -160,11 +160,11 @@ fn pull_failure_preserves_created_tree_and_pending_participants() {
 	);
 	assert!(!output.status.success());
 	assert!(root.join("feat/pull/api/.git").is_file());
-	assert!(!root.join("feat/pull/web").exists());
+	assert!(root.join("feat/pull/web/.git").exists());
 	let stored = record(&root.join(".workyard"));
-	assert_eq!(stored["operation"]["outcome"], "failed");
-	assert_eq!(stored["participants"][0]["phase"], "pulling");
-	assert_eq!(stored["participants"][1]["phase"], "not_started");
+	assert_eq!(stored["operation"]["outcome"], "succeeded");
+	assert_eq!(stored["participants"][0]["phase"], "completed");
+	assert_eq!(stored["participants"][1]["phase"], "completed");
 }
 
 #[test]

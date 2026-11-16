@@ -35,6 +35,25 @@ impl Reader {
 			snapshot.problems.push(damaged("Task record is missing or unreadable. Independent evidence is shown separately; inspect state and run workyard recover with the task and selected state directory."));
 		}
 		let intent = self.read_optional(&intent_path, filename, selected, &mut snapshot);
+
+		if let Some(intent) = &intent {
+			match crate::revision::read(&intent_path, intent, &self.root, &self.state) {
+				Ok(Some(revision)) => {
+					snapshot.name = Some(revision.current.task.task.clone());
+					snapshot.pending = revision.current.pending;
+					snapshot.evidence =
+						decoded(revision.current.task.clone(), &mut snapshot.problems);
+					if saved.is_some() {
+						snapshot.task = decoded(revision.current.task, &mut snapshot.problems);
+					}
+					self.inspect_task_gate(&mut snapshot);
+					self.verify()?;
+					return Ok(snapshot);
+				}
+				Ok(None) => {}
+				Err(problem) => snapshot.problems.push(problem),
+			}
+		}
 		if let (Some(intent), Some(saved)) = (&intent, &saved)
 			&& let Err(problem) = match_intent(intent, saved)
 		{

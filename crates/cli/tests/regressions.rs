@@ -325,7 +325,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 			remote: None,
 			from: Some("main".into()),
 		};
-		let (task, _) = smol::block_on(workyard_core::create(
+		let result = smol::block_on(workyard_core::create(
 			request,
 			&workyard_git::Runner::default(),
 			&Control::default(),
@@ -333,6 +333,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 			&store,
 		))
 		.unwrap();
+		let task = result.task;
 		assert_eq!(task.operation.outcome, OperationOutcome::Failed);
 		assert_eq!(task.problem.unwrap().code, expected);
 		assert!(!root.join("feat/revalidate/api/.git").exists());

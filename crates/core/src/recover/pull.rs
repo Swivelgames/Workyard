@@ -32,6 +32,14 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 			.runner
 			.pull(repository, &participant.destination, self.control)
 			.await;
-		crate::publication::settle_pull(result, task, index, self.store, self.guard)
+		if let Some(failure) =
+			crate::optional_pull::settle_pull(result, task, index, self.store, self.guard)?
+		{
+			self.pull_failures
+				.lock()
+				.expect("pull failures")
+				.push(failure);
+		}
+		Ok(())
 	}
 }

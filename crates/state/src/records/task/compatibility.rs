@@ -43,7 +43,7 @@ impl<'de> Deserialize<'de> for TaskRecord {
 					|| value.get("generation").is_some()
 					|| value.get("removal").is_some()
 			}
-			Some(3) => {
+			Some(3 | 4) => {
 				value.get("status").is_some()
 					|| value.get("generation").is_none()
 					|| value.get("removal").is_none()
@@ -76,7 +76,7 @@ impl<'de> Deserialize<'de> for TaskRecord {
 					},
 				)
 			}
-			2 | 3 if document.status.is_none() => {
+			2..=4 if document.status.is_none() => {
 				let lifecycle = document
 					.lifecycle
 					.ok_or_else(|| D::Error::custom("Missing task lifecycle"))?;
@@ -94,7 +94,7 @@ impl<'de> Deserialize<'de> for TaskRecord {
 
 		Ok(TaskRecord {
 			// In-memory normalization also makes subsequent serialization canonical.
-			version: 3,
+			version: document.version.max(3),
 			generation: document.generation,
 			removal: document.removal,
 			task: document.task,

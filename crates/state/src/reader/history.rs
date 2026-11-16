@@ -34,7 +34,7 @@ impl Reader {
 				if path.extension().is_none_or(|extension| extension != "json") {
 					continue;
 				}
-				let record: TaskRecord = read_supported(&path, &[3])?;
+				let record: TaskRecord = read_supported(&path, &[3, 4])?;
 				validate(&record, &record.task, &self.root, &self.state)?;
 				if record.lifecycle != "retired"
 					|| directory.file_name()

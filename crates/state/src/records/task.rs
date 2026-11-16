@@ -11,9 +11,39 @@ use crate::path::StoredPath;
 use serde::{Deserialize, Serialize};
 use workyard_core::{Problem, Task};
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CreationRecord {
+	pub checkout: bool,
+	pub no_fetch: bool,
+	pub pull: bool,
+}
+
+impl From<workyard_core::CreationOptions> for CreationRecord {
+	fn from(value: workyard_core::CreationOptions) -> Self {
+		Self {
+			checkout: value.checkout,
+			no_fetch: value.no_fetch,
+			pull: value.pull,
+		}
+	}
+}
+
+impl From<CreationRecord> for workyard_core::CreationOptions {
+	fn from(value: CreationRecord) -> Self {
+		Self {
+			checkout: value.checkout,
+			no_fetch: value.no_fetch,
+			pull: value.pull,
+		}
+	}
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ParticipantRecord {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub creation: Option<CreationRecord>,
 	pub name: String,
 	pub source: StoredPath,
 	pub common_dir: StoredPath,
@@ -63,7 +93,14 @@ pub struct TaskRecord {
 impl From<&Task> for TaskRecord {
 	fn from(task: &Task) -> Self {
 		Self {
-			version: 3,
+			version: if task.participants.iter().any(|p| p.creation.is_some())
+				|| task.operation.kind == Some(workyard_core::OperationKind::Amend)
+				|| task.operation.continues == Some(workyard_core::OperationKind::Amend)
+			{
+				4
+			} else {
+				3
+			},
 			generation: task.generation,
 			removal: task.removal.as_ref().map(Into::into),
 			task: task.name.clone(),
@@ -79,6 +116,7 @@ impl From<&Task> for TaskRecord {
 				.participants
 				.iter()
 				.map(|participant| ParticipantRecord {
+					creation: participant.creation.map(Into::into),
 					name: participant.name.clone(),
 					source: participant.source.as_path().into(),
 					common_dir: participant.common_dir.as_path().into(),

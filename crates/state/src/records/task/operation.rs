@@ -47,6 +47,7 @@ impl OperationRecord {
 
 fn parse_kind(kind: &str) -> Result<OperationKind, Problem> {
 	match kind {
+		"amend" => Ok(OperationKind::Amend),
 		"create" => Ok(OperationKind::Create),
 		"recover" => Ok(OperationKind::Recover),
 		"remove" => Ok(OperationKind::Remove),

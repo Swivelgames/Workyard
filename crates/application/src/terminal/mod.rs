@@ -2,6 +2,7 @@
 mod confirmation;
 mod operation;
 mod paths;
+mod pull;
 mod style;
 mod table;
 

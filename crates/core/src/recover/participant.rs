@@ -86,7 +86,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 		index: usize,
 		repository: &crate::Repository,
 	) -> Result<(), Problem> {
-		if task.pull {
+		if task.creation_options(index).pull {
 			self.pull(task, index, repository).await?;
 		}
 		self.phase(task, index, Phase::Completed).await

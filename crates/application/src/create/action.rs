@@ -41,8 +41,11 @@ async fn run(
 	)
 	.await;
 	match result {
-		Ok((task, record)) => {
-			let outcome = CreateOutcome::from_task(task, record);
+		Ok(result) => {
+			let mut outcome = CreateOutcome::from_task(result.task, result.record);
+			outcome.operation = result.operation.into();
+			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
+			outcome.problem = result.problem.map(Into::into);
 			if outcome.operation.outcome == OperationOutcome::Failed {
 				Err(outcome)
 			} else {

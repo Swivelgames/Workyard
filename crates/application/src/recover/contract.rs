@@ -7,6 +7,8 @@ pub use crate::reporting::{OperationReport, ParticipantOutcome};
 
 #[derive(Serialize)]
 pub struct RecoverOutcome {
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub pull_failures: Vec<crate::reporting::PullFailure>,
 	/// Verified no-op; task/evidence history was preserved.
 	pub nothing_to_recover: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -58,6 +60,7 @@ impl RecoverOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
 			mutation_started: None,
@@ -99,6 +102,7 @@ impl RecoverOutcome {
 			}
 		}
 		Self {
+			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
 			mutation_started: None,

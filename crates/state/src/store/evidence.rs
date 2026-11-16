@@ -17,6 +17,13 @@ impl Store {
 	) -> Result<(), Problem> {
 		self.verify()?;
 		guard.verify()?;
+		let writers = match state {
+			workyard_core::EffectState::Pending => crate::revision::WriterUpdate::Pending(index),
+			workyard_core::EffectState::Settled => crate::revision::WriterUpdate::Settled,
+		};
+		if self.revise(guard, task, writers)? {
+			return Ok(());
+		}
 		publish(
 			&effect_path(guard),
 			&EffectRecord {

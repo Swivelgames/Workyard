@@ -1,5 +1,5 @@
 use trine::InvocationContext;
-use workyard_core::{Control, OperationOutcome, ProblemCode, RecoveryState};
+use workyard_core::{AmendState, Control, OperationOutcome, ProblemCode, RecoveryState};
 use workyard_git::Runner;
 use workyard_state::Store;
 
@@ -37,6 +37,13 @@ async fn run(
 	let guard = store.admit(&name).map_err(rejected)?;
 	let record = store.load(&guard, &name).map_err(rejected)?;
 	let removing = record.task.removal.is_some();
+	let amending = record.task.operation.kind == Some(workyard_core::OperationKind::Amend)
+		|| record.task.operation.continues == Some(workyard_core::OperationKind::Amend);
+	let amendment = if amending && !removing {
+		store.amend_request(&guard).map_err(rejected)?
+	} else {
+		None
+	};
 	drop(guard);
 	if removing {
 		if !accepted.is_empty() {
@@ -73,6 +80,35 @@ async fn run(
 		)));
 	}
 
+	if let Some(request) = amendment {
+		let result = workyard_core::recover_amend(
+			request,
+			&accepted,
+			&runner,
+			&control,
+			&Events(context, "recover"),
+			&store,
+		)
+		.await;
+		return match result {
+			Ok(result) => {
+				let nothing = !result.mutation_started;
+				let mut outcome = RecoverOutcome::from_task(result.task, result.record);
+				outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
+				outcome.problem = result.problem.map(Into::into);
+				outcome.operation = result.operation.into();
+				outcome.nothing_to_recover = nothing && outcome.problem.is_none();
+				if outcome.operation.outcome == OperationOutcome::Failed {
+					Err(outcome)
+				} else {
+					Ok(outcome)
+				}
+			}
+			Err(problem) if problem.code == ProblemCode::Cancelled => Ok(rejected(problem)),
+			Err(problem) => Err(rejected(problem)),
+		};
+	}
+
 	let result = workyard_core::recover(
 		&name,
 		&accepted,
@@ -85,6 +121,9 @@ async fn run(
 	match result {
 		Ok(result) => {
 			let mut outcome = RecoverOutcome::from_task(result.task, result.record);
+			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
+			outcome.problem = result.problem.map(Into::into);
+			outcome.operation = result.operation.into();
 			outcome.nothing_to_recover = result.nothing_to_recover;
 			if outcome.nothing_to_recover {
 				outcome.operation.continues = outcome

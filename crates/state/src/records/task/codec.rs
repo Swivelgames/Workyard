@@ -18,6 +18,7 @@ pub(crate) fn match_intent(intent: &TaskRecord, current: &TaskRecord) -> Result<
 					&& a.backing_identity == b.backing_identity
 					&& a.from == b.from
 					&& a.remote == b.remote
+					&& a.creation == b.creation
 			});
 	if !same {
 		return Err(damaged(
@@ -33,7 +34,7 @@ pub(crate) fn validate(
 	root: &Path,
 	state: &Path,
 ) -> Result<(), Problem> {
-	if !matches!(record.version, 1..=3) {
+	if !matches!(record.version, 1..=4) {
 		return Err(Problem::new(
 			ProblemCode::IncompatibleState,
 			"Unsupported task version in recovery evidence.",
@@ -64,6 +65,11 @@ pub(crate) fn validate(
 			if !path.decode()?.is_absolute() {
 				return Err(damaged("Task evidence contains a relative Git path."));
 			}
+		}
+		if p.creation
+			.is_some_and(|options| options.pull && options.no_fetch)
+		{
+			return Err(damaged("Invalid participant creation options."));
 		}
 		parse_phase(&p.phase)?;
 	}
@@ -116,6 +122,7 @@ pub(crate) fn decode(record: TaskRecord) -> Result<Task, Problem> {
 			.into_iter()
 			.map(|p| {
 				Ok(Participant {
+					creation: p.creation.map(Into::into),
 					name: p.name,
 					source: p.source.decode()?,
 					common_dir: p.common_dir.decode()?,

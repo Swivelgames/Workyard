@@ -1,8 +1,10 @@
 //! Workyard's lifecycle and values. Git, persistence and interfaces remain adapters.
+mod amend;
 mod control;
 mod create;
 mod model;
 mod observation;
+mod optional_pull;
 mod paths;
 mod ports;
 mod problem;
@@ -12,6 +14,7 @@ mod recover;
 mod remove;
 mod settle_add;
 
+pub use amend::{amend, recover_amend};
 pub use control::Control;
 pub use create::create;
 pub use model::*;

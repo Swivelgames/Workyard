@@ -10,6 +10,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 		index: usize,
 		repository: &crate::Repository,
 	) -> Result<(), Problem> {
+		let options = task.creation_options(index);
 		let participant = &task.participants[index];
 		if matches!(
 			participant.phase,
@@ -28,7 +29,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 			));
 		}
 
-		let fetch_needed = !task.no_fetch
+		let fetch_needed = !options.no_fetch
 			&& repository.remote.is_some()
 			&& matches!(participant.phase, Phase::NotStarted | Phase::Fetching);
 		if fetch_needed {
@@ -53,7 +54,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 			.plan(
 				repository,
 				&task.name,
-				task.checkout,
+				options.checkout,
 				participant.from.as_deref(),
 				SourceResolution::Cached,
 				self.control,

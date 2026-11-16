@@ -46,7 +46,9 @@ impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
 		};
 		let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		if outcome.nothing_to_recover {
+		if !outcome.pull_failures.is_empty() && outcome.problem.is_none() {
+			terminal.completed_with_pull_failures("Recovery", &outcome.task);
+		} else if outcome.nothing_to_recover {
 			terminal.heading(&format!("Nothing to recover: {}", text(&outcome.task)));
 		} else {
 			terminal.heading(&format!(
@@ -63,6 +65,7 @@ impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
 				recorded_progress(&mut terminal, outcome);
 			}
 		}
+		terminal.pull_failures(&outcome.pull_failures);
 		if let Some(problem) = &outcome.problem {
 			if problem.code != "cancelled" {
 				terminal.problem_at(MessageScope::Workspace, problem);

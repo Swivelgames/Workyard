@@ -8,6 +8,7 @@ pub mod path;
 mod paths;
 mod reader;
 mod records;
+mod revision;
 mod store;
 
 pub use discovery::{discover_state, find_state};

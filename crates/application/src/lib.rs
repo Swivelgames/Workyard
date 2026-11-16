@@ -10,6 +10,7 @@ mod structured;
 mod terminal;
 
 // Action modules
+pub mod amend;
 pub mod create;
 pub mod info;
 pub mod list;
@@ -27,6 +28,7 @@ pub fn application() -> Result<Application, Box<dyn std::error::Error>> {
 	let mut app = Application::new("workyard", env!("CARGO_PKG_VERSION"))?;
 
 	app.register(create::build_entry()?)?;
+	app.register(amend::build_entry()?)?;
 	app.register(recover::build_entry()?)?;
 	app.register(remove::build_entry()?)?;
 	app.register(list::build_entry()?)?;

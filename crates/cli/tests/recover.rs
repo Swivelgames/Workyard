@@ -14,6 +14,24 @@ fn state_file(root: &Path, directory: &str, extension: &str) -> PathBuf {
 		.unwrap()
 }
 
+fn legacy_pull_evidence(root: &Path, unfinished_web: bool) {
+	let path = state_file(root, "tasks", "json");
+	let mut task: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+	task["participants"][0]["phase"] = "pulling".into();
+	task["operation"]["outcome"] = "failed".into();
+	if unfinished_web {
+		task["participants"][1]["phase"] = "not_started".into();
+		task["participants"][1]["worktree_identity"] = serde_json::Value::Null;
+	}
+	fs::write(path, serde_json::to_vec(&task).unwrap()).unwrap();
+	let effects = state_file(root, "evidence", "effects");
+	fs::write(
+		effects,
+		serde_json::to_vec(&serde_json::json!({"version":1,"task":task,"pending":null})).unwrap(),
+	)
+	.unwrap();
+}
+
 fn create(root: &Path, source: &Path, task: &str) {
 	assert_ok(&workyard(
 		root,
@@ -102,7 +120,7 @@ fn missing_corrupt_and_mismatched_state_never_bootstraps_or_adopts() {
 }
 
 #[test]
-fn failed_pull_requires_acceptance_and_preserves_next_participant() {
+fn settled_pull_failures_leave_membership_ready_and_report_each_repo() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
@@ -123,25 +141,26 @@ fn failed_pull_requires_acceptance_and_preserves_next_participant() {
 		],
 	);
 	assert!(!first.status.success());
-	let tree = root.join("feat/task/api");
-	fs::write(tree.join("authored"), "preserved").unwrap();
-	assert!(!workyard(&root, &["recover", "feat/task"]).status.success());
-	assert!(!root.join("feat/task/web").exists());
-	let accepted = workyard(&root, &["recover", "feat/task", "--accept-pull", "api"]);
-	assert!(!accepted.status.success()); // web's own pull now fails; api is settled.
-	assert_eq!(
-		record(&root.join(".workyard"))["participants"][0]["phase"],
-		"completed"
+	let output = String::from_utf8_lossy(&first.stdout);
+	assert!(output.contains("Pull failed for api"));
+	assert!(output.contains("Pull failed for web"));
+	assert!(output.contains("[active]"));
+	assert!(!output.contains("[needs attention]"));
+	let saved = record(&root.join(".workyard"));
+	assert!(
+		saved["participants"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.all(|p| p["phase"] == "completed")
 	);
-	assert!(root.join("feat/task/web/.git").exists());
-	assert_ok(&workyard(
-		&root,
-		&["recover", "feat/task", "--accept-pull", "web"],
-	));
-	assert_eq!(
-		fs::read_to_string(tree.join("authored")).unwrap(),
-		"preserved"
-	);
+	assert!(saved["problem"].is_null());
+	let status = workyard(&root, &["status"]);
+	assert_ok(&status);
+	assert!(String::from_utf8_lossy(&status.stdout).contains("healthy"));
+	let recovery = workyard(&root, &["recover", "feat/task"]);
+	assert_ok(&recovery);
+	assert!(String::from_utf8_lossy(&recovery.stdout).contains("Nothing to recover"));
 }
 
 #[test]
@@ -166,6 +185,7 @@ fn acknowledgement_never_bypasses_pending_writer_or_git_operation() {
 		.status
 		.success()
 	);
+	legacy_pull_evidence(&root, false);
 	let tree = root.join("feat/task/api");
 	let git_dir = PathBuf::from(git(&tree, &["rev-parse", "--absolute-git-dir"]));
 	fs::write(
@@ -341,32 +361,76 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 	let commit = git(&web, &["rev-parse", "HEAD"]);
 	let root = fixture.path().join("workspace");
 	fs::create_dir(&root).unwrap();
-	assert!(
-		!workyard(
-			&root,
-			&[
-				"create",
-				"feat/task",
-				"--repo",
-				text(&api),
-				"--repo",
-				text(&web),
-				"--repo-from",
-				&commit,
-				"--from",
-				"main",
-				"--pull"
-			]
-		)
-		.status
-		.success()
-	);
+	struct StopAfterApi;
+	impl workyard_core::Observer for StopAfterApi {
+		async fn phase(
+			&self,
+			_: &str,
+			participant: &str,
+			phase: &str,
+		) -> Result<(), workyard_core::Problem> {
+			if participant == "api" && phase == "completed" {
+				return Err(workyard_core::Problem::new(
+					workyard_core::ProblemCode::Cancelled,
+					"Stop before web creation",
+				));
+			}
+			Ok(())
+		}
+	}
+
+	{
+		let store = workyard_state::Store::open(&root, &root.join(".workyard")).unwrap();
+		let request = workyard_core::CreateRequest {
+			task: "feat/task".into(),
+			repositories: vec![
+				workyard_core::RepositoryInput {
+					path: api,
+					name: None,
+					remote: None,
+					from: None,
+				},
+				workyard_core::RepositoryInput {
+					path: web.clone(),
+					name: None,
+					remote: None,
+					from: Some(commit.clone()),
+				},
+			],
+			tasks_root: root.clone(),
+			state_dir: root.join(".workyard"),
+			checkout: false,
+			no_fetch: true,
+			pull: false,
+			remote: None,
+			from: Some("main".into()),
+		};
+		let result = smol::block_on(workyard_core::create(
+			request,
+			&workyard_git::Runner::default(),
+			&workyard_core::Control::default(),
+			&StopAfterApi,
+			&store,
+		))
+		.unwrap();
+		assert_eq!(
+			result.operation.outcome,
+			workyard_core::OperationOutcome::Cancelled
+		);
+		assert_eq!(
+			result.task.participants[1].phase,
+			workyard_core::Phase::NotStarted
+		);
+	}
+	assert!(!root.join("feat/task/web").exists());
+
 	fs::write(web.join("file"), "advanced").unwrap();
 	git(&web, &["commit", "-am", "advance"]);
-	assert!(
-		!workyard(&root, &["recover", "feat/task", "--accept-pull", "api"])
-			.status
-			.success()
+	assert_ne!(git(&web, &["rev-parse", "HEAD"]), commit);
+	assert_ok(&workyard(&root, &["recover", "feat/task"]));
+	assert_eq!(
+		record(&root.join(".workyard"))["participants"][1]["phase"],
+		"completed"
 	);
 	assert_eq!(
 		git(&root.join("feat/task/web"), &["rev-parse", "HEAD"]),
@@ -442,6 +506,12 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 		.status
 		.success()
 	);
+	git(
+		&web,
+		&["worktree", "remove", text(&root.join("feat/task/web"))],
+	);
+	git(&web, &["branch", "-D", "feat/task"]);
+	legacy_pull_evidence(&root, true);
 	let cancelled = Arc::new(AtomicBool::new(false));
 	let signal = cancelled.clone();
 	let control = workyard_core::Control::new(move || signal.load(Ordering::SeqCst));
@@ -468,10 +538,7 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 	);
 	drop(store);
 	assert!(!workyard(&root, &["recover", "feat/task"]).status.success());
-	assert_ok(&workyard(
-		&root,
-		&["recover", "feat/task", "--accept-pull", "web"],
-	));
+	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 }
 
 #[test]

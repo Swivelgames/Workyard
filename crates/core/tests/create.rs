@@ -14,6 +14,7 @@ struct Fixture {
 	saved: Mutex<Vec<Task>>,
 	fail_publish: bool,
 	fail_identity: bool,
+	pull_error: Option<ProblemCode>,
 	effects: Mutex<Vec<(Task, bool)>>,
 }
 
@@ -26,6 +27,7 @@ impl Fixture {
 			saved: Default::default(),
 			fail_publish,
 			fail_identity: false,
+			pull_error: None,
 			effects: Default::default(),
 		}
 	}
@@ -99,6 +101,9 @@ impl Git for Fixture {
 	}
 
 	async fn pull(&self, _: &Repository, _: &Path, _: &Control) -> Result<(), Problem> {
+		if let Some(code) = self.pull_error {
+			return Err(Problem::new(code, "Injected pull failure"));
+		}
 		Ok(())
 	}
 }
@@ -195,7 +200,7 @@ fn cancellation_racing_success_records_known_worktree_and_stops_next_repo() {
 	let fixture = Fixture::new(true, false);
 	let cancelled = fixture.cancelled.clone();
 	let control = Control::new(move || cancelled.load(Ordering::SeqCst));
-	let (task, _) =
+	let CreateResult { task, .. } =
 		smol::block_on(create(request(), &fixture, &control, &Quiet, &fixture)).unwrap();
 	assert_eq!(task.operation.outcome, OperationOutcome::Cancelled);
 	assert_eq!(task.participants[0].phase, Phase::WorktreeCreated);
@@ -210,7 +215,7 @@ fn cancellation_racing_success_records_known_worktree_and_stops_next_repo() {
 #[test]
 fn post_effect_publication_failure_preserves_evidence_and_stops_later_effects() {
 	let fixture = Fixture::new(false, true);
-	let (task, _) = smol::block_on(create(
+	let CreateResult { task, .. } = smol::block_on(create(
 		request(),
 		&fixture,
 		&Control::default(),
@@ -235,7 +240,7 @@ fn post_effect_publication_failure_preserves_evidence_and_stops_later_effects() 
 #[test]
 fn broken_presentation_stops_before_effect_and_records_cancellation() {
 	let fixture = Fixture::new(false, false);
-	let (task, _) = smol::block_on(create(
+	let CreateResult { task, .. } = smol::block_on(create(
 		request(),
 		&fixture,
 		&Control::default(),
@@ -314,7 +319,7 @@ fn assert_identity_failure_settled(task: &Task, fixture: &Fixture) {
 fn create_identity_read_failure_retains_success_and_writer_settlement() {
 	let mut fixture = Fixture::new(false, false);
 	fixture.fail_identity = true;
-	let (task, _) = smol::block_on(create(
+	let CreateResult { task, .. } = smol::block_on(create(
 		request(),
 		&fixture,
 		&Control::default(),
@@ -353,7 +358,7 @@ fn recovery_identity_read_failure_retains_success_and_writer_settlement() {
 #[test]
 fn named_effect_modes_reach_existing_bool_adapter_hook() {
 	let fixture = Fixture::new(false, false);
-	let (task, _) = smol::block_on(create(
+	let CreateResult { task, .. } = smol::block_on(create(
 		request(),
 		&fixture,
 		&Control::default(),
@@ -387,7 +392,9 @@ fn named_effect_modes_reach_existing_bool_adapter_hook() {
 fn recovery_publishes_new_attempt_without_erasing_participant_facts() {
 	for status in [OperationOutcome::Failed, OperationOutcome::Cancelled] {
 		let fixture = Fixture::new(false, false);
-		let (mut stored, _) = smol::block_on(create(
+		let CreateResult {
+			task: mut stored, ..
+		} = smol::block_on(create(
 			request(),
 			&fixture,
 			&Control::default(),
@@ -434,4 +441,90 @@ fn recovery_publishes_new_attempt_without_erasing_participant_facts() {
 			}
 		}
 	}
+}
+
+#[test]
+fn optional_pull_failure_continues_but_supervision_uncertainty_does_not() {
+	for code in [
+		ProblemCode::GitFailed,
+		ProblemCode::SupervisionFailed,
+		ProblemCode::Cancelled,
+	] {
+		let mut fixture = Fixture::new(false, false);
+		fixture.pull_error = Some(code);
+		let mut request = request();
+		request.no_fetch = false;
+		request.pull = true;
+		let result = smol::block_on(create(
+			request,
+			&fixture,
+			&Control::default(),
+			&Quiet,
+			&fixture,
+		))
+		.unwrap();
+		let effects = fixture.effects.lock().unwrap();
+		let (last, settled) = effects.last().unwrap();
+		if code == ProblemCode::GitFailed {
+			assert_eq!(result.operation.outcome, OperationOutcome::Failed);
+			assert_eq!(result.pull_failures.len(), 2);
+			assert_eq!(result.task.operation.outcome, OperationOutcome::Succeeded);
+			assert!(result.task.problem.is_none());
+			assert!(
+				result
+					.task
+					.participants
+					.iter()
+					.all(|p| p.phase == Phase::Completed)
+			);
+			assert_eq!(fixture.added.lock().unwrap().len(), 2);
+			continue;
+		}
+		assert_eq!(fixture.added.lock().unwrap().len(), 1);
+		assert!(result.pull_failures.is_empty());
+		assert_eq!(result.task.participants[1].phase, Phase::NotStarted);
+		if code == ProblemCode::SupervisionFailed {
+			assert!(!settled);
+			assert_eq!(last.participants[0].phase, Phase::Pulling);
+		} else {
+			assert!(*settled);
+			assert_eq!(last.participants[0].phase, Phase::Completed);
+			assert_eq!(result.operation.outcome, OperationOutcome::Cancelled);
+		}
+	}
+}
+
+#[test]
+fn cancelled_last_pull_keeps_membership_settled_but_invocation_cancelled() {
+	let mut fixture = Fixture::new(false, false);
+	fixture.pull_error = Some(ProblemCode::Cancelled);
+	let mut request = request();
+	request.repositories.truncate(1);
+	request.no_fetch = false;
+	request.pull = true;
+
+	let result = smol::block_on(create(
+		request,
+		&fixture,
+		&Control::default(),
+		&Quiet,
+		&fixture,
+	))
+	.unwrap();
+	assert_eq!(result.operation.outcome, OperationOutcome::Cancelled);
+	assert_eq!(result.problem.unwrap().code, ProblemCode::Cancelled);
+	assert_eq!(result.task.operation.outcome, OperationOutcome::Succeeded);
+	assert!(result.task.problem.is_none());
+	assert_eq!(result.task.participants[0].phase, Phase::Completed);
+	assert_eq!(
+		fixture
+			.saved
+			.lock()
+			.unwrap()
+			.last()
+			.unwrap()
+			.operation
+			.outcome,
+		OperationOutcome::Succeeded
+	);
 }

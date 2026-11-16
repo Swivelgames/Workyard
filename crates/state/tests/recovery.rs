@@ -7,6 +7,7 @@ fn completed_task(workspace: &support::Workspace) -> Task {
 	let mut task = support::task(&workspace.root, &workspace.state, "feat/task");
 	task.operation.outcome = OperationOutcome::Succeeded;
 	task.participants.push(Participant {
+		creation: None,
 		name: "api".into(),
 		source: workspace.root.join("source"),
 		common_dir: workspace.root.join("source/.git"),

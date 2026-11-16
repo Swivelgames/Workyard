@@ -33,14 +33,22 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 		};
 		let mut terminal = Terminal::for_output(&self.output.stdout);
 		let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
-		terminal.operation_result("Creation", outcome.operation.outcome);
+		if !outcome.pull_failures.is_empty() && outcome.problem.is_none() {
+			terminal.completed_with_pull_failures("Creation", &outcome.task);
+		} else {
+			terminal.operation_result("Creation", outcome.operation.outcome);
+		}
 		terminal.workspace(
 			outcome.tasks_root.as_ref().map(|path| path.as_path()),
 			outcome.state_dir.as_ref().map(|path| path.as_path()),
 		);
 		let condition = if outcome.lifecycle.is_none() {
 			"not inspected"
-		} else if succeeded {
+		} else if outcome
+			.participants
+			.iter()
+			.all(|participant| participant.phase == "completed")
+		{
 			"active"
 		} else {
 			"needs attention"
@@ -48,7 +56,7 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 		terminal.task(
 			&outcome.task,
 			condition,
-			if succeeded {
+			if condition == "active" {
 				Tone::Good
 			} else {
 				Tone::Attention
@@ -64,6 +72,7 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 				"creation recorded"
 			},
 		);
+		terminal.pull_failures(&outcome.pull_failures);
 		if let Some(problem) = &outcome.problem {
 			terminal.problem(problem);
 			if problem.remedy.trim().is_empty() {

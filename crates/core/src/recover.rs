@@ -15,6 +15,7 @@ struct Recovery<'a, G, S: RecoveryState, O> {
 	store: &'a S,
 	guard: &'a S::Admission,
 	publication_attempted: AtomicBool,
+	pull_failures: std::sync::Mutex<Vec<crate::PullFailure>>,
 }
 
 pub async fn recover(
@@ -65,6 +66,7 @@ pub async fn recover(
 		store,
 		guard: &guard,
 		publication_attempted: AtomicBool::new(false),
+		pull_failures: std::sync::Mutex::new(Vec::new()),
 	};
 	let result = recovery.resume(&mut task, accept_pull).await;
 
@@ -75,6 +77,13 @@ pub async fn recover(
 		control.check()?;
 		store.verify()?;
 		return Ok(crate::RecoveryResult {
+			operation: record
+				.recorded
+				.as_ref()
+				.expect("verified published task")
+				.operation,
+			pull_failures: Vec::new(),
+			problem: None,
 			task: record.recorded.expect("verified published task"),
 			record: path,
 			nothing_to_recover: true,
@@ -87,11 +96,21 @@ pub async fn recover(
 		Err(_) => OperationOutcome::Failed,
 	};
 	task.problem = result.err();
+	let mut invocation = task.operation;
+	let mut invocation_problem = task.problem.clone();
+	crate::optional_pull::preserve_settled_cancellation(&mut task);
+
 	if let Err(problem) = store.save(&guard, &task) {
 		task.operation.outcome = OperationOutcome::Failed;
-		task.problem = Some(problem);
+		task.problem = Some(problem.clone());
+		invocation.outcome = OperationOutcome::Failed;
+		invocation_problem = Some(problem);
 	}
+	let pull_failures = recovery.pull_failures.into_inner().expect("pull failures");
 	Ok(crate::RecoveryResult {
+		operation: crate::optional_pull::invocation_operation(invocation, &pull_failures),
+		pull_failures,
+		problem: invocation_problem,
 		task,
 		record: path,
 		nothing_to_recover: false,

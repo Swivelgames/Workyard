@@ -12,7 +12,10 @@ impl RecoveryState for Store {
 		guard.verify()?;
 		if !exists(&guard.evidence_path)? {
 			return Err(
-				if !exists(&guard.record_path)? && !exists(&effect_path(guard))? {
+				if !exists(&guard.record_path)?
+					&& !exists(&effect_path(guard))?
+					&& !exists(&crate::revision::path(&guard.evidence_path))?
+				{
 					Problem::new(
 						workyard_core::ProblemCode::TaskUnknown,
 						"Task is unknown in this state directory.",
@@ -23,13 +26,38 @@ impl RecoveryState for Store {
 			);
 		}
 		let intent: TaskRecord =
-			crate::documents::read_supported(&guard.evidence_path, &[1, 2, 3])?;
+			crate::documents::read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
 		validate(&intent, name, &self.root, &self.state)?;
+
+		if let Some(revision) =
+			crate::revision::read(&guard.evidence_path, &intent, &self.root, &self.state)?
+		{
+			let mut needs_publication = true;
+			let recorded = if exists(&guard.record_path)? {
+				let saved: TaskRecord =
+					crate::documents::read_supported(&guard.record_path, &[1, 2, 3, 4])?;
+				validate(&saved, name, &self.root, &self.state)?;
+				if saved.generation != intent.generation {
+					return Err(damaged("Published task belongs to another incarnation."));
+				}
+				needs_publication = serde_json::to_value(&saved).ok()
+					!= serde_json::to_value(&revision.current.task).ok();
+				Some(decode(saved)?)
+			} else {
+				None
+			};
+			return Ok(RecoveryRecord {
+				needs_publication,
+				recorded,
+				task: decode(revision.current.task)?,
+				pending: revision.current.pending,
+			});
+		}
 		let mut needs_publication = true;
 		let recorded = if exists(&guard.record_path)? {
 			let (record, version): (TaskRecord, _) =
-				crate::documents::read_supported_with_version(&guard.record_path, &[1, 2, 3])?;
-			needs_publication = version != 3;
+				crate::documents::read_supported_with_version(&guard.record_path, &[1, 2, 3, 4])?;
+			needs_publication = version < 3;
 			validate(&record, name, &self.root, &self.state)?;
 			match_intent(&intent, &record)?;
 			Some(record)

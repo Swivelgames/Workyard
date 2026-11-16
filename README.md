@@ -4,7 +4,7 @@ Workyard creates a task across explicitly selected Git repositories. The same co
 operation is exposed through CLI views and Trine's on-demand stdio RPC host.
 
 This experimental slice implements `create`, its `checkout` alias, `recover`,
-`remove`, `list`, `status`, `info`, and `rpc`.
+`amend`, `remove`, `list`, `status`, `info`, and `rpc`.
 Other lifecycle commands, MCP and TUI are not implemented yet.
 
 ```sh
@@ -53,6 +53,41 @@ and `git -C <source> worktree list --porcelain` to investigate. Do not rerun cre
 a partial task: use `recover` with the original task name. A publication error
 reports uncertainty, even if the desired JSON is already visible; visibility does not prove durability.
 
+## Amending tasks
+
+```sh
+workyard amend feat/payments --repo /repos/worker --from main
+workyard amend feat/payments --repo /repos/api --repo-name legacy-api --repo /repos/new-api --repo-name api --from main
+workyard amend feat/payments --repo /new/location/api
+```
+
+Amend requires an explicit active task and existing state. It adds repositories,
+renames participants through `git worktree move`, and repairs known worktree links
+when a supplied moved repository retains its backing identity. Existing participants
+keep their names unless `--repo-name` explicitly changes them. Dirty or detached
+worktrees retain their files and branch state. Unrelated participants do not need
+to be clean. Rename cycles require an intermediate unused name.
+
+New participants use creation's source, remote, fetch and pull options; existing
+branches require `--checkout`. These flags do not pull or reset established
+participants. An identical completed request is a notified no-op. Ordinary failures
+preserve completed changes and permit `amend` retry; a failed addition does not
+roll back a successful rename. A leftover branch without verified creation evidence
+still requires explicit `--checkout` rather than silent adoption.
+
+Repository identity comes from Git's backing storage, not its remote URL. Replacement
+clones and moves that change filesystem identity are not automatically adopted.
+Git performs repairs itself; Workyard never rewrites Git administrative files.
+Repairing a moved main clone may reconnect its other linked worktrees too.
+
+Amended membership has an atomic `.revision` document under `evidence/`, anchored
+to the original admission. It preserves the latest membership and writer evidence
+even if publishing the normal task document is interrupted. Read-only commands use
+that verified evidence without writing it. Later mutations use the same authority;
+retiring/reusing a task archives the amended membership before a new incarnation.
+Participant creation options are versioned separately from the original task-wide
+options so recovery preserves each participant's intended execution policy.
+
 ## Recovery
 
 ```sh
@@ -67,7 +102,13 @@ moves/repairs, and resumes only remaining safe work. Healthy tasks do not fetch 
 pull for freshness. Branch-valued sources resolve their current tips; explicit
 commit sources retain their exact meaning.
 
-An uncertain pull is never automatically replayed. Inspect `git -C <path> status`,
+An ordinary optional pull failure leaves its successfully created worktree established.
+Workyard reports each participant's Git error and exits nonzero, while continuing
+other independent participants. Fix or retry the pull with Git; no Workyard acceptance
+is needed. Invocation results carry `pull_failures`; status uses current Git facts,
+so conflicts remain visible without persisting stale pull errors as task damage.
+
+Legacy or genuinely uncertain pull evidence is never automatically replayed. Inspect `git -C <path> status`,
 finish or abort the native Git operation manually, then name that participant with
 `--accept-pull`. Acceptance preserves your repair and does not bypass unresolved
 Git conflicts, native locks, backing/worktree identity checks or uncertain writers.
@@ -146,6 +187,9 @@ Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout:
 
 Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
 `{"task":"feat/payments","accept_pull":["api"],"state_dir":"/workspace/.workyard"}`.
+Amend uses `action: ["amend"]` and the same repository groups/options as creation,
+with an explicit task and existing-state selection. Its result separates operation
+outcome, retained participant facts and per-participant changes.
 Inspection uses `action: ["list"]`, `["status"]` or `["info"]` with optional `state_dir` and
 `tasks_root`; status additionally accepts optional `task`.
 

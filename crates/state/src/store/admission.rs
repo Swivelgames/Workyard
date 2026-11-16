@@ -62,7 +62,10 @@ impl Store {
 	}
 
 	pub fn ensure_new(&self, guard: &TaskGuard, name: &str) -> Result<(), Problem> {
-		if exists(&guard.record_path)? || exists(&guard.evidence_path)? {
+		if exists(&guard.record_path)?
+			|| exists(&guard.evidence_path)?
+			|| exists(&crate::revision::path(&guard.evidence_path))?
+		{
 			let previous = workyard_core::RecoveryState::load(self, guard, name)?;
 			if previous.pending.is_some()
 				|| previous.task.lifecycle != workyard_core::TaskLifecycle::Retired
@@ -92,7 +95,7 @@ impl Store {
 					continue;
 				}
 
-				let record: TaskRecord = read_supported(&path, &[1, 2, 3])?;
+				let record: TaskRecord = read_supported(&path, &[1, 2, 3, 4])?;
 				if path.file_name() != Some(std::ffi::OsStr::new(&task_filename(&record.task))) {
 					return Err(Problem::new(
 						workyard_core::ProblemCode::DamagedState,
@@ -104,14 +107,27 @@ impl Store {
 				// admission evidence. A missing or inconsistent current record does not.
 				let current_path = self.state.join("tasks").join(task_filename(&record.task));
 				if exists(&current_path)? {
-					let current: TaskRecord = read_supported(&current_path, &[1, 2, 3])?;
+					let current: TaskRecord = read_supported(&current_path, &[1, 2, 3, 4])?;
 					crate::records::task::validate(
 						&current,
 						&record.task,
 						&self.root,
 						&self.state,
 					)?;
-					crate::records::task::match_intent(&record, &current)?;
+					let intent_path = self
+						.state
+						.join("evidence")
+						.join(task_filename(&record.task));
+					let intent: TaskRecord = read_supported(&intent_path, &[1, 2, 3, 4])?;
+					if let Some(revision) =
+						crate::revision::read(&intent_path, &intent, &self.root, &self.state)?
+					{
+						if revision.current.task.lifecycle == "retired" {
+							continue;
+						}
+					} else {
+						crate::records::task::match_intent(&record, &current)?;
+					}
 					if current.lifecycle == "retired" {
 						continue;
 					}

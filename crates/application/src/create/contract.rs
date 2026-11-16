@@ -7,6 +7,8 @@ pub use crate::reporting::{OperationReport, ParticipantOutcome};
 
 #[derive(Serialize)]
 pub struct CreateOutcome {
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub pull_failures: Vec<crate::reporting::PullFailure>,
 	pub operation: OperationReport,
 	/// None when this invocation could not establish task membership.
 	pub lifecycle: Option<&'static str>,
@@ -27,6 +29,7 @@ impl CreateOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			pull_failures: Vec::new(),
 			operation: Operation {
 				kind: Some(OperationKind::Create),
 				continues: None,
@@ -45,6 +48,7 @@ impl CreateOutcome {
 
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
 		Self {
+			pull_failures: Vec::new(),
 			operation: task.operation.into(),
 			lifecycle: Some(task.lifecycle.as_str()),
 			task: task.name,
