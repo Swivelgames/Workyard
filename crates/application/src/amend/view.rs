@@ -4,10 +4,7 @@ use crate::{
 	terminal::{MessageScope, Terminal, text},
 };
 use std::io;
-use trine::{
-	application::{CliCompletion, CliViewContext},
-	view::View,
-};
+use trine::{application::CliViewContext, view::View};
 use workyard_core::OperationOutcome;
 
 pub struct AmendView {
@@ -15,7 +12,7 @@ pub struct AmendView {
 }
 
 impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
-	type Completion = CliCompletion;
+	type Completion = ();
 	type Error = io::Error;
 
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
@@ -24,10 +21,7 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 		self.output.stderr.write_all(terminal.output.as_bytes())
 	}
 
-	async fn finish(
-		&mut self,
-		result: &Result<AmendOutcome, AmendOutcome>,
-	) -> io::Result<CliCompletion> {
+	async fn finish(&mut self, result: &Result<AmendOutcome, AmendOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
@@ -66,6 +60,6 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 			terminal.problem_at(MessageScope::Workspace, problem);
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
-		Ok(CliCompletion::exit(if succeeded { 0 } else { 1 }))
+		Ok(())
 	}
 }

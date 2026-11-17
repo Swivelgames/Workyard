@@ -3,6 +3,7 @@ use trine::application::Application;
 
 mod command_hint;
 mod common;
+mod completion;
 mod invocation;
 mod removal;
 mod reporting;

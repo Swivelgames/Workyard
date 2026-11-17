@@ -4,10 +4,7 @@ use crate::{
 	terminal::{MessageScope, Terminal, text},
 };
 use std::io;
-use trine::{
-	application::{CliCompletion, CliViewContext},
-	view::View,
-};
+use trine::{application::CliViewContext, view::View};
 use workyard_core::OperationOutcome;
 
 pub struct RecoverView {
@@ -16,7 +13,7 @@ pub struct RecoverView {
 }
 
 impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
-	type Completion = CliCompletion;
+	type Completion = ();
 	type Error = io::Error;
 
 	async fn confirm(
@@ -37,10 +34,7 @@ impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
 		self.output.stderr.write_all(terminal.output.as_bytes())
 	}
 
-	async fn finish(
-		&mut self,
-		result: &Result<RecoverOutcome, RecoverOutcome>,
-	) -> io::Result<CliCompletion> {
+	async fn finish(&mut self, result: &Result<RecoverOutcome, RecoverOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
@@ -81,7 +75,7 @@ impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
 			}
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
-		Ok(CliCompletion::exit(if succeeded { 0 } else { 1 }))
+		Ok(())
 	}
 }
 

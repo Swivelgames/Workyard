@@ -1,27 +1,21 @@
 use super::ListOutcome;
 use crate::common::Progress;
 use std::io;
-use trine::{
-	application::{CliCompletion, CliViewContext},
-	view::View,
-};
+use trine::{application::CliViewContext, view::View};
 
 pub struct ListView {
 	pub output: CliViewContext,
 }
 
 impl View<ListOutcome, ListOutcome, Progress> for ListView {
-	type Completion = CliCompletion;
+	type Completion = ();
 	type Error = io::Error;
 
 	async fn progress(&mut self, _: Progress) -> io::Result<()> {
 		Ok(())
 	}
 
-	async fn finish(
-		&mut self,
-		result: &Result<ListOutcome, ListOutcome>,
-	) -> io::Result<CliCompletion> {
+	async fn finish(&mut self, result: &Result<ListOutcome, ListOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => &outcome.0,
 		};
@@ -29,6 +23,6 @@ impl View<ListOutcome, ListOutcome, Progress> for ListView {
 		crate::observation::render::list(&mut terminal, outcome);
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
 
-		Ok(CliCompletion::exit(if result.is_err() { 1 } else { 0 }))
+		Ok(())
 	}
 }

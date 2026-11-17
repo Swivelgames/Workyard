@@ -27,7 +27,11 @@ pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
 	let rpc = StructuredBinding::serde();
 
 	Ok(Entry::new(handler)
-		.cli(cli, |output| Ok(StatusView { output }))
+		.cli(
+			cli,
+			|output| Ok(StatusView { output }),
+			crate::completion::result,
+		)
 		.rpc(rpc))
 }
 

@@ -4,27 +4,21 @@ use crate::{
 	terminal::{MessageScope, Terminal},
 };
 use std::{fmt::Write, io};
-use trine::{
-	application::{CliCompletion, CliViewContext},
-	view::View,
-};
+use trine::{application::CliViewContext, view::View};
 
 pub struct InfoView {
 	pub output: CliViewContext,
 }
 
 impl View<InfoOutcome, InfoOutcome, Progress> for InfoView {
-	type Completion = CliCompletion;
+	type Completion = ();
 	type Error = io::Error;
 
 	async fn progress(&mut self, _: Progress) -> io::Result<()> {
 		Ok(())
 	}
 
-	async fn finish(
-		&mut self,
-		result: &Result<InfoOutcome, InfoOutcome>,
-	) -> io::Result<CliCompletion> {
+	async fn finish(&mut self, result: &Result<InfoOutcome, InfoOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
@@ -78,6 +72,6 @@ impl View<InfoOutcome, InfoOutcome, Progress> for InfoView {
 			terminal.problem_at(MessageScope::Workspace, problem);
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
-		Ok(CliCompletion::exit(if result.is_err() { 1 } else { 0 }))
+		Ok(())
 	}
 }

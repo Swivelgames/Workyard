@@ -23,7 +23,11 @@ pub(crate) fn build_entry() -> Result<InfoEntry, RegistrationError> {
 	let cli = CliBinding::new(cli_bindings());
 	let rpc = StructuredBinding::serde();
 	Ok(Entry::new(handler)
-		.cli(cli, |output| Ok(InfoView { output }))
+		.cli(
+			cli,
+			|output| Ok(InfoView { output }),
+			crate::completion::result,
+		)
 		.rpc(rpc))
 }
 

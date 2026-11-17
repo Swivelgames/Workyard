@@ -4,10 +4,7 @@ use crate::{
 	terminal::{MessageScope, Terminal, text},
 };
 use std::io;
-use trine::{
-	application::{CliCompletion, CliViewContext},
-	view::View,
-};
+use trine::{application::CliViewContext, view::View};
 use workyard_core::OperationOutcome;
 
 pub struct RemoveView {
@@ -16,7 +13,7 @@ pub struct RemoveView {
 }
 
 impl View<RemoveOutcome, RemoveOutcome, Progress> for RemoveView {
-	type Completion = CliCompletion;
+	type Completion = ();
 	type Error = io::Error;
 
 	async fn confirm(
@@ -37,10 +34,7 @@ impl View<RemoveOutcome, RemoveOutcome, Progress> for RemoveView {
 		self.output.stderr.write_all(terminal.output.as_bytes())
 	}
 
-	async fn finish(
-		&mut self,
-		result: &Result<RemoveOutcome, RemoveOutcome>,
-	) -> io::Result<CliCompletion> {
+	async fn finish(&mut self, result: &Result<RemoveOutcome, RemoveOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
@@ -77,7 +71,7 @@ impl View<RemoveOutcome, RemoveOutcome, Progress> for RemoveView {
 			}
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
-		Ok(CliCompletion::exit(if succeeded { 0 } else { 1 }))
+		Ok(())
 	}
 }
 

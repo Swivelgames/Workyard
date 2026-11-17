@@ -4,10 +4,7 @@ use crate::{
 	terminal::{Terminal, Tone},
 };
 use std::io;
-use trine::{
-	application::{CliCompletion, CliViewContext},
-	view::View,
-};
+use trine::{application::CliViewContext, view::View};
 use workyard_core::OperationOutcome;
 
 pub struct CreateView {
@@ -15,7 +12,7 @@ pub struct CreateView {
 }
 
 impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
-	type Completion = CliCompletion;
+	type Completion = ();
 	type Error = io::Error;
 
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
@@ -24,10 +21,7 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 		self.output.stderr.write_all(terminal.output.as_bytes())
 	}
 
-	async fn finish(
-		&mut self,
-		result: &Result<CreateOutcome, CreateOutcome>,
-	) -> io::Result<CliCompletion> {
+	async fn finish(&mut self, result: &Result<CreateOutcome, CreateOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
@@ -83,6 +77,6 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 			}
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
-		Ok(CliCompletion::exit(if succeeded { 0 } else { 1 }))
+		Ok(())
 	}
 }

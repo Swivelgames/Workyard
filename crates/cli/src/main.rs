@@ -1,66 +1,44 @@
+mod host;
+
 use std::{ffi::OsString, process::ExitCode};
-use trine::{Cancellation, application::CliViewContext, cli::Parsed, rpc};
+use trine::{
+	application::{CliViewContext, json::JsonResponse},
+	cli::output_mode::json_requested,
+	error::{Failure, FailureKind},
+};
 
 fn main() -> ExitCode {
-	match run() {
+	let mut arguments: Vec<OsString> = std::env::args_os().collect();
+	let output = CliViewContext::default();
+	if arguments.len() == 1 {
+		let version = format!("workyard {}\n", env!("CARGO_PKG_VERSION"));
+		if output.stdout.write_all(version.as_bytes()).is_err() {
+			return ExitCode::FAILURE;
+		}
+		arguments.push("--help".into());
+	}
+
+	let json = json_requested(&arguments);
+	match host::run(arguments, output.clone()) {
 		Ok(code) => ExitCode::from(code),
 		Err(error) => {
-			eprintln!("{error}");
+			report_failure(&output, json, error);
 			ExitCode::FAILURE
 		}
 	}
 }
 
-fn run() -> Result<u8, Box<dyn std::error::Error>> {
-	let application = workyard_application::application()?;
-	let mut arguments: Vec<OsString> = std::env::args_os().collect();
-	if arguments.len() == 1 {
-		println!("workyard {}", env!("CARGO_PKG_VERSION"));
-		arguments.push("--help".into());
+fn report_failure(output: &CliViewContext, json: bool, error: Failure) {
+	let message = std::error::Error::source(&error)
+		.map(ToString::to_string)
+		.unwrap_or_else(|| error.to_string());
+	if !json || error.kind == FailureKind::OutputFailed {
+		let _ = output.stderr.write_all(format!("{message}\n").as_bytes());
+		return;
 	}
 
-	if arguments.get(1).is_some_and(|argument| argument == "rpc") {
-		if arguments.len() != 2 {
-			return Err("workyard rpc accepts no command arguments".into());
-		}
-
-		return run_rpc(&application);
+	let response = JsonResponse::failure(error.kind, message);
+	if let Err(error) = response.write(&output.stdout) {
+		let _ = output.stderr.write_all(format!("{error}\n").as_bytes());
 	}
-
-	match application.parse_cli(arguments)? {
-		Parsed::Display(text) => {
-			print!("{text}");
-			Ok(0)
-		}
-		Parsed::Input(prepared) => Ok(prepared
-			.run(CliViewContext::default(), signal_cancellation()?)?
-			.exit_code()),
-	}
-}
-
-fn run_rpc(
-	application: &trine::application::Application,
-) -> Result<u8, Box<dyn std::error::Error>> {
-	let cancellation = signal_cancellation()?;
-	let (reader, writer) = rpc::stdio::open()?;
-	let report = smol::block_on(rpc::serve(
-		application,
-		reader,
-		writer,
-		rpc::Config::default(),
-		cancellation,
-		|_| {},
-	))?;
-	if let Some(failure) = report.failure {
-		return Err(failure.into());
-	}
-
-	Ok(0)
-}
-
-fn signal_cancellation() -> Result<Cancellation, ctrlc::Error> {
-	let cancellation = Cancellation::new();
-	let signal = cancellation.clone();
-	ctrlc::set_handler(move || signal.cancel())?;
-	Ok(cancellation)
 }

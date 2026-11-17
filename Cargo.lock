@@ -225,6 +225,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a35200383f20018d41c14d1ab19c1727c697f544492143f7d93aa39f0187848"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_lex"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -958,6 +967,7 @@ dependencies = [
  "async-io",
  "base64",
  "clap",
+ "clap_complete",
  "futures-lite",
  "inquire",
  "rustix 1.1.6",
@@ -1241,6 +1251,7 @@ dependencies = [
 name = "workyard-cli"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "ctrlc",
  "process-wrap",
  "serde_json",

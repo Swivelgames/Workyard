@@ -30,12 +30,16 @@ pub(crate) fn build_entry() -> Result<RemoveEntry, RegistrationError> {
 	let rpc = crate::structured::progress_binding();
 
 	Ok(Entry::new(handler)
-		.cli(cli, |output| {
-			Ok(RemoveView {
-				output,
-				started: false,
-			})
-		})
+		.cli(
+			cli,
+			|output| {
+				Ok(RemoveView {
+					output,
+					started: false,
+				})
+			},
+			|result| crate::completion::operation(result, |outcome| &outcome.operation),
+		)
 		.rpc(rpc))
 }
 

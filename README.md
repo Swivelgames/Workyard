@@ -4,7 +4,7 @@ Workyard creates a task across explicitly selected Git repositories. The same co
 operation is exposed through CLI views and Trine's on-demand stdio RPC host.
 
 This experimental slice implements `create`, its `checkout` alias, `recover`,
-`amend`, `remove`, `list`, `status`, `info`, and `rpc`.
+`amend`, `remove`, `list`, `status`, `info`, `rpc`, and `completion`.
 Other lifecycle commands, MCP and TUI are not implemented yet.
 
 ```sh
@@ -235,3 +235,40 @@ Linux tests use isolated repositories and remotes. Windows cross-compilation che
 are not native validation. Windows console/headless cancellation, Job containment,
 case-insensitive filesystems, Unicode paths and macOS process-group completion still
 need the tracked native-platform validation pass before production readiness.
+
+## JSON output and shell completions
+
+Add `--json` before or after any action to receive one structured result:
+
+```sh
+workyard --json list
+workyard status feat/payments --json
+workyard create --repo /repos/api --from main feat/payments --json
+```
+
+The document contains `exit_code`, `result`, and `error`, with four-space indentation
+and a trailing newline. The process exit code agrees with `exit_code` when output
+is delivered successfully. `result` contains the same typed action data available
+over RPC, including domain problems and partial/cancelled outcomes. `error` is null
+unless CLI/framework execution or presentation failed; it then contains a stable
+`code` and readable `message`. There is no JSON-RPC wrapper.
+
+JSON mode suppresses progress, styling and prompts. It does not imply `--yes` or
+`--force`; existing noninteractive consent rules apply. Explicit help/version remain
+plain displays, and combining JSON mode with `rpc` or `completion` is rejected.
+A failed output stream can prevent delivery of a complete document; check the exit
+code and stderr too.
+
+Generate a completion script for Bash, Zsh, Fish or PowerShell:
+
+```sh
+workyard completion bash > workyard.bash
+workyard completion zsh > _workyard
+workyard completion fish > workyard.fish
+workyard completion powershell > workyard.ps1
+```
+
+Load or install the script using your shell's normal completion configuration.
+Workyard never edits that configuration. Scripts include commands, aliases, options
+and filesystem hints from the actual CLI definitions. Context-aware task,
+participant and Git branch suggestions are the immediate next slice.

@@ -26,12 +26,16 @@ pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 	let rpc = crate::structured::progress_binding();
 
 	Ok(Entry::new(handler)
-		.cli(cli, |output| {
-			Ok(RecoverView {
-				output,
-				started: false,
-			})
-		})
+		.cli(
+			cli,
+			|output| {
+				Ok(RecoverView {
+					output,
+					started: false,
+				})
+			},
+			|result| crate::completion::operation(result, |outcome| &outcome.operation),
+		)
 		.rpc(rpc))
 }
 

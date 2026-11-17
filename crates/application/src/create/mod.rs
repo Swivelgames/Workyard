@@ -32,7 +32,11 @@ pub(crate) fn build_entry() -> Result<CreateEntry, RegistrationError> {
 	let rpc = crate::structured::progress_binding();
 
 	Ok(Entry::new(handler)
-		.cli(cli, |output| Ok(CreateView { output }))
+		.cli(
+			cli,
+			|output| Ok(CreateView { output }),
+			|result| crate::completion::operation(result, |outcome| &outcome.operation),
+		)
 		.rpc(rpc))
 }
 
