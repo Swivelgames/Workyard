@@ -1,4 +1,4 @@
-use crate::common::ProblemOutcome;
+use crate::contracts::ProblemOutcome;
 use serde::Serialize;
 use trine::NativePath;
 use workyard_core::ParticipantInspection;

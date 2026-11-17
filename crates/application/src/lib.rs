@@ -1,42 +1,15 @@
 //! Workyard orchestration and interface DTOs; Git and state remain focused adapters.
-use trine::application::Application;
-
-mod argument_completion;
-mod command_hint;
-mod common;
-mod completion;
-mod invocation;
-mod removal;
-mod reporting;
-mod structured;
-mod task_completion;
-mod terminal;
-
-// Action modules
-pub mod amend;
-pub mod create;
-pub mod info;
-pub mod list;
+mod actions;
+mod application;
+mod contracts;
+mod execution;
+mod guidance;
 pub mod observation;
-pub mod recover;
-pub mod remove;
-pub mod status;
-// etc...
+mod presentation;
+mod workspace;
 
-// Preserve the original imports while exposing capability-scoped APIs.
-pub use common::{ProblemOutcome, Progress};
+// Deliberate compatibility exports: disk ownership does not change supported imports.
+pub use actions::{amend, create, info, list, recover, remove, status};
+pub use application::application;
+pub use contracts::{ProblemOutcome, Progress};
 pub use create::{CreateInput, CreateOutcome, RepositoryInput, create};
-
-pub fn application() -> Result<Application, Box<dyn std::error::Error>> {
-	let mut app = Application::new("workyard", env!("CARGO_PKG_VERSION"))?;
-
-	app.register(create::build_entry()?)?;
-	app.register(amend::build_entry()?)?;
-	app.register(recover::build_entry()?)?;
-	app.register(remove::build_entry()?)?;
-	app.register(list::build_entry()?)?;
-	app.register(info::build_entry()?)?;
-	app.register(status::build_entry()?)?;
-
-	Ok(app)
-}

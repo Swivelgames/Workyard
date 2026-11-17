@@ -480,3 +480,12 @@ capability-owned assembly, contracts independent of views, staged construction,
 semantic argument groups and an obvious home for future actions. The lesson applies
 equally to storage components, protocol handlers, UI features and other cohesive
 units. The goal is code whose structure explains how to understand and extend it.
+
+## Workyard application owners
+
+Apply these principles through the concrete owners and extension examples in
+[Application organization](application-organization.md). Capabilities own assembly
+and command layouts; the composition root only registers entries. Shared contracts,
+execution adaptation, workspace selection, observation, guidance and presentation
+have separate admission rules. Keep internal imports directed at those owners while
+preserving existing public paths through deliberate compatibility exports.

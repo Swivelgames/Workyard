@@ -1,17 +1,24 @@
 mod participant;
 pub use participant::{ParticipantReport, ParticipantState};
 
-use crate::common::ProblemOutcome;
+use crate::contracts::ProblemOutcome;
 use serde::Serialize;
 use trine::NativePath;
 use workyard_core::{Task, TaskInspection, TaskSnapshot};
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Provenance {
+	Recorded,
+	Inspected,
+}
+
 #[derive(Serialize)]
 pub struct SavedTask {
 	pub lifecycle: &'static str,
-	pub operation: crate::reporting::OperationReport,
+	pub operation: crate::contracts::OperationReport,
 	pub problem: Option<ProblemOutcome>,
-	pub participants: Vec<crate::reporting::ParticipantOutcome>,
+	pub participants: Vec<crate::contracts::ParticipantOutcome>,
 }
 
 impl From<Task> for SavedTask {

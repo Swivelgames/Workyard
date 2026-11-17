@@ -201,8 +201,10 @@ accepted work; shutdown, read failure or output failure requests cancellation.
 
 - `core`: create/recovery orchestration and its private preflight, task/request contracts,
 	cancellation, problems and narrow effect ports.
-- `application`: capability-owned create/recovery input, contract, action and view modules;
-	the root registers capabilities and preserves public imports.
+- `application`: capability-owned actions and CLI views, with explicit shared contract,
+	execution, workspace, observation, guidance and presentation owners. See
+	[Application organization](docs/application-organization.md) for dependencies,
+	extension examples and compatibility policy.
 - `git`: repository inspection and effects, with private branch planning; the
 	process runner and output contract delegate to bounded capture and supervision.
 - `state`: the store publishes task records and implements the core port; private

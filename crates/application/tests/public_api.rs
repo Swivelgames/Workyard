@@ -80,3 +80,22 @@ fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields()
 	expected["nothing_to_recover"] = false.into();
 	assert_eq!(serde_json::to_value(recover).unwrap(), expected);
 }
+
+#[cfg(unix)]
+#[test]
+fn public_normalize_resolves_future_placement_without_creating_state() {
+	let workspace = tempfile::tempdir().unwrap();
+	let root = workspace.path().join("future-root");
+	let state = workspace.path().join("external-state");
+	let mut input = invalid_request();
+	input.task = "feat/placement".into();
+	input.tasks_root = Some(NativePath::new(&root).unwrap());
+	input.state_dir = Some(NativePath::new(&state).unwrap());
+
+	let request = input.normalize().unwrap();
+
+	assert_eq!(request.tasks_root, root);
+	assert_eq!(request.state_dir, state);
+	assert!(!root.exists());
+	assert!(!state.exists());
+}
