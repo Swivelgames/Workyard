@@ -1,6 +1,6 @@
 use workyard_core::Problem;
 
-pub(super) fn choose_remote(
+pub(crate) fn choose_remote(
 	remotes: &[String],
 	requested: Option<&str>,
 ) -> Result<Option<String>, Problem> {

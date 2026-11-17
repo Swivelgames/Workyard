@@ -1,7 +1,7 @@
 mod effects;
 mod inspection;
 mod planning;
-mod remote;
+pub(crate) mod remote;
 
 use std::path::PathBuf;
 use workyard_core::Problem;

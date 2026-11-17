@@ -44,7 +44,11 @@ fn cli_bindings() -> Bindings {
 	let bindings = Bindings::new();
 
 	// Target branch name
-	let bindings = bindings.positional("task");
+	let bindings = bindings.positional("task").complete_group(
+		"task",
+		"Branches",
+		crate::argument_completion::checkout,
+	);
 
 	// Options
 	let bindings = bindings
@@ -63,8 +67,18 @@ fn cli_bindings() -> Bindings {
 	let bindings = bindings
 		// Common git remote
 		.option("remote", "remote")
+		.complete_group(
+			"remote",
+			"Remotes",
+			crate::argument_completion::common_remote,
+		)
 		// Common source branch
-		.option("from", "from");
+		.option("from", "from")
+		.complete_group(
+			"from",
+			"References",
+			crate::argument_completion::common_from,
+		);
 
 	// Repo Selection
 	bindings
@@ -72,5 +86,15 @@ fn cli_bindings() -> Bindings {
 		.native_path("repositories[].path")
 		.option("repositories[].name", "repo-name")
 		.option("repositories[].remote", "repo-remote")
+		.complete_group(
+			"repositories[].remote",
+			"Remotes",
+			crate::argument_completion::repo_remote,
+		)
 		.option("repositories[].from", "repo-from")
+		.complete_group(
+			"repositories[].from",
+			"References",
+			crate::argument_completion::repo_from,
+		)
 }

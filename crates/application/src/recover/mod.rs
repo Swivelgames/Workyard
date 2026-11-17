@@ -52,6 +52,11 @@ fn cli_bindings() -> Bindings {
 	// Side-effects
 	let bindings = bindings
 		.option("accept_pull", "accept-pull")
+		.complete_group(
+			"accept_pull",
+			"Participants",
+			crate::argument_completion::unsettled_pull,
+		)
 		.option("undo", "undo")
 		.option("yes", "yes")
 		.option("force", "force");

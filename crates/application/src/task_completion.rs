@@ -11,17 +11,7 @@ pub(crate) fn suggest(context: &Context, current: &OsStr) -> Vec<OsString> {
 	let Some(prefix) = current.to_str() else {
 		return Vec::new();
 	};
-	let Some(root) = placement(context, "tasks-root") else {
-		return Vec::new();
-	};
-	let Some(explicit) = placement(context, "state-dir") else {
-		return Vec::new();
-	};
-	let start = root.as_deref().unwrap_or(&context.cwd);
-	let Ok(Some(state)) = workyard_state::find_state(start, explicit.as_deref()) else {
-		return Vec::new();
-	};
-	let Ok(reader) = workyard_state::Reader::open(&state, root.as_deref()) else {
+	let Some(reader) = reader(context) else {
 		return Vec::new();
 	};
 	let Ok(tasks) = reader.tasks(None) else {
@@ -45,10 +35,18 @@ pub(crate) fn suggest(context: &Context, current: &OsStr) -> Vec<OsString> {
 		.collect()
 }
 
+pub(crate) fn reader(context: &Context) -> Option<workyard_state::Reader> {
+	let root = placement(context, "tasks-root")?;
+	let explicit = placement(context, "state-dir")?;
+	let start = root.as_deref().unwrap_or(&context.cwd);
+	let state = workyard_state::find_state(start, explicit.as_deref()).ok()??;
+	workyard_state::Reader::open(&state, root.as_deref()).ok()
+}
+
 fn placement(context: &Context, option: &str) -> Option<Option<PathBuf>> {
 	match context.option(option) {
 		OptionValue::Absent => Some(None),
 		OptionValue::Present(value) => Some(Some(context.cwd.join(value))),
-		OptionValue::Ambiguous => None,
+		OptionValue::Ambiguous | OptionValue::Incomplete => None,
 	}
 }

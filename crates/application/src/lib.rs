@@ -1,6 +1,7 @@
 //! Workyard orchestration and interface DTOs; Git and state remain focused adapters.
 use trine::application::Application;
 
+mod argument_completion;
 mod command_hint;
 mod common;
 mod completion;

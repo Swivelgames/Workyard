@@ -275,11 +275,20 @@ completion uses the installed executable to query current data.
 `amend`, `remove`, `status`, and `recover` suggest recorded non-retired task names.
 Damaged or busy tasks can still appear; a suggestion is not a promise that an
 operation will succeed. Placement follows CWD ancestry, `--tasks-root`, and explicit
-`--state-dir`. Completion reads existing state only: it never checks Git, fetches,
-initializes state, creates locks or waits for locks. Unavailable context returns
+`--state-dir`. Recorded-task completion reads existing state only: it never checks
+Git, fetches, initializes state, creates locks or waits for locks. Unavailable context returns
 no suggestions. `create` and `checkout` task names remain free-form, without file
-suggestions. Path options still complete files and directories. Participant and Git
-branch suggestions remain the immediate follow-up.
+suggestions. Path options still complete files and directories.
+
+Repository remotes and local references are suggested from their own `--repo` group.
+Common `--remote`/`--from` suggestions intersect explicitly supplied repositories,
+excluding the corresponding per-repository overrides. References include local branches,
+cached remote-tracking branches and tags; no network query or fetch occurs.
+
+`checkout` and `create --checkout` suggest the union of existing local branches and
+branches cached for each repository's selected remote. New names remain valid.
+`recover --accept-pull` suggests only participants with recorded unsettled pulls in the
+selected task. These are advisory names, not evidence that recovery is currently safe.
 
 Zsh shows named Tasks and Options groups, with tasks first and available help beside
 options. Existing Zsh completion styles control the headings. Repository child

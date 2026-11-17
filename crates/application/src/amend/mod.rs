@@ -47,12 +47,34 @@ fn cli_bindings() -> Bindings {
 		.option("state_dir", "state-dir")
 		.native_path("state_dir");
 
-	let bindings = bindings.option("remote", "remote").option("from", "from");
+	let bindings = bindings
+		.option("remote", "remote")
+		.complete_group(
+			"remote",
+			"Remotes",
+			crate::argument_completion::common_remote,
+		)
+		.option("from", "from")
+		.complete_group(
+			"from",
+			"References",
+			crate::argument_completion::common_from,
+		);
 
 	bindings
 		.group("repositories", "path", "repo")
 		.native_path("repositories[].path")
 		.option("repositories[].name", "repo-name")
 		.option("repositories[].remote", "repo-remote")
+		.complete_group(
+			"repositories[].remote",
+			"Remotes",
+			crate::argument_completion::repo_remote,
+		)
 		.option("repositories[].from", "repo-from")
+		.complete_group(
+			"repositories[].from",
+			"References",
+			crate::argument_completion::repo_from,
+		)
 }

@@ -65,6 +65,12 @@ def main():
 				cwd=workspace, check=True, capture_output=True)
 		(workspace / "feat/decoy").mkdir(parents=True)
 		(workspace / "some space/child").mkdir(parents=True)
+		for args in [
+			["branch", "suggest/topic"],
+			["remote", "add", "origin", "file:///workyard-completion-offline-missing"],
+			["update-ref", "refs/remotes/origin/suggest/remote", "HEAD"],
+		]:
+			subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 		before = snapshot(workspace / ".workyard")
 
 		for shell in ["bash", "zsh"]:
@@ -82,30 +88,32 @@ def main():
 				print(shell, repr(typed), "passed")
 
 			if shell == "zsh":
-				menu = capture(shell, setup, "workyard amend \t\t")
+				# List choices without cycling through candidates or inserting hidden matches.
+				menu_setup = setup + "; bindkey '^X?' list-choices"
+				menu = capture(shell, menu_setup, "workyard amend \x18?")
 				assert "Tasks" in menu and "Options" in menu, menu
 				assert menu.index("Tasks") < menu.index("fix/one") < menu.index("Options") < menu.index("--repo"), menu
 				assert "--repo-name" not in menu, menu
 				assert "Print help" in menu, menu
 				print("zsh named task-first groups and option descriptions passed")
 
-				hidden = setup + "; zstyle ':completion:*:Tasks' hidden all"
-				menu = capture(shell, hidden, "workyard amend \t\t")
+				hidden = menu_setup + "; zstyle ':completion:*:Tasks' hidden all"
+				menu = capture(shell, hidden, "workyard amend \x18?")
 				assert "Tasks" not in menu and "fix/one" not in menu, menu
 				assert "Options" in menu and "--repo" in menu, menu
 				print("zsh hidden-all suppresses task headings and display passed")
 
-				styled = setup + "; zstyle ':completion:*:descriptions' format '== %d =='"
-				menu = capture(shell, styled, "workyard amend --repo 'some space' \t\t")
+				styled = menu_setup + "; zstyle ':completion:*:descriptions' format '== %d =='"
+				menu = capture(shell, styled, "workyard amend --repo 'some space' \x18?")
 				assert "== Tasks ==" in menu and "== Options ==" in menu, menu
 				assert "--repo-name" in menu, menu
 				print("zsh styled groups and completed-anchor child options passed")
 
-				metadata = setup + (
+				metadata = menu_setup + (
 					"; workyard() { printf '%s\\n' 'Tasks:%B' 'literal:one%' 'help: 100%' "
 					"'Options' '--other' 'literal help'; }"
 				)
-				menu = capture(shell, metadata, "workyard amend \t\t")
+				menu = capture(shell, metadata, "workyard amend \x18?")
 				assert "Tasks:%B" in menu and "Tasks:%%B" not in menu, menu
 				assert "literal:one% -- help: 100%" in menu, menu
 				assert menu.index("Tasks:%B") < menu.index("literal:one%") < menu.index("Options") < menu.index("--other"), menu
@@ -142,6 +150,19 @@ def main():
 			output = capture(shell, inspect, f"workyard status --state-dir {escaped_state} fix/o\t\n")
 			assert "<fix/one>" in output.split("ARGS:")[-1], output
 			print(shell, "escaped placement passed")
+
+			# Argument providers must insert values, preserving quoted repository paths.
+			quoted_repo = shlex.quote(str(repo))
+			output = capture(shell, inspect,
+				f"workyard create fix/new --repo {quoted_repo} --repo-remote ori\t\n")
+			assert "<--repo-remote><origin>" in output, output
+			output = capture(shell, inspect,
+				f"workyard create fix/new --repo {quoted_repo} --repo-from=suggest/t\t\n")
+			assert "<--repo-from=suggest/topic>" in output, output
+			output = capture(shell, inspect,
+				f"workyard checkout --repo {quoted_repo} suggest/r\t\n")
+			assert "<suggest/remote>" in output, output
+			print(shell, "local remote/source and checkout branch insertion passed")
 
 			setup += f"; cd {shlex.quote(str(root))}"
 			typed = f"workyard amend --state-dir={shlex.quote(str(workspace / '.workyard'))} f\t"
