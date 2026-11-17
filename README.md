@@ -269,6 +269,24 @@ workyard completion powershell > workyard.ps1
 ```
 
 Load or install the script using your shell's normal completion configuration.
-Workyard never edits that configuration. Scripts include commands, aliases, options
-and filesystem hints from the actual CLI definitions. Context-aware task,
-participant and Git branch suggestions are the immediate next slice.
+Workyard never edits that configuration. Reload or regenerate scripts after upgrading;
+completion uses the installed executable to query current data.
+
+`amend`, `remove`, `status`, and `recover` suggest recorded non-retired task names.
+Damaged or busy tasks can still appear; a suggestion is not a promise that an
+operation will succeed. Placement follows CWD ancestry, `--tasks-root`, and explicit
+`--state-dir`. Completion reads existing state only: it never checks Git, fetches,
+initializes state, creates locks or waits for locks. Unavailable context returns
+no suggestions. `create` and `checkout` task names remain free-form, without file
+suggestions. Path options still complete files and directories. Participant and Git
+branch suggestions remain the immediate follow-up.
+
+Zsh shows named Tasks and Options groups, with tasks first and available help beside
+options. Existing Zsh completion styles control the headings. Repository child
+options (`--repo-name`, `--repo-remote`, `--repo-from`) are suggested only after a
+completed `--repo` value before the cursor; this applies in every supported shell.
+The path need not exist, and ordinary command validation is unchanged.
+
+Bash and Zsh have live local verification. Fish and PowerShell scripts and Rust
+transport are covered by tests, but native execution remains a platform acceptance
+item. Unresolved shell expressions are not evaluated during completion.

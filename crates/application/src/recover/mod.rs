@@ -43,7 +43,11 @@ fn cli_bindings() -> Bindings {
 	let bindings = Bindings::new();
 
 	// Target task
-	let bindings = bindings.positional("task");
+	let bindings = bindings.positional("task").complete_group(
+		"task",
+		"Tasks",
+		crate::task_completion::suggest,
+	);
 
 	// Side-effects
 	let bindings = bindings

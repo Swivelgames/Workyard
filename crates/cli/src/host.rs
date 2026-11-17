@@ -13,6 +13,15 @@ pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8
 	let application = workyard_application::application()
 		.map_err(|error| Failure::message(FailureKind::ContractViolation, error.to_string()))?;
 	let mut command = command(&application);
+	if completion::requested() {
+		let bytes = std::env::current_dir()
+			.ok()
+			.and_then(|cwd| completion::respond(command, arguments, &cwd).ok())
+			.unwrap_or_default();
+		write(&output, &bytes)?;
+		return Ok(0);
+	}
+
 	let matches = match command.clone().try_get_matches_from(arguments.clone()) {
 		Ok(matches) => matches,
 		Err(error)

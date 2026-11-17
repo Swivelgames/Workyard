@@ -30,7 +30,11 @@ pub(crate) fn build_entry() -> Result<AmendEntry, RegistrationError> {
 }
 
 fn cli_bindings() -> Bindings {
-	let bindings = Bindings::new().positional("task");
+	let bindings = Bindings::new().positional("task").complete_group(
+		"task",
+		"Tasks",
+		crate::task_completion::suggest,
+	);
 
 	let bindings = bindings
 		.option("checkout", "checkout")

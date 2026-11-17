@@ -37,7 +37,11 @@ pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
 
 fn cli_bindings() -> Bindings {
 	let bindings = Bindings::new();
-	let bindings = bindings.positional("task");
+	let bindings = bindings.positional("task").complete_group(
+		"task",
+		"Tasks",
+		crate::task_completion::suggest,
+	);
 
 	bindings
 		.option("tasks_root", "tasks-root")

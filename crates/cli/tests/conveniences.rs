@@ -129,27 +129,10 @@ fn completion_scripts_cover_registered_actions_aliases_and_host_commands() {
 		let output = workyard(root.path(), &["completion", shell]);
 		assert_ok(&output);
 		let script = String::from_utf8(output.stdout).unwrap();
-		for name in [
-			"create",
-			"checkout",
-			"amend",
-			"recover",
-			"remove",
-			"list",
-			"status",
-			"info",
-			"rpc",
-			"completion",
-			"json",
-			"repo",
-		] {
-			assert!(script.contains(name), "{shell} is missing {name}");
-		}
-		if shell == "zsh" {
-			// These actions share Trine's task positional, including the checkout alias.
-			assert_eq!(script.matches("'::input-task:_default'").count(), 6);
-			assert!(!script.contains("'::input:task:"));
-		}
+		assert!(script.contains("workyard"));
+		assert!(script.contains("TRINE_COMPLETE"));
+		assert!(!script.contains("Invoke-Expression"));
+		assert!(!script.contains("bashdefault"));
 		assert!(output.stderr.is_empty());
 	}
 	assert!(fs::read_dir(root.path()).unwrap().next().is_none());

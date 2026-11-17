@@ -8,6 +8,7 @@ mod invocation;
 mod removal;
 mod reporting;
 mod structured;
+mod task_completion;
 mod terminal;
 
 // Action modules
