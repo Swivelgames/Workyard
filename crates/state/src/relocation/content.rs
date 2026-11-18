@@ -2,9 +2,12 @@
 mod copy;
 mod entries;
 mod inventory;
+mod snapshot;
 use super::record::{Content, Journal};
+pub(super) use entries::remove_symlink;
 pub(super) use inventory::inventory;
 use sha2::{Digest, Sha256};
+pub(super) use snapshot::{copy_workspace, permissions};
 use std::{fs, io::Read, path::Path};
 use workyard_core::{Control, Problem, ProblemCode};
 
@@ -216,18 +219,7 @@ pub(super) fn transfer(
 		if !entries::verify_existing(&target, entry)? {
 			return Err(conflict(&target));
 		}
-		let mut permissions = fs::metadata(&target)
-			.map_err(|error| Problem::io("Read relocated directory permissions", error))?
-			.permissions();
-		#[cfg(unix)]
-		if let Some(mode) = entry.mode {
-			use std::os::unix::fs::PermissionsExt;
-			permissions.set_mode(mode);
-		}
-		#[cfg(not(unix))]
-		permissions.set_readonly(entry.readonly);
-		fs::set_permissions(&target, permissions)
-			.map_err(|error| Problem::io("Preserve directory permissions", error))?;
+		set_directory_permissions(&target, entry)?;
 		let path = source.join(relative);
 		if !entries::verify_existing(&path, entry)? {
 			continue;
@@ -245,7 +237,27 @@ pub(super) fn transfer(
 	Ok(())
 }
 
-fn copy_symlink(_source: &Path, destination: &Path, entry: &Content) -> Result<(), Problem> {
+fn set_directory_permissions(target: &Path, entry: &Content) -> Result<(), Problem> {
+	let mut permissions = fs::metadata(target)
+		.map_err(|error| Problem::io("Read relocated directory permissions", error))?
+		.permissions();
+	#[cfg(unix)]
+	if let Some(mode) = entry.mode {
+		use std::os::unix::fs::PermissionsExt;
+		permissions.set_mode(mode);
+	}
+	#[cfg(not(unix))]
+	permissions.set_readonly(entry.readonly);
+	fs::set_permissions(target, permissions)
+		.map_err(|error| Problem::io("Preserve directory permissions", error))?;
+	Ok(())
+}
+
+pub(super) fn copy_symlink(
+	_source: &Path,
+	destination: &Path,
+	entry: &Content,
+) -> Result<(), Problem> {
 	let target = entry.link.as_ref().expect("symlink target").decode()?;
 	#[cfg(unix)]
 	std::os::unix::fs::symlink(target, destination)
@@ -268,7 +280,7 @@ fn copy_symlink(_source: &Path, destination: &Path, entry: &Content) -> Result<(
 	Ok(())
 }
 
-fn matches(path: &Path, entry: &Content, control: &Control) -> Result<bool, Problem> {
+pub(super) fn matches(path: &Path, entry: &Content, control: &Control) -> Result<bool, Problem> {
 	let kind = fs::symlink_metadata(path)
 		.map_err(|error| Problem::io("Inspect transfer file kind", error))?
 		.file_type();

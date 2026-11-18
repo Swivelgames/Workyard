@@ -1,4 +1,5 @@
 //! Reconcile verified linked-worktree identities, including broken location pointers.
+mod copy;
 mod location;
 use crate::{Runner, operations::operations_present, output::path_line, process::args};
 use location::locate;
@@ -161,6 +162,50 @@ impl Runner {
 }
 
 impl workyard_core::RelocationGit for Runner {
+	async fn recovery_registration(
+		&self,
+		entry: &workyard_core::RelocationParticipant,
+		undo: bool,
+		previous: Option<&std::path::Path>,
+		control: &Control,
+	) -> Result<Option<workyard_core::RegisteredCopy>, Problem> {
+		copy::displaced(self, entry, undo, previous, control).await
+	}
+	async fn displaced_copy(
+		&self,
+		entry: &workyard_core::RelocationParticipant,
+		undo: bool,
+		control: &Control,
+	) -> Result<Option<workyard_core::RegisteredCopy>, Problem> {
+		copy::displaced(self, entry, undo, None, control).await
+	}
+	async fn bind_displaced_copy(
+		&self,
+		entry: &workyard_core::RelocationParticipant,
+		undo: bool,
+		registered: &workyard_core::RegisteredCopy,
+		control: &Control,
+	) -> Result<(), Problem> {
+		copy::repair(self, entry, undo, Some(registered), control).await
+	}
+	async fn copy_is_bound(
+		&self,
+		entry: &workyard_core::RelocationParticipant,
+		undo: bool,
+		control: &Control,
+	) -> Result<bool, Problem> {
+		copy::inspect(self, entry, undo, control).await
+	}
+
+	async fn bind_copy(
+		&self,
+		entry: &workyard_core::RelocationParticipant,
+		undo: bool,
+		control: &Control,
+	) -> Result<(), Problem> {
+		copy::repair(self, entry, undo, None, control).await
+	}
+
 	async fn relocation_relationship(
 		&self,
 		participant: &Participant,

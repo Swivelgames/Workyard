@@ -19,6 +19,7 @@ impl Reader {
 		let state = canonical_future(state)?;
 		let gate = Lock::read_existing(&state.join("workspace.lock"))?;
 		let record: WorkspaceRecord = WorkspaceRecord::read(&state.join("workspace.json"))?;
+		crate::relocation::snapshot_guard(&state, &record)?;
 		let root = record.tasks_root.decode()?;
 		if !root.is_absolute()
 			|| record.state_dir.decode()? != state

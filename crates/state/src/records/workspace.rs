@@ -13,12 +13,14 @@ pub struct WorkspaceRecord {
 	pub relocation_source: Option<StoredPath>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub relocation_destination: Option<StoredPath>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub active_tasks_root: Option<StoredPath>,
 	pub tasks_root: StoredPath,
 	pub state_dir: StoredPath,
 }
 
 impl WorkspaceRecord {
 	pub(crate) fn read(path: &std::path::Path) -> Result<Self, workyard_core::Problem> {
-		crate::documents::read_supported(path, &[1, 2])
+		crate::documents::read_supported(path, &[1, 2, 3])
 	}
 }

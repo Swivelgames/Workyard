@@ -1,7 +1,8 @@
 //! Resume paired authority under both gates; never reconstruct activated state.
 use super::{Relocation, conflict, record::Journal};
 use crate::{
-	Lock, LockMode, canonical_future, documents::read_versioned, records::WorkspaceRecord,
+	Lock, LockMode, canonical_future, documents::publish, documents::read_versioned,
+	records::WorkspaceRecord,
 };
 use std::{fs, path::Path};
 use workyard_core::{Problem, RelocationState};
@@ -9,6 +10,12 @@ use workyard_core::{Problem, RelocationState};
 impl Relocation {
 	pub fn recover(state: &Path) -> Result<Self, Problem> {
 		let selected = canonical_future(state)?;
+		if crate::exists(&selected.join("workspace.json"))? {
+			super::snapshot::require_live(
+				&selected,
+				&WorkspaceRecord::read(&selected.join("workspace.json"))?,
+			)?;
+		}
 		let selected_journal = selected.join("relocation.json");
 		let journal: Journal = if selected_journal
 			.try_exists()
@@ -109,13 +116,39 @@ impl Relocation {
 						"Active destination is missing; inactive source cannot reconstruct it.",
 					));
 				}
-				fs::create_dir_all(&new_state)
+				let create_state = if relocation.journal.copy {
+					super::content::permissions::private_directories().create(&new_state)
+				} else {
+					fs::create_dir_all(&new_state)
+				};
+				create_state
 					.map_err(|error| Problem::io("Recreate pending destination state", error))?;
 			}
 			relocation.destination_gate = Some(Lock::acquire_mode(
 				&new_state.join("workspace.lock"),
 				LockMode::Exclusive,
 			)?);
+			if relocation.journal.copy
+				&& !relocation.journal.activated
+				&& !crate::exists(&new_state.join("relocation.json"))?
+			{
+				// A user may remove the staged state directory before recovery.
+				// Re-establish its paired intent only after confirming that the
+				// gate is its sole entry. Occupied state belongs to the caller.
+				for entry in fs::read_dir(&new_state)
+					.map_err(|error| Problem::io("Inspect pending copy state", error))?
+				{
+					if entry
+						.map_err(|error| Problem::io("Inspect copy state entry", error))?
+						.file_name() != "workspace.lock"
+					{
+						return Err(conflict(
+							"Destination state lacks paired copy intent and is occupied.",
+						));
+					}
+				}
+				publish(&new_state.join("relocation.json"), &relocation.journal)?;
+			}
 		}
 		if new_state
 			.join("relocation.json")
@@ -154,6 +187,15 @@ impl Relocation {
 		}
 
 		relocation.verify()?;
+		if relocation.journal.copy && !relocation.journal.activated {
+			let source = WorkspaceRecord::read(&old_state.join("workspace.json"))?;
+			relocation.verify_copy_binding(&old_state, true, &source)?;
+			if source.relocation.as_deref() != Some(&relocation.journal.id) {
+				// Recover admission interrupted between the source journal and
+				// publishing the matching pending source binding.
+				relocation.binding(&old_state, &relocation.old_root()?, "relocating")?;
+			}
+		}
 		Ok(relocation)
 	}
 }

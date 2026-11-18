@@ -1,6 +1,7 @@
 //! Shared observation facts and execution; capabilities own entries and views.
 mod classification;
 mod contract;
+pub(crate) mod placement;
 mod read;
 mod selection;
 

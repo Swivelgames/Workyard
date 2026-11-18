@@ -6,7 +6,11 @@ mod metadata;
 mod observation;
 mod record;
 mod recovery;
+mod selection;
+mod snapshot;
 mod transfer;
+pub(crate) use snapshot::require_live as snapshot_guard;
+pub use snapshot::{SnapshotStatus, snapshot_status};
 mod validation;
 use crate::{
 	Lock,
@@ -26,6 +30,10 @@ pub struct Relocation {
 }
 
 impl Relocation {
+	pub fn is_copy(&self) -> bool {
+		self.journal.copy
+	}
+
 	pub fn old_root(&self) -> Result<PathBuf, Problem> {
 		self.journal.old_root.decode()
 	}
@@ -75,7 +83,16 @@ impl Relocation {
 		publish(
 			&state.join("workspace.json"),
 			&WorkspaceRecord {
-				version: 2,
+				version: if matches!(authority, "snapshot" | "partial_copy") {
+					3
+				} else {
+					2
+				},
+				active_tasks_root: if matches!(authority, "snapshot" | "partial_copy") {
+					Some(self.active_root()?.as_path().into())
+				} else {
+					None
+				},
 				relocation: Some(self.journal.id.clone()),
 				authority: Some(authority.into()),
 				relocation_source: Some(self.journal.old_state.clone()),
@@ -96,6 +113,7 @@ pub(crate) fn validate_mutation_binding(
 	state: &Path,
 	record: &WorkspaceRecord,
 ) -> Result<(), Problem> {
+	snapshot::require_live(state, record)?;
 	if record
 		.authority
 		.as_deref()

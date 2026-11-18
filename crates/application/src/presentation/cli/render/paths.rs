@@ -1,4 +1,4 @@
-use super::style::text;
+pub(super) use crate::guidance::text::path as display;
 use std::path::{Component, Path, PathBuf};
 
 pub(crate) struct Paths {
@@ -43,13 +43,6 @@ impl Paths {
 
 	pub fn within(&self, root: &Path, path: &Path) -> String {
 		relative(root, path).map_or_else(|| display(path), |path| display(&path))
-	}
-}
-
-pub(super) fn display(path: &Path) -> String {
-	match path.to_str() {
-		Some(value) => text(value),
-		None => format!("{:?}", path.as_os_str()),
 	}
 }
 

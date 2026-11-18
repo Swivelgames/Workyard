@@ -11,3 +11,11 @@ pub(crate) fn escaped(value: &str) -> String {
 		})
 		.collect()
 }
+
+/// Keep distinct native paths distinguishable when they cannot be rendered as UTF-8.
+pub(crate) fn path(path: &std::path::Path) -> String {
+	match path.to_str() {
+		Some(value) => escaped(value),
+		None => format!("{:?}", path.as_os_str()),
+	}
+}

@@ -13,6 +13,8 @@ pub enum DiscoverySource {
 pub struct InfoOutcome {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub relocation: Option<crate::contracts::relocation::WorkspaceRelocation>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub snapshot: Option<crate::contracts::relocation::WorkspaceSnapshot>,
 	pub tasks_root: Option<NativePath>,
 	pub state_dir: Option<NativePath>,
 	pub discovery: Option<DiscoverySource>,

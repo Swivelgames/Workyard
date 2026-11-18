@@ -131,7 +131,7 @@ fn discard_stage(
 	removed.map_err(|error| Problem::io("Discard staged workspace entry", error))
 }
 
-pub(super) fn remove_symlink(path: &Path) -> std::io::Result<()> {
+pub(in crate::relocation) fn remove_symlink(path: &Path) -> std::io::Result<()> {
 	#[cfg(windows)]
 	{
 		use std::os::windows::fs::FileTypeExt;

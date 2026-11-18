@@ -1,4 +1,4 @@
-//! Resumable cross-volume files use a journaled inode and verified source prefix.
+//! Stage regular file copies with a journaled identity and a verified source prefix.
 use super::{conflict, digest, exists_entry};
 use crate::relocation::record::Journal;
 use std::{
@@ -25,24 +25,38 @@ pub(super) fn file(
 ) -> Result<(), Problem> {
 	let temporary = temporary(destination, journal, index);
 	let mut input =
-		fs::File::open(source).map_err(|error| Problem::io("Open cross-volume source", error))?;
-	let mut output = match fs::OpenOptions::new()
-		.read(true)
-		.write(true)
-		.create_new(true)
-		.open(&temporary)
+		fs::File::open(source).map_err(|error| Problem::io("Open file copy source", error))?;
+	let mut options = fs::OpenOptions::new();
+	options.read(true).write(true).create_new(true);
+	#[cfg(unix)]
 	{
+		use std::os::unix::fs::OpenOptionsExt;
+		options.mode(0o600);
+	}
+	let mut output = match options.open(&temporary) {
 		Ok(output) => {
 			journal.content[index].staged_identity = Some(workyard_system::file_identity(&output)?);
 			publish(journal)?;
 			output
 		}
 		Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-			if !fs::symlink_metadata(&temporary)
-				.map_err(|error| Problem::io("Inspect staged transfer kind", error))?
-				.is_file()
-			{
+			let metadata = fs::symlink_metadata(&temporary)
+				.map_err(|error| Problem::io("Inspect staged transfer kind", error))?;
+			if !metadata.is_file() {
 				return Err(conflict(&temporary));
+			}
+			if metadata.permissions().readonly() {
+				// An interruption after applying the source permissions can leave a
+				// complete stage that cannot be reopened for writing.
+				if metadata.permissions()
+					!= input
+						.metadata()
+						.map_err(|error| Problem::io("Inspect transfer source permissions", error))?
+						.permissions()
+				{
+					return Err(conflict(&temporary));
+				}
+				return publish_file(source, destination, journal, index, control, publish);
 			}
 			let output = fs::OpenOptions::new()
 				.read(true)
@@ -73,6 +87,9 @@ pub(super) fn file(
 			.map_err(|error| Problem::io("Write pending transfer", error))?;
 	}
 	output
+		.sync_all()
+		.map_err(|error| Problem::io("Flush pending transfer", error))?;
+	output
 		.set_permissions(
 			input
 				.metadata()
@@ -80,9 +97,22 @@ pub(super) fn file(
 				.permissions(),
 		)
 		.map_err(|error| Problem::io("Preserve transfer permissions", error))?;
-	output
-		.sync_all()
-		.map_err(|error| Problem::io("Flush pending transfer", error))?;
+	publish_file(source, destination, journal, index, control, publish)
+}
+
+fn publish_file(
+	source: &Path,
+	destination: &Path,
+	journal: &mut Journal,
+	index: usize,
+	control: &Control,
+	publish: &mut impl FnMut(&Journal) -> Result<(), Problem>,
+) -> Result<(), Problem> {
+	let temporary = temporary(destination, journal, index);
+	if Some(workyard_system::entry_identity(&temporary)?) != journal.content[index].staged_identity
+	{
+		return Err(conflict(&temporary));
+	}
 	if digest(&temporary, control)? != journal.content[index].digest
 		|| digest(source, control)? != journal.content[index].digest
 	{

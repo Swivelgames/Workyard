@@ -19,10 +19,21 @@ impl View<RelocateOutcome, RelocateOutcome, Progress> for RelocateView {
 	) -> io::Result<Option<bool>> {
 		self.output.confirm(&request, &cancellation)
 	}
+	async fn select(
+		&mut self,
+		request: trine::invocation::Selection,
+		cancellation: trine::Cancellation,
+	) -> std::io::Result<Option<usize>> {
+		self.output.select(request, &cancellation)
+	}
+
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
 		let mut terminal = Terminal::for_output(&self.output.stderr);
 		let stage = match progress.phase.as_str() {
 			"preparing" => "Checking workspace relocation",
+			"copying_workspace" => "Copying workspace contents",
+			"restoring_workspace" => "Restoring original workspace",
+			"marking_snapshot" => "Marking the retained copy inactive",
 			"moving_workspace" => "Moving workspace contents",
 			"repairing_git" => "Verifying Git relationships",
 			"transferring_state" => "Transferring authoritative state",
@@ -46,21 +57,7 @@ impl View<RelocateOutcome, RelocateOutcome, Progress> for RelocateView {
 impl RelocateView {
 	pub(crate) fn finish_outcome(&mut self, outcome: &RelocateOutcome) -> io::Result<()> {
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		terminal.heading(if outcome.nothing_to_recover {
-			if outcome.operation.kind == Some("recover") {
-				"Nothing to recover"
-			} else {
-				"Workspace placement is unchanged"
-			}
-		} else if outcome.placement_complete && outcome.cleanup_complete {
-			"Workspace relocation completed"
-		} else if outcome.placement_complete {
-			"Workspace placement completed; source cleanup needs attention"
-		} else if !outcome.mutation_started {
-			"Relocation did not start; workspace is unchanged"
-		} else {
-			"Workspace relocation is incomplete"
-		});
+		terminal.heading(heading(outcome));
 		terminal.workspace(
 			outcome
 				.active_tasks_root
@@ -73,6 +70,13 @@ impl RelocateView {
 				.or(outcome.new_state_dir.as_ref())
 				.map(|path| path.as_path()),
 		);
+		if let Some(snapshot) = &outcome.snapshot {
+			let retained = terminal.paths.root(snapshot.tasks_root.as_path());
+			terminal.hint_at(
+				MessageScope::Workspace,
+				&format!("{}: {retained}", snapshot.label()),
+			);
+		}
 		for warning in &outcome.warnings {
 			terminal.hint_at(
 				MessageScope::Workspace,
@@ -112,5 +116,33 @@ impl RelocateView {
 			}
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())
+	}
+}
+
+fn heading(outcome: &RelocateOutcome) -> &'static str {
+	if outcome.nothing_to_recover {
+		return match outcome.operation.kind {
+			Some("recover") => "Nothing to recover",
+			_ => "Workspace placement is unchanged",
+		};
+	}
+	if let Some(snapshot) = &outcome.snapshot {
+		return if snapshot.partial {
+			"Original workspace restored"
+		} else {
+			"Workspace relocated"
+		};
+	}
+	if outcome.placement_complete {
+		return match (outcome.cleanup_complete, outcome.copy) {
+			(true, _) => "Workspace relocation completed",
+			(false, true) => "Workspace placement complete. Snapshot finalization needs attention",
+			(false, false) => "Workspace placement completed; source cleanup needs attention",
+		};
+	}
+	if outcome.mutation_started {
+		"Workspace relocation is incomplete"
+	} else {
+		"Relocation did not start; workspace is unchanged"
 	}
 }

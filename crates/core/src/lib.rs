@@ -25,5 +25,8 @@ pub use ports::*;
 pub use problem::Problem;
 pub use problem_code::ProblemCode;
 pub use recover::recover;
-pub use relocate::{RelocationGit, RelocationParticipant, RelocationState, relocate};
+pub use relocate::{
+	RecoveryCandidates, RecoveryChoice, RegisteredCopy, RelocationGit, RelocationParticipant,
+	RelocationState, relocate,
+};
 pub use remove::{recover_removal, remove};

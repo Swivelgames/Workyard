@@ -16,6 +16,8 @@ pub use discovery::{discover_state, find_state};
 pub use paths::{canonical_future, exists};
 pub use reader::Reader;
 pub use records::{OperationRecord, TaskRecord, task_filename};
-pub use relocation::{Relocation, RelocationStatus, relocation_status};
+pub use relocation::{
+	Relocation, RelocationStatus, SnapshotStatus, relocation_status, snapshot_status,
+};
 pub use store::{Store, TaskGuard};
 pub use workyard_system::{Lock, LockMode};

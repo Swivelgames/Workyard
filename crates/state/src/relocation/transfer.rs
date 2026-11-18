@@ -111,11 +111,16 @@ impl Relocation {
 			let paired: Journal = read_versioned(&directory.join("relocation.json"))?;
 			self.pair(&paired)?;
 		}
-		if crate::exists(&directory.join("workspace.json"))? {
+		let manifest = directory.join("workspace.json");
+		if self.journal.copy && directory == self.old_state()? && !crate::exists(&manifest)? {
+			return Err(conflict("Copy source workspace binding is missing."));
+		}
+		if crate::exists(&manifest)? {
 			let binding = WorkspaceRecord::read(&directory.join("workspace.json"))?;
-			if binding.relocation.as_deref() != Some(&self.journal.id)
-				&& directory != self.old_state()?
-			{
+			let source = directory == self.old_state()?;
+			if self.journal.copy {
+				self.verify_copy_binding(directory, source, &binding)?;
+			} else if !source && binding.relocation.as_deref() != Some(&self.journal.id) {
 				return Err(conflict(
 					"Destination workspace belongs to another operation.",
 				));
@@ -134,6 +139,7 @@ impl Relocation {
 
 	pub(super) fn pair(&self, other: &Journal) -> Result<(), Problem> {
 		if other.id != self.journal.id
+			|| other.copy != self.journal.copy
 			|| other.old_root != self.journal.old_root
 			|| other.new_root != self.journal.new_root
 			|| other.old_state != self.journal.old_state
@@ -175,14 +181,16 @@ impl Relocation {
 		} else {
 			Some((&source, true))
 		};
-		if let Some((directory, is_source)) = obsolete
-			&& crate::exists(directory)?
-		{
-			self.validate_state_contents(directory, true)?;
-			if is_source {
-				self.binding(directory, &self.old_root()?, "inactive")?;
+		if let Some((directory, is_source)) = obsolete {
+			if self.journal.copy {
+				self.retain_snapshot(directory, is_source)?;
+			} else if crate::exists(directory)? {
+				self.validate_state_contents(directory, true)?;
+				if is_source {
+					self.binding(directory, &self.old_root()?, "inactive")?;
+				}
+				self.remove_metadata(directory, is_source)?;
 			}
-			self.remove_metadata(directory, is_source)?;
 		}
 
 		self.journal.cleanup_complete = true;

@@ -24,6 +24,11 @@ impl Journal {
 				));
 			}
 		}
+		if self.copy && (old_root == new_root || old_state == new_state) {
+			return Err(conflict(
+				"Copy requires distinct workspace roots and distinct state directories.",
+			));
+		}
 		super::admission::validate_placement(&old_root, &old_state, &new_root, &new_state)?;
 		let mut files = std::collections::BTreeSet::new();
 		for file in &self.files {
@@ -43,6 +48,15 @@ impl Journal {
 		for entry in &self.content {
 			let path = entry.path.decode()?;
 			relative(&path)?;
+			let target = new_root.join(&path);
+			if self.copy
+				&& (target.starts_with(&new_state)
+					|| (new_state.starts_with(&target) && entry.kind != "directory"))
+			{
+				return Err(conflict(&format!(
+					"Copied workspace entry overlaps destination state: {target:?}."
+				)));
+			}
 			if old_root.join(&path).starts_with(&old_state)
 				|| !content.insert(path)
 				|| !matches!(entry.kind.as_str(), "file" | "directory" | "symlink")
@@ -75,6 +89,11 @@ impl Journal {
 					.contains(&0)
 			{
 				return Err(conflict("Invalid relocation participant identity."));
+			}
+		}
+		for (index, entry) in self.participants.iter().enumerate() {
+			if let Some(selection) = &entry.selection {
+				selection.validate(self, index)?;
 			}
 		}
 		Ok(())

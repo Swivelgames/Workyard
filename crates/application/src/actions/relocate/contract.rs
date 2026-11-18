@@ -11,8 +11,22 @@ pub struct ExternalParticipant {
 }
 
 #[derive(Serialize)]
+pub struct RecoveryCandidates {
+	pub participant: String,
+	pub destination: NativePath,
+	pub destination_occupied: bool,
+	pub local_candidate: NativePath,
+	pub registered_candidate: NativePath,
+}
+
+#[derive(Serialize)]
 pub struct RelocateOutcome {
 	pub operation: OperationReport,
+	pub copy: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub recovery_choice: Option<RecoveryCandidates>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub snapshot: Option<crate::contracts::relocation::WorkspaceSnapshot>,
 	pub scope: &'static str,
 	pub operation_id: Option<String>,
 	pub old_tasks_root: Option<NativePath>,
@@ -37,6 +51,9 @@ impl RelocateOutcome {
 				continues: (kind == "recover").then_some("relocate"),
 				outcome: OperationOutcome::Succeeded,
 			},
+			copy: false,
+			recovery_choice: None,
+			snapshot: None,
 			scope: "workspace",
 			operation_id: None,
 			old_tasks_root: None,

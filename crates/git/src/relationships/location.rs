@@ -43,8 +43,10 @@ pub(super) fn locate(
 			}
 			return Ok(LinkedLocation {
 				administration,
-				destination: destination.to_path_buf(),
-				registration_matches: destination == registered,
+				destination: destination
+					.canonicalize()
+					.map_err(|error| Problem::io("Resolve linked worktree location", error))?,
+				registration_matches: same_path(destination, registered),
 			});
 		}
 		if identity.is_some()
@@ -155,7 +157,7 @@ fn verify_pointer(
 		.common_dir
 		.join("worktrees")
 		.join(administration.file_name().expect("administrative entry"));
-	if path != administration && path != former {
+	if !same_path(&path, administration) && !same_path(&path, &former) {
 		return Err(changed(
 			"Participant Git pointer refers to different administrative storage.",
 		));
@@ -163,13 +165,13 @@ fn verify_pointer(
 	Ok(())
 }
 
-fn read_path(path: &Path) -> Result<PathBuf, Problem> {
+pub(super) fn read_path(path: &Path) -> Result<PathBuf, Problem> {
 	let bytes = std::fs::read(path)
 		.map_err(|error| Problem::io("Read Git worktree registration", error))?;
 	path_line(&bytes).map_err(|_| changed("Invalid native Git registration."))
 }
 
-fn absolute(base: &Path, path: &Path) -> PathBuf {
+pub(super) fn absolute(base: &Path, path: &Path) -> PathBuf {
 	let joined = if path.is_absolute() {
 		path.to_path_buf()
 	} else {
@@ -186,4 +188,34 @@ fn absolute(base: &Path, path: &Path) -> PathBuf {
 		}
 	}
 	result
+}
+
+/// Git for Windows can omit the verbatim prefix on an otherwise identical path.
+pub(super) fn same_path(left: &Path, right: &Path) -> bool {
+	if left == right {
+		return true;
+	}
+	#[cfg(windows)]
+	{
+		use std::path::{Component, Prefix};
+
+		let mut left = left.components();
+		let mut right = right.components();
+		let (Some(Component::Prefix(a)), Some(Component::Prefix(b))) = (left.next(), right.next())
+		else {
+			return false;
+		};
+		let prefixes_match = match (a.kind(), b.kind()) {
+			(
+				Prefix::Disk(a) | Prefix::VerbatimDisk(a),
+				Prefix::Disk(b) | Prefix::VerbatimDisk(b),
+			) => a.eq_ignore_ascii_case(&b),
+			(Prefix::UNC(a, b), Prefix::VerbatimUNC(c, d))
+			| (Prefix::VerbatimUNC(a, b), Prefix::UNC(c, d)) => a == c && b == d,
+			_ => false,
+		};
+		return prefixes_match && left.eq(right);
+	}
+	#[cfg(not(windows))]
+	false
 }

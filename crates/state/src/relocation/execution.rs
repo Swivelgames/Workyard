@@ -8,6 +8,71 @@ use std::{
 use workyard_core::{Problem, RelocationParticipant, RelocationState};
 
 impl RelocationState for Relocation {
+	fn prior_registered_copy(
+		&self,
+		entry: &RelocationParticipant,
+	) -> Result<Option<PathBuf>, Problem> {
+		self.previous_registration(entry)
+	}
+	fn accept_registered_endpoint(
+		&mut self,
+		entry: &RelocationParticipant,
+		undo: bool,
+		control: &workyard_core::Control,
+	) -> Result<(), Problem> {
+		self.accept_endpoint(entry, undo, control)
+	}
+
+	fn settle_recovery_direction(
+		&mut self,
+		entry: &RelocationParticipant,
+		undo: bool,
+		registered: &workyard_core::RegisteredCopy,
+		control: &workyard_core::Control,
+	) -> Result<(), Problem> {
+		self.settle_direction(entry, undo, registered, control)
+	}
+
+	fn recovery_candidates(
+		&self,
+		entry: &RelocationParticipant,
+		undo: bool,
+		registered: &workyard_core::RegisteredCopy,
+		control: &workyard_core::Control,
+	) -> Result<Option<workyard_core::RecoveryCandidates>, Problem> {
+		self.candidates(entry, undo, registered, control)
+	}
+	fn select_recovery(
+		&mut self,
+		entry: &RelocationParticipant,
+		undo: bool,
+		registered: &workyard_core::RegisteredCopy,
+		candidates: &workyard_core::RecoveryCandidates,
+		use_registered: bool,
+	) -> Result<(), Problem> {
+		self.select(entry, undo, registered, candidates, use_registered)
+	}
+	fn install_recovery(
+		&mut self,
+		entry: &RelocationParticipant,
+		undo: bool,
+		registered: &workyard_core::RegisteredCopy,
+		control: &workyard_core::Control,
+	) -> Result<(), Problem> {
+		self.install(entry, undo, registered, control)
+	}
+	fn is_copy(&self) -> bool {
+		self.journal.copy
+	}
+
+	fn copy_participant_expected(&self, entry: &RelocationParticipant) -> bool {
+		!self.journal.participants.iter().any(|record| {
+			record.absent_at_admission
+				&& record.task.task == entry.task
+				&& record.destination == entry.destination.as_path().into()
+		})
+	}
+
 	fn participants(&self) -> Vec<RelocationParticipant> {
 		self.journal
 			.participants
@@ -80,8 +145,16 @@ impl RelocationState for Relocation {
 			}
 		}
 
+		let copy = self.is_copy();
 		for (record, observed) in self.journal.participants.iter_mut().zip(participants) {
 			let mut task = crate::records::task::decode(record.task.clone())?;
+			if copy {
+				record.absent_at_admission = !observed
+					.original
+					.destination
+					.try_exists()
+					.map_err(|error| Problem::io("Inspect original participant location", error))?;
+			}
 			task.participants[record.index] = observed.original;
 			record.task = crate::TaskRecord::from(&task);
 			record.destination = observed.destination.as_path().into();
@@ -91,8 +164,13 @@ impl RelocationState for Relocation {
 		let new_state = self.new_state()?;
 		if new_state != old_state {
 			empty(&new_state)?;
-			fs::create_dir_all(&new_state)
-				.map_err(|error| Problem::io("Create destination state", error))?;
+			let create_state = if copy {
+				content::permissions::prepare_root(&self.new_root()?)?;
+				content::permissions::private_directories().create(&new_state)
+			} else {
+				fs::create_dir_all(&new_state)
+			};
+			create_state.map_err(|error| Problem::io("Create destination state", error))?;
 			self.destination_gate = Some(Lock::acquire_mode(
 				&new_state.join("workspace.lock"),
 				LockMode::Exclusive,
@@ -106,6 +184,16 @@ impl RelocationState for Relocation {
 					return Err(conflict(
 						"Destination became occupied before relocation intent.",
 					));
+				}
+			}
+		}
+		// State scaffolding may share a parent with copied workspace entries.
+		if copy {
+			let root = self.new_root()?;
+			for entry in &mut self.journal.content {
+				let target = root.join(entry.path.decode()?);
+				if new_state.starts_with(&target) {
+					entry.destination_identity = Some(workyard_system::entry_identity(&target)?);
 				}
 			}
 		}
@@ -124,17 +212,46 @@ impl RelocationState for Relocation {
 			.source_gate
 			.as_ref()
 			.ok_or_else(|| conflict("Source gate is missing."))?;
-		content::transfer(&mut self.journal, undo, control, |journal| {
+		let publish_progress = |journal: &super::record::Journal| {
 			gate.verify()?;
 			publish(&old_state.join("relocation.json"), journal)
-		})
+		};
+		if self.journal.copy {
+			return content::copy_workspace(&mut self.journal, undo, control, publish_progress);
+		}
+		content::transfer(&mut self.journal, undo, control, publish_progress)
 	}
+	fn copy_writer(&mut self, entry: &RelocationParticipant, undo: bool) -> Result<(), Problem> {
+		let location = if undo {
+			&entry.original.destination
+		} else {
+			&entry.destination
+		};
+		self.journal.writer_description = Some(format!(
+			"{} / {} at {:?}",
+			entry.task, entry.original.name, location
+		));
+		self.writer(true)
+	}
+
+	fn pending_writer_description(&self) -> Option<String> {
+		self.journal.writer_description.clone()
+	}
+
 	fn writer(&mut self, pending: bool) -> Result<(), Problem> {
 		self.verify()?;
 		self.journal.writer_pending = pending;
+		if !pending {
+			self.journal.writer_description = None;
+		}
 		self.persist()
 	}
 	fn activate(&mut self, undo: bool) -> Result<(), Problem> {
+		for (index, member) in self.journal.participants.iter().enumerate() {
+			if let Some(selection) = &member.selection {
+				selection.require_settled(&self.journal, index, undo)?;
+			}
+		}
 		self.activate_state(undo)
 	}
 	fn cleanup(&mut self) -> Result<(), Problem> {

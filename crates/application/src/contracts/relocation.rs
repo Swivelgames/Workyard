@@ -3,6 +3,7 @@ use trine::NativePath;
 
 #[derive(Serialize)]
 pub struct WorkspaceRelocation {
+	pub copy: bool,
 	pub operation_id: String,
 	pub old_tasks_root: NativePath,
 	pub new_tasks_root: NativePath,
@@ -16,6 +17,7 @@ pub struct WorkspaceRelocation {
 impl From<workyard_state::RelocationStatus> for WorkspaceRelocation {
 	fn from(status: workyard_state::RelocationStatus) -> Self {
 		Self {
+			copy: status.copy,
 			operation_id: status.operation_id,
 			old_tasks_root: NativePath::new(status.old_root).expect("validated native anchor"),
 			new_tasks_root: NativePath::new(status.new_root).expect("validated native anchor"),
@@ -24,6 +26,26 @@ impl From<workyard_state::RelocationStatus> for WorkspaceRelocation {
 			placement_complete: status.placement_complete,
 			writer_pending: status.writer_pending,
 			authority: status.authority,
+		}
+	}
+}
+
+#[derive(Serialize)]
+pub struct WorkspaceSnapshot {
+	pub operation_id: String,
+	pub tasks_root: NativePath,
+	pub state_dir: NativePath,
+	pub active_tasks_root: NativePath,
+	pub active_state_dir: NativePath,
+	pub partial: bool,
+}
+
+impl WorkspaceSnapshot {
+	pub(crate) fn label(&self) -> &'static str {
+		if self.partial {
+			"Inactive partial copy"
+		} else {
+			"Inactive snapshot"
 		}
 	}
 }

@@ -27,6 +27,14 @@ impl View<Outcome, Outcome, Progress> for DispatchView {
 	) -> std::io::Result<Option<bool>> {
 		self.task.confirm(request, cancellation).await
 	}
+	async fn select(
+		&mut self,
+		request: trine::invocation::Selection,
+		cancellation: trine::Cancellation,
+	) -> std::io::Result<Option<usize>> {
+		self.workspace.select(request, cancellation).await
+	}
+
 	async fn progress(&mut self, progress: Progress) -> std::io::Result<()> {
 		if progress.task.is_empty() {
 			self.workspace.progress(progress).await

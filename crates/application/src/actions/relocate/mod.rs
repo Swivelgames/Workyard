@@ -3,6 +3,7 @@ mod action;
 mod cli;
 mod contract;
 mod input;
+mod interaction;
 
 use crate::{contracts::Progress, presentation::cli::exit_status};
 use trine::{
@@ -21,7 +22,7 @@ type RelocateEntry = Entry<RelocateInput, RelocateOutcome, RelocateOutcome, Prog
 pub(crate) fn build_entry() -> Result<RelocateEntry, RegistrationError> {
 	let handler = Action::new(
 		"relocate",
-		"Move a workspace or its authoritative state",
+		"Move a workspace or its state, optionally keeping the source files",
 		relocate,
 	)?;
 	let cli = CliBinding::new(cli::bindings());

@@ -1,41 +1,8 @@
 //! Workspace relocation policy. Adapters own native transfer and durable authority.
-use crate::{Control, Participant, Problem, ProblemCode, Repository};
-use std::path::PathBuf;
-
-#[derive(Clone, Debug)]
-pub struct RelocationParticipant {
-	pub task: String,
-	pub original: Participant,
-	pub destination: PathBuf,
-}
-
-pub trait RelocationGit {
-	fn relocation_relationship(
-		&self,
-		participant: &Participant,
-		control: &Control,
-	) -> impl std::future::Future<Output = Result<crate::Relationship, Problem>> + Send;
-	fn repair_relocation(
-		&self,
-		repository: &Repository,
-		participant: &Participant,
-		control: &Control,
-	) -> impl std::future::Future<Output = Result<(), Problem>> + Send;
-}
-
-pub trait RelocationState {
-	fn participants(&self) -> Vec<RelocationParticipant>;
-	fn activated(&self) -> bool;
-	fn started(&self) -> bool;
-	fn relocated_path(&self, path: &std::path::Path) -> Result<PathBuf, Problem>;
-	fn verify(&self) -> Result<(), Problem>;
-	fn begin(&mut self, participants: Vec<RelocationParticipant>) -> Result<(), Problem>;
-	fn transfer(&mut self, undo: bool, control: &Control) -> Result<(), Problem>;
-	fn pending_writer(&self) -> bool;
-	fn writer(&mut self, pending: bool) -> Result<(), Problem>;
-	fn activate(&mut self, undo: bool) -> Result<(), Problem>;
-	fn cleanup(&mut self) -> Result<(), Problem>;
-}
+mod copy;
+mod ports;
+use crate::{Control, Problem, ProblemCode, Repository};
+pub use ports::*;
 
 pub async fn relocate(
 	state: &mut impl RelocationState,
@@ -56,8 +23,11 @@ pub async fn relocate(
 		return state.cleanup();
 	}
 	if state.pending_writer() {
+		let writer = state
+			.pending_writer_description()
+			.unwrap_or_else(|| "its managed Git writer".into());
 		return Err(Problem::new(ProblemCode::ResourceBusy,
-			"Relocation has no durable proof that its managed Git writer stopped.")
+			format!("Relocation has no durable proof that {writer} stopped."))
 			.remedy("Inspect the interrupted Workyard and Git processes. A free workspace gate does not establish writer settlement; preserve the relocation evidence."));
 	}
 
@@ -92,10 +62,40 @@ pub async fn relocate(
 			Err(problem) => return Err(problem),
 		}
 	}
-	observer.phase("", "", "moving_workspace").await?;
-	state.begin(participants.clone())?;
-	state.transfer(undo, control)?;
-	observer.phase("", "", "repairing_git").await?;
+	let phase = match (state.is_copy(), undo) {
+		(false, _) => "moving_workspace",
+		(true, false) => "copying_workspace",
+		(true, true) => "restoring_workspace",
+	};
+	observer.phase("", "", phase).await?;
+	if state.is_copy() {
+		copy::transfer(state, git, &participants, undo, control, observer).await?;
+	} else {
+		state.begin(participants.clone())?;
+		state.transfer(undo, control)?;
+		observer.phase("", "", "repairing_git").await?;
+		repair_moved_worktrees(state, git, participants, undo, control).await?;
+	}
+	control.check()?;
+	state.verify()?;
+	observer.phase("", "", "transferring_state").await?;
+	state.activate(undo)?;
+	let phase = if state.is_copy() {
+		"marking_snapshot"
+	} else {
+		"cleaning_source"
+	};
+	observer.phase("", "", phase).await?;
+	state.cleanup()
+}
+
+async fn repair_moved_worktrees(
+	state: &mut impl RelocationState,
+	git: &impl RelocationGit,
+	participants: Vec<RelocationParticipant>,
+	undo: bool,
+	control: &Control,
+) -> Result<(), Problem> {
 	for entry in participants {
 		control.check()?;
 		state.verify()?;
@@ -146,10 +146,5 @@ pub async fn relocate(
 			));
 		}
 	}
-	control.check()?;
-	state.verify()?;
-	observer.phase("", "", "transferring_state").await?;
-	state.activate(undo)?;
-	observer.phase("", "", "cleaning_source").await?;
-	state.cleanup()
+	Ok(())
 }

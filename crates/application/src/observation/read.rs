@@ -42,16 +42,10 @@ async fn observe(
 
 	let cwd = std::env::current_dir().map_err(|e| Problem::io("Read current directory", e))?;
 	if let Some(state) = workyard_state::find_state(root.unwrap_or(&cwd), explicit)?
-		&& let Some(status) = workyard_state::relocation_status(&state)?
+		&& let Some(mut observation) = super::placement::inspect(&state)?
 	{
-		return Ok(Observation {
-			state_dir: Some(NativePath::new(&state).expect("state anchor")),
-			tasks_root: Some(NativePath::new(&status.tasks_root).expect("root anchor")),
-			selected_task: task.map(str::to_owned),
-			guidance: Some(guidance::relocation(&state, status.placement_complete)),
-			relocation: Some(status.into()),
-			..Default::default()
-		});
+		observation.selected_task = task.map(str::to_owned);
+		return Ok(observation);
 	}
 	let Some(reader) = crate::workspace::reader::optional(&cwd, root, explicit)? else {
 		return Ok(Observation {

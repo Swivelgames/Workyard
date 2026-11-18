@@ -66,7 +66,9 @@ impl View<InfoOutcome, InfoOutcome, Progress> for InfoView {
 			}
 		}
 		if let Some(guidance) = &outcome.guidance {
-			terminal.hint_at(MessageScope::Workspace, guidance);
+			for line in guidance.lines() {
+				terminal.hint_at(MessageScope::Workspace, line);
+			}
 		}
 		if let Some(problem) = &outcome.problem {
 			terminal.problem_at(MessageScope::Workspace, problem);

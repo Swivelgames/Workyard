@@ -14,13 +14,7 @@ impl Store {
 				.remedy("Select the existing --state-dir, or run from beneath its .workyard ancestor. Recovery cannot initialize state."));
 		}
 		let state = canonical_future(state)?;
-		for name in [
-			"workspace.json",
-			"workspace.lock",
-			"tasks",
-			"locks",
-			"evidence",
-		] {
+		for name in ["workspace.json", "workspace.lock"] {
 			if !exists(&state.join(name))? {
 				return Err(damaged(format!(
 					"Existing state is missing {name}. Preserve it and restore its authoritative metadata."
@@ -31,6 +25,14 @@ impl Store {
 			crate::Lock::acquire_mode(&state.join("workspace.lock"), crate::LockMode::Shared)?;
 		let record: crate::records::WorkspaceRecord =
 			WorkspaceRecord::read(&state.join("workspace.json"))?;
+		crate::relocation::snapshot_guard(&state, &record)?;
+		for name in ["tasks", "locks", "evidence"] {
+			if !exists(&state.join(name))? {
+				return Err(damaged(format!(
+					"Existing state is missing {name}. Preserve it and restore its authoritative metadata."
+				)));
+			}
+		}
 		let root = canonical_future(&record.tasks_root.decode()?)?;
 		if let Some(requested) = requested_root
 			&& canonical_future(requested)? != root
@@ -52,10 +54,15 @@ impl Store {
 
 	pub fn open(root: &Path, state: &Path) -> Result<Self, Problem> {
 		validate_default(root, state)?;
-		fs::create_dir_all(root).map_err(|e| Problem::io("Create tasks root", e))?;
-		fs::create_dir_all(state).map_err(|e| Problem::io("Create state directory", e))?;
-		let root = canonical_future(root)?;
 		let state = canonical_future(state)?;
+		let manifest = state.join("workspace.json");
+		if exists(&manifest)? {
+			crate::relocation::snapshot_guard(&state, &WorkspaceRecord::read(&manifest)?)?;
+		}
+
+		fs::create_dir_all(root).map_err(|e| Problem::io("Create tasks root", e))?;
+		fs::create_dir_all(&state).map_err(|e| Problem::io("Create state directory", e))?;
+		let root = canonical_future(root)?;
 		let gate = state.join("workspace.lock");
 		bootstrap(&root, &state, &gate)?;
 
@@ -105,6 +112,7 @@ pub(super) fn validate_default(root: &Path, state: &Path) -> Result<(), Problem>
 	let _gate = Lock::acquire_mode(&default.join("workspace.lock"), crate::LockMode::Shared)?;
 	let record: WorkspaceRecord = WorkspaceRecord::read(&default.join("workspace.json"))?;
 	if canonical_future(&record.tasks_root.decode()?)? == root {
+		crate::relocation::snapshot_guard(&default, &record)?;
 		if record
 			.authority
 			.as_deref()
@@ -172,6 +180,7 @@ fn bootstrap(root: &Path, state: &Path, gate: &Path) -> Result<(), Problem> {
 		authority: None,
 		relocation_source: None,
 		relocation_destination: None,
+		active_tasks_root: None,
 		tasks_root: root.into(),
 		state_dir: state.into(),
 	};

@@ -30,6 +30,41 @@ impl Relocation {
 		new_state: Option<&Path>,
 		control: &workyard_core::Control,
 	) -> Result<Self, Problem> {
+		Self::open_mode(
+			old_state,
+			requested_root,
+			new_root,
+			new_state,
+			control,
+			false,
+		)
+	}
+
+	pub fn open_copy_control(
+		old_state: &Path,
+		requested_root: Option<&Path>,
+		new_root: &Path,
+		new_state: Option<&Path>,
+		control: &workyard_core::Control,
+	) -> Result<Self, Problem> {
+		Self::open_mode(
+			old_state,
+			requested_root,
+			new_root,
+			new_state,
+			control,
+			true,
+		)
+	}
+
+	fn open_mode(
+		old_state: &Path,
+		requested_root: Option<&Path>,
+		new_root: &Path,
+		new_state: Option<&Path>,
+		control: &workyard_core::Control,
+		copy: bool,
+	) -> Result<Self, Problem> {
 		let old_state = canonical_future(old_state)?;
 		for name in ["workspace.json", "workspace.lock"] {
 			if !old_state
@@ -45,6 +80,7 @@ impl Relocation {
 		let source_gate =
 			Lock::acquire_mode(&old_state.join("workspace.lock"), LockMode::Exclusive)?;
 		let record = WorkspaceRecord::read(&old_state.join("workspace.json"))?;
+		super::snapshot::require_live(&old_state, &record)?;
 		let old_root = record.tasks_root.decode()?;
 		if record.state_dir.decode()? != old_state
 			|| record
@@ -70,7 +106,7 @@ impl Relocation {
 		let new_root = canonical_future(new_root)?;
 		let new_state = canonical_future(&new_state.map_or_else(
 			|| {
-				if old_state == old_root.join(".workyard") {
+				if copy || old_state == old_root.join(".workyard") {
 					new_root.join(".workyard")
 				} else {
 					old_state.clone()
@@ -78,6 +114,11 @@ impl Relocation {
 			},
 			Path::to_path_buf,
 		))?;
+		if copy && (new_root == old_root || new_state == old_state) {
+			return Err(conflict(
+				"Copy requires distinct workspace roots and distinct state directories.",
+			));
+		}
 		validate_placement(&old_root, &old_state, &new_root, &new_state)?;
 		if new_root != old_root {
 			empty(&new_root)?;
@@ -103,6 +144,10 @@ impl Relocation {
 				participants.push(Participant {
 					task: task.clone(),
 					index,
+					absent_at_admission: false,
+					selection: None,
+					recovered_source: None,
+					recovered_destination: None,
 					destination: destination.as_path().into(),
 				});
 			}
@@ -118,6 +163,8 @@ impl Relocation {
 		let journal = Journal {
 			version: 1,
 			id,
+			copy,
+			copy_verified: false,
 			old_root: old_root.as_path().into(),
 			new_root: new_root.as_path().into(),
 			old_state: old_state.as_path().into(),
@@ -131,6 +178,7 @@ impl Relocation {
 				content::inventory(&old_root, &old_state, control)?
 			},
 			writer_pending: false,
+			writer_description: None,
 			activated: false,
 			activation_pending: false,
 			undone: false,

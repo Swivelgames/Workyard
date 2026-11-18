@@ -19,5 +19,7 @@ pub(in super::super) fn bindings() -> Bindings {
 		.option("new_state_dir", "new-state-dir")
 		.native_path("new_state_dir");
 
-	bindings.option("move", "move")
+	bindings
+		.option("move", "move")
+		.option("keep_source", "keep-source")
 }

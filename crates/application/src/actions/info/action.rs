@@ -30,15 +30,13 @@ fn read(input: InfoInput, context: InvocationContext<Progress>) -> Result<InfoOu
 		});
 	};
 
-	if let Some(status) = workyard_state::relocation_status(&state)? {
+	if let Some(placement) = crate::observation::placement::inspect(&state)? {
 		return Ok(InfoOutcome {
-			tasks_root: Some(NativePath::new(&status.tasks_root).expect("root anchor")),
-			state_dir: Some(NativePath::new(&state).expect("state anchor")),
-			guidance: Some(crate::guidance::workspace::relocation(
-				&state,
-				status.placement_complete,
-			)),
-			relocation: Some(status.into()),
+			tasks_root: placement.tasks_root,
+			state_dir: placement.state_dir,
+			guidance: placement.guidance,
+			relocation: placement.relocation,
+			snapshot: placement.snapshot,
 			..Default::default()
 		});
 	}

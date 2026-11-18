@@ -1,5 +1,8 @@
 use super::{RelocateInput, RelocateOutcome};
-use crate::{contracts::Progress, execution::blocking_action};
+use crate::{
+	contracts::{Progress, relocation::WorkspaceSnapshot},
+	execution::blocking_action,
+};
 use std::path::{Path, PathBuf};
 use trine::{InvocationContext, NativePath, invocation::Confirmation};
 use workyard_core::{Control, Problem, ProblemCode, RelocationState};
@@ -17,9 +20,12 @@ pub async fn relocate(
 	context: InvocationContext<Progress>,
 ) -> Result<RelocateOutcome, RelocateOutcome> {
 	blocking_action(async move {
-		run(input, context)
-			.await
-			.map_err(|problem| RelocateOutcome::rejected("relocate", problem))?
+		let copy = input.copy;
+		run(input, context).await.map_err(|problem| {
+			let mut outcome = RelocateOutcome::rejected("relocate", problem);
+			outcome.copy = copy;
+			outcome
+		})?
 	})
 	.await
 }
@@ -34,11 +40,16 @@ async fn run(
 
 	let prepared = prepare(&input)?;
 	if prepared.confirm_source {
-		confirm_source(&prepared.old_root, &context).await?;
+		confirm_source(&prepared.old_root, input.copy, &context).await?;
 	}
 
 	control.check()?;
-	let mut session = Relocation::open_control(
+	let open = if input.copy {
+		Relocation::open_copy_control
+	} else {
+		Relocation::open_control
+	};
+	let mut session = open(
 		&prepared.state,
 		Some(&prepared.old_root),
 		&prepared.target,
@@ -56,6 +67,13 @@ async fn run(
 }
 
 fn prepare(input: &RelocateInput) -> Result<Prepared, Problem> {
+	if input.copy && input.move_workspace {
+		return Err(Problem::new(
+			ProblemCode::InvalidInput,
+			"Choose either a regular move or a relocation that keeps the source files.",
+		));
+	}
+
 	let cwd =
 		std::env::current_dir().map_err(|error| Problem::io("Read current directory", error))?;
 	let old = alias(input.old.as_ref(), input.old_tasks_root.as_ref())?;
@@ -90,15 +108,19 @@ fn prepare(input: &RelocateInput) -> Result<Prepared, Problem> {
 
 async fn confirm_source(
 	old_root: &Path,
+	copy: bool,
 	context: &InvocationContext<Progress>,
 ) -> Result<(), Problem> {
+	let source = crate::guidance::text::path(old_root);
+	let question = if copy {
+		format!("Move the workspace at {source} and keep its source files?")
+	} else {
+		format!("Move the workspace at {source}?")
+	};
 	let answer = context
 		.confirm(Confirmation {
 			code: "relocate_source".into(),
-			message: format!(
-				"Move the workspace at {}?",
-				crate::guidance::text::escaped(&old_root.to_string_lossy())
-			),
+			message: question,
 		})
 		.await
 		.map_err(|_| Problem::new(ProblemCode::Cancelled, "Source confirmation interrupted."))?;
@@ -170,16 +192,18 @@ async fn execute(
 	kind: &'static str,
 	context: InvocationContext<Progress>,
 ) -> Result<RelocateOutcome, RelocateOutcome> {
+	let observer = super::interaction::RelocationEvents::new(context, kind);
 	let result = workyard_core::relocate(
 		session,
 		&workyard_git::Runner::default(),
 		control,
 		undo,
-		&crate::execution::Events(context, kind),
+		&observer,
 	)
 	.await;
 	let mut outcome =
 		outcome(session, kind).unwrap_or_else(|problem| RelocateOutcome::rejected(kind, problem));
+	outcome.recovery_choice = observer.pending.into_inner();
 	match result {
 		Ok(()) => Ok(outcome),
 		Err(problem) => {
@@ -192,6 +216,7 @@ async fn execute(
 fn outcome(session: &Relocation, kind: &'static str) -> Result<RelocateOutcome, Problem> {
 	let mut outcome = RelocateOutcome::empty(kind);
 	let old_root = session.old_root()?;
+	outcome.copy = session.is_copy();
 	outcome.operation_id = Some(session.operation_id().into());
 	outcome.mutation_started = session.started();
 	outcome.old_tasks_root = Some(native(&old_root)?);
@@ -204,6 +229,9 @@ fn outcome(session: &Relocation, kind: &'static str) -> Result<RelocateOutcome, 
 		outcome.active_state_dir = Some(native(&session.active_state()?)?);
 	}
 	outcome.cleanup_complete = session.cleanup_complete();
+	if outcome.copy && outcome.cleanup_complete {
+		outcome.snapshot = Some(retained_snapshot(session)?);
+	}
 	for entry in session.participants() {
 		if !entry.original.destination.starts_with(&old_root) {
 			outcome.warnings.push(super::contract::ExternalParticipant {
@@ -214,6 +242,24 @@ fn outcome(session: &Relocation, kind: &'static str) -> Result<RelocateOutcome, 
 		}
 	}
 	Ok(outcome)
+}
+
+fn retained_snapshot(session: &Relocation) -> Result<WorkspaceSnapshot, Problem> {
+	let active_root = session.active_root()?;
+	let partial = active_root == session.old_root()?;
+	let (retained_root, retained_state) = if partial {
+		(session.new_root()?, session.new_state()?)
+	} else {
+		(session.old_root()?, session.old_state()?)
+	};
+	Ok(WorkspaceSnapshot {
+		operation_id: session.operation_id().into(),
+		tasks_root: native(&retained_root)?,
+		state_dir: native(&retained_state)?,
+		active_tasks_root: native(&active_root)?,
+		active_state_dir: native(&session.active_state()?)?,
+		partial,
+	})
 }
 
 fn native(path: &Path) -> Result<NativePath, Problem> {

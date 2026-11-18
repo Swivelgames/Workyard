@@ -6,6 +6,7 @@ use workyard_core::Problem;
 
 pub struct RelocationStatus {
 	pub operation_id: String,
+	pub copy: bool,
 	pub tasks_root: PathBuf,
 	pub old_root: PathBuf,
 	pub new_root: PathBuf,
@@ -124,6 +125,7 @@ pub fn relocation_status(state: &Path) -> Result<Option<RelocationStatus>, Probl
 	}
 	Ok(Some(RelocationStatus {
 		operation_id: journal.id,
+		copy: journal.copy,
 		tasks_root,
 		old_root,
 		new_root,
@@ -145,6 +147,7 @@ fn binding_at(state: &Path) -> Result<Option<WorkspaceRecord>, Problem> {
 
 fn pair(source: &Journal, destination: &Journal) -> Result<(), Problem> {
 	if source.id != destination.id
+		|| source.copy != destination.copy
 		|| source.old_root != destination.old_root
 		|| source.new_root != destination.new_root
 		|| source.old_state != destination.old_state

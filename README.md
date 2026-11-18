@@ -92,14 +92,16 @@ options so recovery preserves each participant's intended execution policy.
 
 ```sh
 workyard relocate --old /workspace/tasks --new /work/tasks
+workyard relocate --keep-source --old /workspace/tasks --new /new/tasks
 workyard relocate --old /work/tasks --new-state-dir /workyard-state
 workyard recover --state-dir /workspace/tasks/.workyard
 workyard recover --state-dir /workspace/tasks/.workyard --undo
 ```
 
 Relocation moves workspace contents and repairs Git relationships, then activates
-verified destination state. Incomplete tasks and authored files are retained;
-externally located participants stay fixed. Pending relocation blocks ordinary
+verified destination state. Use `--keep-source` to retain an inactive source snapshot.
+Inspect or modify Git state at the active worktree. Relocation preserves incomplete
+tasks and authored files. Externally located participants stay fixed. Pending relocation blocks ordinary
 mutations and supports fixed-endpoint continuation or pre-activation undo.
 See [Workspace relocation](docs/relocation.md) for selection, recovery, formats and
 native-platform acceptance limits.
