@@ -1,6 +1,6 @@
 use super::Store;
 use crate::damage::damaged;
-use crate::documents::{publish, read_versioned};
+use crate::documents::publish;
 use crate::records::WorkspaceRecord;
 use crate::{Lock, canonical_future, exists};
 use std::{fs, path::Path};
@@ -30,7 +30,7 @@ impl Store {
 		let workspace =
 			crate::Lock::acquire_mode(&state.join("workspace.lock"), crate::LockMode::Shared)?;
 		let record: crate::records::WorkspaceRecord =
-			read_versioned(&state.join("workspace.json"))?;
+			WorkspaceRecord::read(&state.join("workspace.json"))?;
 		let root = canonical_future(&record.tasks_root.decode()?)?;
 		if let Some(requested) = requested_root
 			&& canonical_future(requested)? != root
@@ -77,7 +77,9 @@ impl Store {
 
 	pub fn verify(&self) -> Result<(), Problem> {
 		self.workspace.verify()?;
-		let record: WorkspaceRecord = read_versioned(&self.state.join("workspace.json"))?;
+		let record: WorkspaceRecord = WorkspaceRecord::read(&self.state.join("workspace.json"))?;
+		crate::relocation::validate_mutation_binding(&self.state, &record)?;
+
 		if record.tasks_root.decode()? != self.root || record.state_dir.decode()? != self.state {
 			return Err(Problem::new(
 				workyard_core::ProblemCode::WorkspaceBindingConflict,
@@ -101,8 +103,29 @@ pub(super) fn validate_default(root: &Path, state: &Path) -> Result<(), Problem>
 	}
 
 	let _gate = Lock::acquire_mode(&default.join("workspace.lock"), crate::LockMode::Shared)?;
-	let record: WorkspaceRecord = read_versioned(&default.join("workspace.json"))?;
+	let record: WorkspaceRecord = WorkspaceRecord::read(&default.join("workspace.json"))?;
 	if canonical_future(&record.tasks_root.decode()?)? == root {
+		if record
+			.authority
+			.as_deref()
+			.is_some_and(|authority| authority != "active")
+			&& record
+				.relocation_destination
+				.as_ref()
+				.map(|path| path.decode())
+				.transpose()?
+				.as_deref() == Some(state.as_path())
+		{
+			let selected = WorkspaceRecord::read(&state.join("workspace.json"))?;
+			if selected.authority.as_deref() == Some("active")
+				&& selected.relocation.is_some()
+				&& selected.relocation == record.relocation
+				&& selected.state_dir.decode()? == state
+				&& selected.tasks_root.decode()? == root
+			{
+				return Ok(());
+			}
+		}
 		return Err(Problem::new(
 			workyard_core::ProblemCode::WorkspaceBindingConflict,
 			"The tasks root already has a default state directory.",
@@ -145,6 +168,10 @@ fn bootstrap(root: &Path, state: &Path, gate: &Path) -> Result<(), Problem> {
 
 	let record = WorkspaceRecord {
 		version: 1,
+		relocation: None,
+		authority: None,
+		relocation_source: None,
+		relocation_destination: None,
 		tasks_root: root.into(),
 		state_dir: state.into(),
 	};

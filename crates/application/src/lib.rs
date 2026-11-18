@@ -9,7 +9,7 @@ mod presentation;
 mod workspace;
 
 // Deliberate compatibility exports: disk ownership does not change supported imports.
-pub use actions::{amend, create, info, list, recover, remove, status};
+pub use actions::{amend, create, info, list, recover, relocate, remove, status};
 pub use application::application;
 pub use contracts::{ProblemOutcome, Progress};
 pub use create::{CreateInput, CreateOutcome, RepositoryInput, create};

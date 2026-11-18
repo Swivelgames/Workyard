@@ -15,10 +15,12 @@ pub use action::status;
 pub use contract::StatusOutcome;
 pub use input::StatusInput;
 
-type StatusEntry = Entry<StatusInput, StatusOutcome, StatusOutcome, Progress>;
+use contract::PresentedStatus;
+
+type StatusEntry = Entry<StatusInput, PresentedStatus, PresentedStatus, Progress>;
 
 pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
-	let handler = Action::new("status", "Inspect Workyard tasks", action::status)?;
+	let handler = Action::new("status", "Inspect Workyard tasks", action::present)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();
 

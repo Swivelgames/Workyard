@@ -1,6 +1,5 @@
-use super::super::StatusOutcome;
+use super::super::contract::PresentedStatus;
 use crate::contracts::Progress;
-use crate::observation::Observation;
 use crate::presentation::cli::render::{Terminal, separate, workspace_guidance};
 use std::io;
 use trine::{application::CliViewContext, view::View};
@@ -9,7 +8,7 @@ pub struct StatusView {
 	pub output: CliViewContext,
 }
 
-impl View<StatusOutcome, StatusOutcome, Progress> for StatusView {
+impl View<PresentedStatus, PresentedStatus, Progress> for StatusView {
 	type Completion = ();
 	type Error = io::Error;
 
@@ -17,9 +16,12 @@ impl View<StatusOutcome, StatusOutcome, Progress> for StatusView {
 		Ok(())
 	}
 
-	async fn finish(&mut self, result: &Result<StatusOutcome, StatusOutcome>) -> io::Result<()> {
+	async fn finish(
+		&mut self,
+		result: &Result<PresentedStatus, PresentedStatus>,
+	) -> io::Result<()> {
 		let outcome = match result {
-			Ok(outcome) | Err(outcome) => &outcome.0,
+			Ok(outcome) | Err(outcome) => outcome,
 		};
 		let mut terminal = Terminal::for_output(&self.output.stdout);
 		status(&mut terminal, outcome);
@@ -29,11 +31,18 @@ impl View<StatusOutcome, StatusOutcome, Progress> for StatusView {
 	}
 }
 
-fn status(terminal: &mut Terminal, observation: &Observation) {
+fn status(terminal: &mut Terminal, outcome: &PresentedStatus) {
+	let observation = &outcome.outcome.0;
 	let root = observation.tasks_root.as_ref().map(|path| path.as_path());
+	let recovery_state = observation
+		.state_dir
+		.as_ref()
+		.filter(|_| outcome.explicit_placement)
+		.map(|path| path.as_path());
+
 	for task in &observation.tasks {
 		separate(terminal);
-		crate::presentation::cli::render::task::render(terminal, task, root, true);
+		crate::presentation::cli::render::task::render(terminal, task, root, recovery_state, true);
 	}
 	workspace_guidance(
 		terminal,

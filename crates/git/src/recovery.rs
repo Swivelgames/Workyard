@@ -14,6 +14,35 @@ struct Reconciliation<'a> {
 }
 
 impl RecoveryGit for Runner {
+	async fn recovery_relationship(
+		&self,
+		participant: &Participant,
+		control: &Control,
+	) -> Result<Option<workyard_core::Relationship>, Problem> {
+		if participant.worktree_identity.is_none() {
+			return Ok(None);
+		}
+		let reconciliation = Reconciliation {
+			runner: self,
+			participant,
+			task: "",
+			control,
+		};
+		let repository = reconciliation.locate_repository().await?;
+		workyard_core::AmendGit::relationship(self, &repository.into(), participant, control)
+			.await
+			.map(Some)
+	}
+
+	async fn repair_relationship(
+		&self,
+		repository: &workyard_core::Repository,
+		participant: &Participant,
+		control: &Control,
+	) -> Result<(), Problem> {
+		workyard_core::AmendGit::repair(self, repository, participant, control).await
+	}
+
 	async fn reconcile(
 		&self,
 		participant: &Participant,

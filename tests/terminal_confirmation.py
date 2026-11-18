@@ -111,7 +111,7 @@ def terminal_case(binary, key, expected, consent=False, dirty=True, multiple=Fal
 				output.extend(chunk)
 				if b"\x1b[6n" in chunk:
 					os.write(master, b"\x1b[1;1R")
-				if not sent and b"(y/N)" in output:
+				if not sent and b"(y/N)" in output.replace(b"\r\n", b""):
 					os.write(master, key)
 					sent = True
 
@@ -159,6 +159,53 @@ def closed_stdin_case(binary):
 		assert_healthy_retry(root, binary, before_state, True)
 
 
+def relocation_case(binary, key, accepted):
+	with tempfile.TemporaryDirectory(prefix="workyard-relocate-terminal-") as temporary:
+		root = fixture(Path(temporary), binary)
+		target = Path(temporary) / "moved"
+		before_state = durable_state(root)
+		master, slave = pty.openpty()
+		fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+		before = termios.tcgetattr(slave)
+		process = subprocess.Popen([binary, "relocate", "--new", str(target)], cwd=root,
+			stdin=slave, stdout=subprocess.PIPE, stderr=slave, start_new_session=True)
+		output = bytearray()
+		sent = False
+		deadline = time.monotonic() + 15
+		try:
+			while process.poll() is None:
+				assert time.monotonic() < deadline, output
+				if not select.select([master], [], [], 0.1)[0]:
+					continue
+				chunk = os.read(master, 65536)
+				output.extend(chunk)
+				if b"\x1b[6n" in chunk:
+					os.write(master, b"\x1b[1;1R")
+				if not sent and b"(y/N)" in output.replace(b"\r\n", b""):
+					os.write(master, key)
+					sent = True
+			assert sent, output
+			result = process.stdout.read()
+			assert b"Move the workspace at" in output, output
+			assert b"(y/N)" not in result, result
+			assert termios.tcgetattr(slave) == before, "terminal modes not restored"
+			if accepted:
+				assert process.returncode == 0, result
+				assert (target / "feat/task/api/file").read_text() == "dirty\n"
+				assert not (root / ".workyard").exists()
+			else:
+				assert process.returncode != 0, result
+				assert b"workspace is unchanged" in result, result
+				assert durable_state(root) == before_state
+				assert not target.exists()
+		finally:
+			if process.poll() is None:
+				process.kill()
+				process.wait()
+			os.close(master)
+			os.close(slave)
+
+
 if __name__ == "__main__":
 	binary = str(Path(sys.argv[1]).resolve())
 	for label, key in [("No", b"n\r"), ("Ctrl+C", b"\x03"), ("Escape", b"\x1b"), ("Ctrl+D", b"\x04")]:
@@ -170,3 +217,8 @@ if __name__ == "__main__":
 	print("Clean prompt: concise disclosure precedes task confirmation, no decoration/tabs")
 	closed_stdin_case(binary)
 	print("Closed stdin: decision required, files preserved, no hang")
+
+	for key in [b"n\r", b"\x1b", b"\x03"]:
+		relocation_case(binary, key, False)
+	relocation_case(binary, b"y\r", True)
+	print("Relocation source confirmation: decline/cancel preserves state; yes moves dirty content")

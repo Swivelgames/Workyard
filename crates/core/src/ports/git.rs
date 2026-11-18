@@ -81,6 +81,29 @@ pub trait Git: Sync {
 }
 
 pub trait RecoveryGit: Git {
+	/// Discover an identity-verified location needing repair without changing Git.
+	fn recovery_relationship(
+		&self,
+		_participant: &crate::Participant,
+		_control: &Control,
+	) -> impl Future<Output = Result<Option<crate::Relationship>, Problem>> + Send {
+		async { Ok(None) }
+	}
+
+	fn repair_relationship(
+		&self,
+		_repository: &Repository,
+		_participant: &crate::Participant,
+		_control: &Control,
+	) -> impl Future<Output = Result<(), Problem>> + Send {
+		async {
+			Err(Problem::new(
+				crate::ProblemCode::RepositoryChanged,
+				"Git adapter does not support relationship repair.",
+			))
+		}
+	}
+
 	fn reconcile(
 		&self,
 		participant: &crate::Participant,

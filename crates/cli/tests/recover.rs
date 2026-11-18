@@ -612,8 +612,31 @@ fn missing_completed_participant_never_claims_current_availability() {
 	let status = workyard(&root, &["status"]);
 	let status = String::from_utf8(status.stdout).unwrap();
 	assert!(
-		status.contains("Recorded operation: recover (failed)"),
+		!status.contains("Recorded operation: recover (failed)"),
 		"{status}"
 	);
-	assert!(status.contains("infra:"), "{status}");
+	assert!(
+		status.contains("Try: workyard recover feat/task"),
+		"{status}"
+	);
+	assert!(!status.contains("git worktree repair"), "{status}");
+
+	let state = root.join(".workyard");
+	let in_workspace = workyard(&root, &["status", "--state-dir", ".workyard"]);
+	assert_ok(&in_workspace);
+	let in_workspace = String::from_utf8(in_workspace.stdout).unwrap();
+	assert!(
+		in_workspace.contains("Try: workyard recover --state-dir=.workyard feat/task"),
+		"{in_workspace}"
+	);
+
+	let explicit = workyard(fixture.path(), &["status", "--state-dir", text(&state)]);
+	assert_ok(&explicit);
+	let explicit = String::from_utf8(explicit.stdout).unwrap();
+	assert!(
+		explicit.contains("Try: workyard recover --state-dir=workspace/.workyard feat/task")
+			|| explicit
+				.contains("Try: workyard recover --state-dir='workspace\\.workyard' feat/task"),
+		"{explicit}"
+	);
 }

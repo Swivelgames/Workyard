@@ -8,6 +8,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 		index: usize,
 		accepted: &[String],
 	) -> Result<(), Problem> {
+		self.repair_location(task, index).await?;
 		let observed = self
 			.runner
 			.reconcile(&task.participants[index], &task.name, self.control)
@@ -37,6 +38,50 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 		self.complete_created(task, index, &repository).await
 	}
 
+	async fn repair_location(&self, task: &mut Task, index: usize) -> Result<(), Problem> {
+		let Some(relationship) = self
+			.runner
+			.recovery_relationship(&task.participants[index], self.control)
+			.await?
+		else {
+			return Ok(());
+		};
+		if !relationship.needs_repair {
+			return Ok(());
+		}
+		let participant = relationship.participant;
+		let repository = crate::Repository {
+			source: participant.source.clone(),
+			common_dir: participant.common_dir.clone(),
+			remote: participant.remote.clone(),
+			identity: participant.backing_identity.clone(),
+		};
+
+		self.observer
+			.phase(&task.name, &participant.name, "repairing_worktree_link")
+			.await?;
+		self.control.check()?;
+		self.store.verify()?;
+		self.publication_attempted
+			.store(true, std::sync::atomic::Ordering::Relaxed);
+		task.participants[index] = participant;
+		self.store
+			.record_effect(self.guard, task, index, crate::EffectState::Pending)?;
+		let result = self
+			.runner
+			.repair_relationship(&repository, &task.participants[index], self.control)
+			.await;
+		if result
+			.as_ref()
+			.is_err_and(|problem| problem.code == ProblemCode::SupervisionFailed)
+		{
+			return result;
+		}
+		self.store
+			.record_effect(self.guard, task, index, crate::EffectState::Settled)?;
+		result
+	}
+
 	async fn resume_existing(
 		&self,
 		task: &mut Task,
@@ -53,6 +98,11 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 				|| participant.common_dir != previous.common_dir
 				|| participant.destination != previous.destination;
 			if cache_changed {
+				self.observer
+					.phase(&task.name, &participant.name, "updating_worktree_location")
+					.await?;
+				self.control.check()?;
+				self.store.verify()?;
 				self.publication_attempted
 					.store(true, std::sync::atomic::Ordering::Relaxed);
 				self.store

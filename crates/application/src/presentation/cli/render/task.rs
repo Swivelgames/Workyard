@@ -9,6 +9,7 @@ pub(crate) fn render(
 	terminal: &mut Terminal,
 	task: &TaskReport,
 	root: Option<&Path>,
+	recovery_state: Option<&Path>,
 	detail: bool,
 ) {
 	let tone = match task.condition {
@@ -43,7 +44,9 @@ pub(crate) fn render(
 
 	match task.provenance {
 		Provenance::Recorded => participants::recorded(terminal, task, root),
-		Provenance::Inspected => participants::inspected(terminal, task, root, detail),
+		Provenance::Inspected => {
+			participants::inspected(terminal, task, root, recovery_state, detail)
+		}
 	}
 
 	render_coordination(terminal, task);
@@ -86,6 +89,13 @@ fn render_problems(terminal: &mut Terminal, task: &TaskReport, detail: bool) {
 		));
 	}
 	if let Some(problem) = &saved.problem {
-		terminal.problem(problem);
+		if task.condition == Condition::Healthy {
+			terminal.note(&format!(
+				"Historical diagnostic: {}: {}",
+				problem.code, problem.message
+			));
+		} else {
+			terminal.problem(problem);
+		}
 	}
 }

@@ -25,6 +25,8 @@ impl Terminal {
 			let phase = match event.phase.as_str() {
 				"completed" => "recovery step finished",
 				"worktree_created" => "worktree created",
+				"repairing_worktree_link" => "repairing Git worktree link",
+				"updating_worktree_location" => "updating saved worktree location",
 				phase => phase,
 			};
 			writeln!(

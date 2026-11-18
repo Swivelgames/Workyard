@@ -15,6 +15,7 @@ pub enum Provenance {
 
 #[derive(Serialize)]
 pub struct SavedTask {
+	pub backing_repositories: std::collections::BTreeMap<String, NativePath>,
 	pub lifecycle: &'static str,
 	pub operation: crate::contracts::OperationReport,
 	pub problem: Option<ProblemOutcome>,
@@ -24,6 +25,16 @@ pub struct SavedTask {
 impl From<Task> for SavedTask {
 	fn from(task: Task) -> Self {
 		Self {
+			backing_repositories: task
+				.participants
+				.iter()
+				.map(|participant| {
+					(
+						participant.name.clone(),
+						NativePath::new(&participant.common_dir).expect("recorded backing path"),
+					)
+				})
+				.collect(),
 			lifecycle: task.lifecycle.as_str(),
 			operation: task.operation.into(),
 			problem: task.problem.map(Into::into),
@@ -87,6 +98,8 @@ impl From<TaskInspection> for TaskReport {
 
 #[derive(Serialize, Default)]
 pub struct Observation {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub relocation: Option<crate::contracts::relocation::WorkspaceRelocation>,
 	pub state_dir: Option<NativePath>,
 	pub tasks_root: Option<NativePath>,
 	pub tasks: Vec<TaskReport>,

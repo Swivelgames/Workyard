@@ -15,7 +15,7 @@ pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 	// SAFETY: File owns the valid handle and info is a correctly sized output.
 	if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
 		return Err(Problem::io(
-			"Inspect lock identity",
+			"Inspect file identity",
 			std::io::Error::last_os_error(),
 		));
 	}
@@ -35,6 +35,32 @@ pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 		.map_err(|e| Problem::io("Inspect file identity", e))?;
 
 	Ok((metadata.dev(), metadata.ino()))
+}
+
+/// Identify a named entry without dereferencing a final symlink.
+#[cfg(unix)]
+pub fn entry_identity(path: &Path) -> Result<(u64, u64), Problem> {
+	use std::os::unix::fs::MetadataExt;
+
+	let metadata = path
+		.symlink_metadata()
+		.map_err(|error| Problem::io("Inspect workspace entry identity", error))?;
+	Ok((metadata.dev(), metadata.ino()))
+}
+
+#[cfg(windows)]
+pub fn entry_identity(path: &Path) -> Result<(u64, u64), Problem> {
+	use std::os::windows::fs::OpenOptionsExt;
+	use windows_sys::Win32::Storage::FileSystem::{
+		FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES,
+	};
+
+	let entry = OpenOptions::new()
+		.access_mode(FILE_READ_ATTRIBUTES)
+		.custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+		.open(path)
+		.map_err(|error| Problem::io("Open workspace entry identity", error))?;
+	file_identity(&entry)
 }
 
 pub fn directory_identity(path: &Path) -> Result<String, Problem> {

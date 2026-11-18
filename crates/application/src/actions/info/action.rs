@@ -30,6 +30,18 @@ fn read(input: InfoInput, context: InvocationContext<Progress>) -> Result<InfoOu
 		});
 	};
 
+	if let Some(status) = workyard_state::relocation_status(&state)? {
+		return Ok(InfoOutcome {
+			tasks_root: Some(NativePath::new(&status.tasks_root).expect("root anchor")),
+			state_dir: Some(NativePath::new(&state).expect("state anchor")),
+			guidance: Some(crate::guidance::workspace::relocation(
+				&state,
+				status.placement_complete,
+			)),
+			relocation: Some(status.into()),
+			..Default::default()
+		});
+	}
 	let reader = workyard_state::Reader::open(&state, root)?;
 	let mut result = InfoOutcome {
 		tasks_root: Some(NativePath::new(reader.root()).expect("root path")),

@@ -620,7 +620,7 @@ fn successful_record_does_not_hide_conflicting_effects_or_condemn_intent_fallbac
 		let before = snapshot(fixture.path());
 		assert_eq!(
 			rpc(&root, "status", json!({}))["result"]["tasks"][0]["condition"],
-			"needs_attention"
+			if failed { "healthy" } else { "needs_attention" }
 		);
 		assert_eq!(before, snapshot(fixture.path()));
 	}

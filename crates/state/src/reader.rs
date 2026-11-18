@@ -4,7 +4,7 @@ mod history;
 mod snapshot;
 mod task;
 mod validation;
-use crate::{Lock, canonical_future, documents::read_versioned, records::WorkspaceRecord};
+use crate::{Lock, canonical_future, records::WorkspaceRecord};
 use std::path::{Path, PathBuf};
 use workyard_core::{Problem, ProblemCode};
 
@@ -18,7 +18,7 @@ impl Reader {
 	pub fn open(state: &Path, requested_root: Option<&Path>) -> Result<Self, Problem> {
 		let state = canonical_future(state)?;
 		let gate = Lock::read_existing(&state.join("workspace.lock"))?;
-		let record: WorkspaceRecord = read_versioned(&state.join("workspace.json"))?;
+		let record: WorkspaceRecord = WorkspaceRecord::read(&state.join("workspace.json"))?;
 		let root = record.tasks_root.decode()?;
 		if !root.is_absolute()
 			|| record.state_dir.decode()? != state
@@ -58,7 +58,7 @@ impl Reader {
 
 	pub(crate) fn verify(&self) -> Result<(), Problem> {
 		self.gate.verify()?;
-		let record: WorkspaceRecord = read_versioned(&self.state.join("workspace.json"))?;
+		let record: WorkspaceRecord = WorkspaceRecord::read(&self.state.join("workspace.json"))?;
 		if record.tasks_root.decode()? != self.root || record.state_dir.decode()? != self.state {
 			return Err(crate::damage::damaged(
 				"Workspace binding changed during observation.",

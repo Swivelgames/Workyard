@@ -38,6 +38,12 @@ impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
+		self.finish_outcome(outcome)
+	}
+}
+
+impl RecoverView {
+	pub(crate) fn finish_outcome(&mut self, outcome: &RecoverOutcome) -> io::Result<()> {
 		let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
 		let mut terminal = Terminal::for_output(&self.output.stdout);
 		if !outcome.pull_failures.is_empty() && outcome.problem.is_none() {

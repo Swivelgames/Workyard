@@ -4,7 +4,7 @@ Workyard creates a task across explicitly selected Git repositories. The same co
 operation is exposed through CLI views and Trine's on-demand stdio RPC host.
 
 This experimental slice implements `create`, its `checkout` alias, `recover`,
-`amend`, `remove`, `list`, `status`, `info`, `rpc`, and `completion`.
+`amend`, `remove`, `relocate`, `list`, `status`, `info`, `rpc`, and `completion`.
 Other lifecycle commands, MCP and TUI are not implemented yet.
 
 ```sh
@@ -87,6 +87,22 @@ that verified evidence without writing it. Later mutations use the same authorit
 retiring/reusing a task archives the amended membership before a new incarnation.
 Participant creation options are versioned separately from the original task-wide
 options so recovery preserves each participant's intended execution policy.
+
+## Relocating workspaces
+
+```sh
+workyard relocate --old /workspace/tasks --new /work/tasks
+workyard relocate --old /work/tasks --new-state-dir /workyard-state
+workyard recover --state-dir /workspace/tasks/.workyard
+workyard recover --state-dir /workspace/tasks/.workyard --undo
+```
+
+Relocation moves workspace contents and repairs Git relationships, then activates
+verified destination state. Incomplete tasks and authored files are retained;
+externally located participants stay fixed. Pending relocation blocks ordinary
+mutations and supports fixed-endpoint continuation or pre-activation undo.
+See [Workspace relocation](docs/relocation.md) for selection, recovery, formats and
+native-platform acceptance limits.
 
 ## Recovery
 

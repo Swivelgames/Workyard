@@ -7,6 +7,7 @@ use workyard_core::{Participant, Problem, Repository};
 pub(super) struct LinkedLocation {
 	pub administration: PathBuf,
 	pub destination: PathBuf,
+	pub registration_matches: bool,
 }
 
 pub(super) fn locate(
@@ -17,7 +18,7 @@ pub(super) fn locate(
 	let entries = std::fs::read_dir(repository.common_dir.join("worktrees"))
 		.map_err(|error| {
 			if error.kind() == std::io::ErrorKind::NotFound {
-				return changed("The recorded worktree administration no longer exists in this repository. Restore the missing worktree; recovery will not recreate authored work.");
+				return changed("The worktree administrative identity changed or no longer exists in this repository. Restore the missing worktree; recovery will not recreate authored work.");
 			}
 			Problem::io("Inspect linked-worktree administration", error)
 		})?;
@@ -37,16 +38,22 @@ pub(super) fn locate(
 			continue;
 		}
 		for destination in [registered, participant.destination.as_path()] {
-			if !destination
-				.try_exists()
-				.map_err(|error| Problem::io("Inspect linked-worktree location", error))?
-			{
+			if !matches_pointer(destination, &administration, participant, std::fs::metadata)? {
 				continue;
 			}
-			verify_pointer(destination, &administration, participant)?;
 			return Ok(LinkedLocation {
 				administration,
 				destination: destination.to_path_buf(),
+				registration_matches: destination == registered,
+			});
+		}
+		if identity.is_some()
+			&& let Some(destination) = discover_task_child(&administration, participant)?
+		{
+			return Ok(LinkedLocation {
+				administration,
+				destination,
+				registration_matches: false,
 			});
 		}
 		return Err(changed(
@@ -54,8 +61,82 @@ pub(super) fn locate(
 		));
 	}
 	Err(changed(
-		"The recorded worktree administration no longer exists in this repository.",
+		"The worktree administrative identity changed or no longer exists in this repository.",
 	))
+}
+
+/// Search only immediate task children, using their linked administrative pointer.
+fn discover_task_child(
+	administration: &Path,
+	participant: &Participant,
+) -> Result<Option<PathBuf>, Problem> {
+	let parent = participant
+		.destination
+		.parent()
+		.ok_or_else(|| changed("Participant has no parent directory."))?;
+	if !parent
+		.try_exists()
+		.map_err(|error| Problem::io("Inspect task directory", error))?
+	{
+		return Ok(None);
+	}
+	let mut matches = Vec::new();
+	for entry in
+		std::fs::read_dir(parent).map_err(|error| Problem::io("Read task directory", error))?
+	{
+		let entry = entry.map_err(|error| Problem::io("Read task child", error))?;
+		if !entry
+			.file_type()
+			.map_err(|error| Problem::io("Inspect task child", error))?
+			.is_dir()
+		{
+			continue;
+		}
+		if matches_pointer(
+			&entry.path(),
+			administration,
+			participant,
+			std::fs::symlink_metadata,
+		)? {
+			matches.push(entry.path());
+		}
+	}
+	if matches.len() > 1 {
+		return Err(changed(
+			"Several task children refer to this worktree identity. Preserve all files and explicitly repair Git at the intended location.",
+		));
+	}
+	Ok(matches.pop())
+}
+
+fn matches_pointer(
+	destination: &Path,
+	administration: &Path,
+	participant: &Participant,
+	metadata: impl FnOnce(PathBuf) -> std::io::Result<std::fs::Metadata>,
+) -> Result<bool, Problem> {
+	let pointer = destination.join(".git");
+	let metadata = match metadata(pointer) {
+		Ok(metadata) => metadata,
+		Err(error)
+			if matches!(
+				error.kind(),
+				std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+			) =>
+		{
+			return Ok(false);
+		}
+		Err(error) => return Err(Problem::io("Inspect linked-worktree pointer", error)),
+	};
+	if !metadata.is_file() {
+		return Ok(false);
+	}
+
+	match verify_pointer(destination, administration, participant) {
+		Ok(()) => Ok(true),
+		Err(problem) if problem.code == workyard_core::ProblemCode::RepositoryChanged => Ok(false),
+		Err(problem) => Err(problem),
+	}
 }
 
 fn verify_pointer(

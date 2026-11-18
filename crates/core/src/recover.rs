@@ -90,6 +90,26 @@ pub async fn recover(
 		});
 	}
 
+	// An unsuccessful observation is an invocation result, not new task history.
+	// No publication means no managed effect has been admitted by this attempt.
+	if result.is_err() && !recovery.publication_attempted.load(Ordering::Relaxed) {
+		let problem = result.expect_err("failed recovery");
+		let mut operation = task.operation;
+		operation.outcome = if problem.code == ProblemCode::Cancelled {
+			OperationOutcome::Cancelled
+		} else {
+			OperationOutcome::Failed
+		};
+		return Ok(crate::RecoveryResult {
+			operation,
+			problem: Some(problem),
+			pull_failures: Vec::new(),
+			task: record.recorded.unwrap_or(record.task),
+			record: path,
+			nothing_to_recover: false,
+		});
+	}
+
 	task.operation.outcome = match &result {
 		Ok(()) => OperationOutcome::Succeeded,
 		Err(problem) if problem.code == ProblemCode::Cancelled => OperationOutcome::Cancelled,

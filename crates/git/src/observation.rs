@@ -161,6 +161,7 @@ impl Observation<'_> {
 		let operation_in_progress =
 			crate::operations::operations_present(&current.git_dir, &current.common)?;
 		Ok(GitFacts {
+			common_dir: Some(current.common),
 			problem: None,
 			path: Some(current.path),
 			branch: Some(branch),
@@ -238,6 +239,7 @@ fn missing_participant(participant: &Participant) -> Result<GitFacts, Problem> {
 		None
 	};
 	Ok(GitFacts {
+		common_dir: None,
 		problem,
 		path: None,
 		branch: None,

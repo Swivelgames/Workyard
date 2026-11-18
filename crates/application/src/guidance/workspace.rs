@@ -1,4 +1,4 @@
-//! Getting-started guidance for absent or empty workspaces.
+//! Next steps for workspace discovery and relocation.
 use crate::guidance::commands;
 use std::path::Path;
 
@@ -8,6 +8,18 @@ pub(crate) fn missing_state(root: Option<&Path>, explicit: Option<&Path>) -> Str
 
 pub(crate) fn empty_workspace(state: &Path, root: &Path) -> String {
 	getting_started("No tasks found.", Some(root), Some(state))
+}
+
+pub(crate) fn relocation(state: &Path, placement_complete: bool) -> String {
+	let command = commands::path(state)
+		.map(|path| format!("workyard recover --state-dir={path}"))
+		.unwrap_or_else(|| "workyard recover with the same state directory".into());
+	if placement_complete {
+		return format!("Placement complete. Finish cleanup with {command}");
+	}
+	format!(
+		"Relocation in progress. Continue with {command} or add --undo to return to the original root."
+	)
 }
 
 fn getting_started(message: &str, root: Option<&Path>, state: Option<&Path>) -> String {

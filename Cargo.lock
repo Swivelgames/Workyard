@@ -1321,6 +1321,7 @@ dependencies = [
 name = "workyard-system"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "smol",
  "tempfile",
  "windows-sys 0.61.2",

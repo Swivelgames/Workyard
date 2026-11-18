@@ -22,7 +22,11 @@ pub(crate) fn argument(value: &str) -> Option<String> {
 
 pub(crate) fn path(path: &Path) -> Option<String> {
 	let cwd = std::env::current_dir().ok();
-	let relative = cwd.as_ref().and_then(|cwd| path.strip_prefix(cwd).ok());
+	let canonical = cwd.as_ref().and_then(|cwd| cwd.canonicalize().ok());
+	let relative = [cwd.as_deref(), canonical.as_deref()]
+		.into_iter()
+		.flatten()
+		.find_map(|base| path.strip_prefix(base).ok());
 	let path = relative.unwrap_or(path);
 	if path.as_os_str().is_empty() {
 		return Some(".".into());
@@ -44,6 +48,17 @@ pub(crate) fn status(task: &str, state: Option<&Path>) -> Option<String> {
 		workspace_status(state)?,
 		argument(task)?
 	))
+}
+
+pub(crate) fn recover(task: &str, state: Option<&Path>) -> Option<String> {
+	let mut command = String::from("workyard recover");
+	if let Some(state) = state {
+		command.push_str(&format!(" --state-dir={}", path(state)?));
+	}
+	if task.starts_with('-') {
+		command.push_str(" --");
+	}
+	Some(format!("{command} {}", argument(task)?))
 }
 
 #[cfg(test)]

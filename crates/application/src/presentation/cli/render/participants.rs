@@ -1,12 +1,13 @@
 //! Recorded membership and current Git facts use distinct participant rows.
 use crate::observation::{ParticipantState, TaskReport};
-use crate::presentation::cli::render::{ParticipantRow, Terminal, Tone};
+use crate::presentation::cli::render::{LocatedParticipantRow, ParticipantRow, Terminal, Tone};
 use std::path::Path;
 
 pub(super) fn inspected(
 	terminal: &mut Terminal,
 	task: &TaskReport,
 	root: Option<&Path>,
+	recovery_state: Option<&Path>,
 	detail: bool,
 ) {
 	let rows = task
@@ -20,25 +21,32 @@ pub(super) fn inspected(
 				participant.state.label().into()
 			};
 
-			ParticipantRow {
-				name: participant.name.clone(),
-				state,
-				tone,
+			LocatedParticipantRow {
+				participant: ParticipantRow {
+					name: participant.name.clone(),
+					state,
+					tone,
+				},
+				location: participant.current_path.as_ref().map_or_else(
+					|| "unavailable".into(),
+					|path| display_path(terminal, root, path.as_path()),
+				),
+				backing: participant.backing_repo.as_ref().map_or_else(
+					|| "unavailable".into(),
+					|path| display_path(terminal, root, path.as_path()),
+				),
 			}
 		})
 		.collect::<Vec<_>>();
-	terminal.participants(&rows);
+	terminal.located_participants(&rows);
 
+	let recover = task
+		.name
+		.as_deref()
+		.filter(|_| !task.busy && task.pending_participant.is_none())
+		.and_then(|name| crate::guidance::commands::recover(name, recovery_state));
+	let mut suggest_recovery = false;
 	for participant in &task.current {
-		if let Some(path) = &participant.current_path {
-			location(
-				terminal,
-				root,
-				task.name.as_deref(),
-				&participant.name,
-				path.as_path(),
-			);
-		}
 		if detail
 			&& let Some(branch) = &participant.branch
 			&& task.name.as_deref() != Some(branch.as_str())
@@ -46,8 +54,18 @@ pub(super) fn inspected(
 			terminal.note(&format!("{} branch: {branch}", participant.name));
 		}
 		if let Some(problem) = &participant.problem {
+			if participant.state == ParticipantState::Missing
+				&& problem.code == "repository_changed"
+				&& recover.is_some()
+			{
+				suggest_recovery = true;
+				continue;
+			}
 			terminal.participant_problem(&participant.name, problem);
 		}
+	}
+	if suggest_recovery && let Some(command) = recover {
+		terminal.hint(&format!("Try: {command}"));
 	}
 }
 
@@ -66,43 +84,31 @@ pub(super) fn recorded(terminal: &mut Terminal, task: &TaskReport, root: Option<
 				"incomplete"
 			};
 
-			ParticipantRow {
-				name: participant.name.clone(),
-				state: state.into(),
-				tone: Tone::Neutral,
+			LocatedParticipantRow {
+				participant: ParticipantRow {
+					name: participant.name.clone(),
+					state: state.into(),
+					tone: Tone::Neutral,
+				},
+				location: display_path(terminal, root, participant.path.as_path()),
+				backing: saved
+					.backing_repositories
+					.get(&participant.name)
+					.map_or_else(
+						|| "unavailable".into(),
+						|path| display_path(terminal, root, path.as_path()),
+					),
 			}
 		})
 		.collect::<Vec<_>>();
-	terminal.participants(&rows);
-
-	for participant in &saved.participants {
-		location(
-			terminal,
-			root,
-			task.name.as_deref(),
-			&participant.name,
-			participant.path.as_path(),
-		);
-	}
+	terminal.located_participants(&rows);
 }
 
-fn location(
-	terminal: &mut Terminal,
-	root: Option<&Path>,
-	task: Option<&str>,
-	participant: &str,
-	path: &Path,
-) {
-	let Some(root) = root else {
-		return;
-	};
-	if task.is_some_and(|task| root.join(task).join(participant) == path) {
-		return;
-	}
-	terminal.note(&format!(
-		"{participant} location (relative to root): {}",
-		terminal.paths.within(root, path)
-	));
+fn display_path(terminal: &Terminal, root: Option<&Path>, path: &Path) -> String {
+	root.map_or_else(
+		|| terminal.paths.root(path),
+		|root| terminal.paths.within(root, path),
+	)
 }
 
 fn participant_tone(state: ParticipantState, unfinished: Option<bool>) -> Tone {

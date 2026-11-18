@@ -28,6 +28,7 @@ impl ParticipantState {
 #[derive(Serialize)]
 pub struct ParticipantReport {
 	pub name: String,
+	pub backing_repo: Option<NativePath>,
 	pub state: ParticipantState,
 	pub recorded_path: NativePath,
 	pub current_path: Option<NativePath>,
@@ -42,6 +43,7 @@ impl From<ParticipantInspection> for ParticipantReport {
 	fn from(inspection: ParticipantInspection) -> Self {
 		let mut participant = Self {
 			name: inspection.participant.name,
+			backing_repo: None,
 			state: ParticipantState::Unavailable,
 			recorded_path: NativePath::new(inspection.participant.destination)
 				.expect("participant path"),
@@ -54,6 +56,9 @@ impl From<ParticipantInspection> for ParticipantReport {
 		};
 		match inspection.current {
 			Ok(facts) => {
+				participant.backing_repo = facts
+					.common_dir
+					.map(|path| NativePath::new(path).expect("Git common path"));
 				participant.state = if facts.path.is_none() {
 					ParticipantState::Missing
 				} else if facts.conflicted {

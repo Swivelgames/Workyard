@@ -1,5 +1,4 @@
 use super::{Provenance, TaskReport};
-use workyard_core::OperationOutcome;
 
 use crate::contracts::Condition;
 
@@ -27,9 +26,6 @@ impl TaskReport {
 			task.participants
 				.iter()
 				.any(|participant| participant.phase != "completed")
-				|| (task.operation.outcome != OperationOutcome::Succeeded
-					&& task.operation.kind != Some("amend")
-					&& task.operation.continues != Some("amend"))
 		});
 		!self.problems.is_empty()
 			|| self.recorded.is_none()

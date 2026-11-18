@@ -11,6 +11,7 @@ mod problem;
 mod problem_code;
 mod publication;
 mod recover;
+mod relocate;
 mod remove;
 mod settle_add;
 
@@ -24,5 +25,5 @@ pub use ports::*;
 pub use problem::Problem;
 pub use problem_code::ProblemCode;
 pub use recover::recover;
-
+pub use relocate::{RelocationGit, RelocationParticipant, RelocationState, relocate};
 pub use remove::{recover_removal, remove};
