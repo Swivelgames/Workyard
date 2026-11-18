@@ -1,6 +1,6 @@
 //! Read-only relocation inspection never opens mutation admission or redirects it.
 use super::{conflict, record::Journal};
-use crate::{documents::read_versioned, records::WorkspaceRecord};
+use crate::records::WorkspaceRecord;
 use std::path::{Path, PathBuf};
 use workyard_core::Problem;
 
@@ -25,7 +25,7 @@ pub fn relocation_status(state: &Path) -> Result<Option<RelocationStatus>, Probl
 		.map_err(|error| Problem::io("Inspect relocation record", error))?
 	{
 		gates.push(crate::Lock::read_existing(&state.join("workspace.lock"))?);
-		(read_versioned(&path)?, false)
+		(Journal::read(&path)?, false)
 	} else {
 		let binding = WorkspaceRecord::read(&state.join("workspace.json"))?;
 		if binding.authority.as_deref() != Some("inactive") {
@@ -38,7 +38,7 @@ pub fn relocation_status(state: &Path) -> Result<Option<RelocationStatus>, Probl
 		gates.push(crate::Lock::read_existing(
 			&destination.join("workspace.lock"),
 		)?);
-		let journal: Journal = read_versioned(&destination.join("relocation.json"))?;
+		let journal = Journal::read(&destination.join("relocation.json"))?;
 		if binding.relocation.as_deref() != Some(&journal.id) {
 			return Err(conflict(
 				"Inactive source and destination identities disagree.",
@@ -46,7 +46,7 @@ pub fn relocation_status(state: &Path) -> Result<Option<RelocationStatus>, Probl
 		}
 		(journal, true)
 	};
-	journal.validate()?;
+
 	let old_state = journal.old_state.decode()?;
 	let new_state = journal.new_state.decode()?;
 	if state != old_state && state != new_state {
@@ -61,8 +61,8 @@ pub fn relocation_status(state: &Path) -> Result<Option<RelocationStatus>, Probl
 		gates.push(crate::Lock::read_existing(
 			&old_state.join("workspace.lock"),
 		)?);
-		let current: Journal = read_versioned(&old_state.join("relocation.json"))?;
-		current.validate()?;
+		let current = Journal::read(&old_state.join("relocation.json"))?;
+
 		pair(&journal, &current)?;
 		journal = current;
 	}
@@ -87,7 +87,7 @@ pub fn relocation_status(state: &Path) -> Result<Option<RelocationStatus>, Probl
 		gates.push(crate::Lock::read_existing(
 			&activation_state.join("workspace.lock"),
 		)?);
-		let paired: Journal = read_versioned(&activation_state.join("relocation.json"))?;
+		let paired = Journal::read(&activation_state.join("relocation.json"))?;
 		pair(&journal, &paired)?;
 		binding_at(activation_state)?
 	} else {

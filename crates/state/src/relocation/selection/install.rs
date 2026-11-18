@@ -59,8 +59,11 @@ impl Relocation {
 			verify_contents(source, &selection.selected_digest, control)?;
 			if selection.occupied && !exists(&displaced)? {
 				selection.verify_old_destination(dest, control)?;
-				selection.retired_entries = cleanup::retired_inventory(dest, control)?;
-				self.save_selection(index, &selection)?;
+				if selection.backup_number.is_none() {
+					// Resume a choice recorded by the earlier overwrite workflow.
+					selection.retired_entries = cleanup::retired_inventory(dest, control)?;
+					self.save_selection(index, &selection)?;
+				}
 				move_directory(dest, &displaced)?;
 				control.check()?;
 			}
@@ -69,18 +72,21 @@ impl Relocation {
 		}
 		verify_contents(dest, &selection.selected_digest, control)?;
 		cleanup::verify_pointer(dest, &reg.administration)?;
-		self.finish_retired(index, &mut selection, &displaced, control)?;
+		self.finish_displaced(index, &mut selection, &displaced, control)?;
 		selection.installed = true;
 		self.save_selection(index, &selection)
 	}
 
-	pub(super) fn finish_retired(
+	pub(super) fn finish_displaced(
 		&mut self,
 		index: usize,
 		selection: &mut Selection,
 		displaced: &Path,
 		control: &Control,
 	) -> Result<(), Problem> {
+		if let Some(number) = selection.backup_number {
+			return self.retain_backup(index, selection, number, displaced);
+		}
 		if exists(displaced)? {
 			if Some(entry_identity(displaced)?) != selection.displaced_id {
 				return Err(conflict("Displaced directory changed before cleanup."));

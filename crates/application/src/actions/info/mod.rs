@@ -17,7 +17,11 @@ use trine::{
 type InfoEntry = Entry<InfoInput, InfoOutcome, InfoOutcome, Progress>;
 
 pub(crate) fn build_entry() -> Result<InfoEntry, RegistrationError> {
-	let handler = Action::new("info", "Inspect Workyard workspace context", action::info)?;
+	let handler = Action::new(
+		"info",
+		"Show workspace paths and configuration",
+		action::info,
+	)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();
 

@@ -15,6 +15,8 @@ pub struct RecoveryCandidates {
 	pub participant: String,
 	pub destination: NativePath,
 	pub destination_occupied: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub backup: Option<NativePath>,
 	pub local_candidate: NativePath,
 	pub registered_candidate: NativePath,
 }
@@ -24,7 +26,7 @@ pub struct RelocateOutcome {
 	pub operation: OperationReport,
 	pub copy: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub recovery_choice: Option<RecoveryCandidates>,
+	pub recovery_choice: Option<Box<RecoveryCandidates>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub snapshot: Option<crate::contracts::relocation::WorkspaceSnapshot>,
 	pub scope: &'static str,
@@ -39,6 +41,8 @@ pub struct RelocateOutcome {
 	pub cleanup_complete: bool,
 	pub nothing_to_recover: bool,
 	pub warnings: Vec<ExternalParticipant>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub backups: Vec<NativePath>,
 	pub mutation_started: bool,
 	pub problem: Option<ProblemOutcome>,
 }
@@ -66,6 +70,7 @@ impl RelocateOutcome {
 			cleanup_complete: false,
 			nothing_to_recover: false,
 			warnings: Vec::new(),
+			backups: Vec::new(),
 			mutation_started: false,
 			problem: None,
 		}

@@ -19,6 +19,15 @@ impl Problem {
 		self
 	}
 
+	/// A later invocation cannot infer process exit from an available Workyard lock.
+	pub(crate) fn unconfirmed_git_exit(context: impl std::fmt::Display) -> Self {
+		let message = format!("Workyard cannot confirm Git finished {context}.");
+		let remedy = "You can inspect files. Leave the worktree in place while checking Git and its hooks. \
+			If the original Workyard process has exited, retrying cannot clear this interruption.";
+
+		Self::new(crate::ProblemCode::ResourceBusy, message).remedy(remedy)
+	}
+
 	pub fn io(context: impl std::fmt::Display, error: std::io::Error) -> Self {
 		Self::new(crate::ProblemCode::IoError, format!("{context}: {error}"))
 	}

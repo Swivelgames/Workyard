@@ -21,7 +21,7 @@ type RecoverEntry = Entry<interface::Input, interface::Outcome, interface::Outco
 pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 	let handler = Action::new(
 		"recover",
-		"Recover interrupted task work",
+		"Resume interrupted task or workspace operations",
 		dispatch::recover,
 	)?;
 	let cli = CliBinding::new(cli::bindings());

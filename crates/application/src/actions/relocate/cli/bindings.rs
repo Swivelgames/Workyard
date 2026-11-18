@@ -1,7 +1,16 @@
 use trine::cli::Bindings;
 
+const EXAMPLES: &str = concat!(
+	"Examples\n",
+	"    workyard relocate ../new-workspace\n",
+	"    workyard relocate ../new-workspace --keep-source\n",
+	"    workyard relocate --new-state-dir ../state",
+);
+
 pub(in super::super) fn bindings() -> Bindings {
 	let bindings = Bindings::new()
+		.examples(EXAMPLES)
+		.positional_alternative("new", "DESTINATION")
 		.option("old", "old")
 		.native_path("old")
 		.option("old_tasks_root", "old-tasks-root")

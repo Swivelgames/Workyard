@@ -55,10 +55,8 @@ async fn run(
 	control.check()?;
 	let guard = store.admit(name)?;
 	let record = store.load(&guard, name)?;
-	if record.pending.is_some() {
-		return Err(Problem::new(ProblemCode::ResourceBusy,
-			"Managed Git writers lack durable settlement evidence.")
-			.remedy("Preserve state and inspect the interrupted Workyard and Git processes. A missing worktree or free task lock cannot prove settlement."));
+	if let Some(index) = record.pending {
+		return Err(record.writer_problem(index));
 	}
 
 	let record_available = record.recorded.is_some();

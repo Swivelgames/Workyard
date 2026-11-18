@@ -36,16 +36,12 @@ impl Endpoint {
 
 /// These participants have their own live inventory, chosen after Git found the manual move.
 pub(super) fn recovery_paths(journal: &Journal) -> Result<BTreeSet<PathBuf>, Problem> {
-	let mut paths = BTreeSet::new();
+	let mut paths: BTreeSet<_> = journal.retained_backups()?.into_iter().collect();
 	for (index, member) in journal.participants.iter().enumerate() {
 		let Some(selection) = &member.selection else {
 			continue;
 		};
-		paths.insert(
-			member.task.participants[member.index]
-				.destination
-				.decode()?,
-		);
+		paths.insert(member.original(&journal.tasks).destination.decode()?);
 		paths.insert(member.destination.decode()?);
 		paths.extend(selection.scratch_paths(journal, index)?);
 	}
@@ -91,7 +87,7 @@ pub(super) fn participant_gitfiles(
 ) -> Result<BTreeSet<PathBuf>, Problem> {
 	let mut gitfiles = BTreeSet::new();
 	for member in &journal.participants {
-		let participant = &member.task.participants[member.index];
+		let participant = member.original(&journal.tasks);
 		if participant.worktree_identity.is_some()
 			&& let Ok(relative) = participant.destination.decode()?.strip_prefix(source)
 		{

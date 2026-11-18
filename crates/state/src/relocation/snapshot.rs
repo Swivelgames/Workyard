@@ -1,6 +1,6 @@
 //! A retained workspace records the active endpoint without following it.
 use super::{Relocation, conflict, record::Journal};
-use crate::{Lock, documents::read_versioned, records::WorkspaceRecord};
+use crate::{Lock, records::WorkspaceRecord};
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -144,7 +144,7 @@ impl Relocation {
 		let journal_path = state.join("relocation.json");
 		let has_journal = crate::exists(&journal_path)?;
 		if has_journal {
-			let paired: Journal = read_versioned(&journal_path)?;
+			let paired: Journal = Journal::read(&journal_path)?;
 			self.pair(&paired)?;
 		}
 

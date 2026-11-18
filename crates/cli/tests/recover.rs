@@ -208,7 +208,9 @@ fn acknowledgement_never_bypasses_pending_writer_or_git_operation() {
 	let before = fs::read(&evidence).unwrap();
 	let result = workyard(&root, &["recover", "feat/task", "--accept-pull", "api"]);
 	assert!(!result.status.success());
-	assert!(String::from_utf8_lossy(&result.stdout).contains("no durable proof"));
+	let output = String::from_utf8_lossy(&result.stdout);
+	assert!(output.contains("participant \"api\""), "{output}");
+	assert!(output.contains("retrying cannot clear"), "{output}");
 	assert_eq!(fs::read(&evidence).unwrap(), before);
 }
 

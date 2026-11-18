@@ -1,7 +1,7 @@
 //! State-last publication and ownership-checked cleanup.
 use super::{Relocation, conflict, metadata, record::Journal};
 use crate::{
-	documents::{publish, publish_bytes, read_versioned},
+	documents::{publish, publish_bytes},
 	records::WorkspaceRecord,
 };
 use std::{collections::BTreeSet, fs, path::Path};
@@ -108,7 +108,7 @@ impl Relocation {
 			}
 		}
 		if crate::exists(&directory.join("relocation.json"))? {
-			let paired: Journal = read_versioned(&directory.join("relocation.json"))?;
+			let paired: Journal = Journal::read(&directory.join("relocation.json"))?;
 			self.pair(&paired)?;
 		}
 		let manifest = directory.join("workspace.json");
@@ -163,7 +163,7 @@ impl Relocation {
 		};
 		let active_root = self.active_root()?;
 		let active_binding = WorkspaceRecord::read(&active.join("workspace.json"))?;
-		let active_journal: Journal = read_versioned(&active.join("relocation.json"))?;
+		let active_journal: Journal = Journal::read(&active.join("relocation.json"))?;
 		self.pair(&active_journal)?;
 		if active_binding.relocation.as_deref() != Some(&self.journal.id)
 			|| active_binding.state_dir.decode()? != *active
@@ -255,7 +255,7 @@ impl Relocation {
 		gate.take();
 		let journal_path = directory.join("relocation.json");
 		if crate::exists(&journal_path)? {
-			let paired: Journal = read_versioned(&journal_path)?;
+			let paired: Journal = Journal::read(&journal_path)?;
 			self.pair(&paired)?;
 			fs::remove_file(&journal_path)
 				.map_err(|error| Problem::io("Remove paired source intent", error))?;

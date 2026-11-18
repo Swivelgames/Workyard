@@ -50,12 +50,7 @@ pub async fn recover(
 	if let Some(index) = record.pending
 		&& task.participants[index].phase != Phase::Fetching
 	{
-		let participant = &task.participants[index].name;
-		let message = format!(
-			"Participant {participant:?} has no durable proof its managed Git writers stopped."
-		);
-		return Err(Problem::new(ProblemCode::ResourceBusy, message)
-				.remedy("Do not retry or accept the effect based on a free task lock. Inspect the interrupted Workyard process and Git process tree. This release has no force or writer-quarantine override: preserve state, continue manual Git repair as needed, and restore verified settled evidence from a backup only if available. --accept-pull cannot bypass this check."));
+		return Err(record.writer_problem(index));
 	}
 
 	let path = store.record_path(&guard);

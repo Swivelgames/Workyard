@@ -11,12 +11,17 @@ pub struct CreateInput {
 	pub repositories: Vec<RepositoryInput>,
 	pub tasks_root: Option<NativePath>,
 	pub state_dir: Option<NativePath>,
+	/// Reuse an existing target branch when available.
 	#[serde(default)]
 	pub checkout: bool,
+	/// Skip fetching from remotes.
 	#[serde(default)]
 	pub no_fetch: bool,
+	/// Run git pull in each new worktree.
 	#[serde(default)]
 	pub pull: bool,
+	/// Default remote for the supplied repositories.
 	pub remote: Option<String>,
+	/// Starting reference for new branches.
 	pub from: Option<String>,
 }

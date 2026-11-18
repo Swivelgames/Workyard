@@ -18,7 +18,7 @@ pub use input::ListInput;
 type ListEntry = Entry<ListInput, ListOutcome, ListOutcome, Progress>;
 
 pub(crate) fn build_entry() -> Result<ListEntry, RegistrationError> {
-	let handler = Action::new("list", "Inspect Workyard tasks", action::list)?;
+	let handler = Action::new("list", "List tasks and their repositories", action::list)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();
 

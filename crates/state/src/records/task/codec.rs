@@ -120,22 +120,27 @@ pub(crate) fn decode(record: TaskRecord) -> Result<Task, Problem> {
 		participants: record
 			.participants
 			.into_iter()
-			.map(|p| {
-				Ok(Participant {
-					creation: p.creation.map(Into::into),
-					name: p.name,
-					source: p.source.decode()?,
-					common_dir: p.common_dir.decode()?,
-					backing_identity: p.backing_identity,
-					worktree_identity: p.worktree_identity,
-					destination: p.destination.decode()?,
-					remote: p.remote,
-					from: p.from,
-					phase: parse_phase(&p.phase)?,
-				})
-			})
+			.map(Participant::try_from)
 			.collect::<Result<_, Problem>>()?,
 	})
+}
+
+impl TryFrom<super::ParticipantRecord> for Participant {
+	type Error = Problem;
+	fn try_from(record: super::ParticipantRecord) -> Result<Self, Problem> {
+		Ok(Self {
+			creation: record.creation.map(Into::into),
+			name: record.name,
+			source: record.source.decode()?,
+			common_dir: record.common_dir.decode()?,
+			backing_identity: record.backing_identity,
+			worktree_identity: record.worktree_identity,
+			destination: record.destination.decode()?,
+			remote: record.remote,
+			from: record.from,
+			phase: parse_phase(&record.phase)?,
+		})
+	}
 }
 
 fn parse_phase(value: &str) -> Result<Phase, Problem> {

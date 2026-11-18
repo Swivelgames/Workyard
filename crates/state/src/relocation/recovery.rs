@@ -1,9 +1,6 @@
 //! Resume paired authority under both gates; never reconstruct activated state.
 use super::{Relocation, conflict, record::Journal};
-use crate::{
-	Lock, LockMode, canonical_future, documents::publish, documents::read_versioned,
-	records::WorkspaceRecord,
-};
+use crate::{Lock, LockMode, canonical_future, documents::publish, records::WorkspaceRecord};
 use std::{fs, path::Path};
 use workyard_core::{Problem, RelocationState};
 
@@ -21,20 +18,20 @@ impl Relocation {
 			.try_exists()
 			.map_err(|error| Problem::io("Inspect recovery intent", error))?
 		{
-			read_versioned(&selected_journal)?
+			Journal::read(&selected_journal)?
 		} else {
 			let binding = WorkspaceRecord::read(&selected.join("workspace.json"))?;
 			let destination = binding
 				.relocation_destination
 				.ok_or_else(|| conflict("No pending workspace relocation exists."))?
 				.decode()?;
-			let journal: Journal = read_versioned(&destination.join("relocation.json"))?;
+			let journal = Journal::read(&destination.join("relocation.json"))?;
 			if binding.relocation.as_deref() != Some(&journal.id) {
 				return Err(conflict("Inactive source routing identity disagrees."));
 			}
 			journal
 		};
-		journal.validate()?;
+
 		let old_state = journal.old_state.decode()?;
 		let new_state = journal.new_state.decode()?;
 		if selected != old_state && selected != new_state {
@@ -66,8 +63,8 @@ impl Relocation {
 			.try_exists()
 			.map_err(|error| Problem::io("Inspect authoritative intent", error))?
 		{
-			let current: Journal = read_versioned(&old_state.join("relocation.json"))?;
-			current.validate()?;
+			let current = Journal::read(&old_state.join("relocation.json"))?;
+
 			relocation.pair(&current)?;
 			relocation.journal = current;
 		}
@@ -155,8 +152,8 @@ impl Relocation {
 			.try_exists()
 			.map_err(|error| Problem::io("Inspect destination intent", error))?
 		{
-			let paired: Journal = read_versioned(&new_state.join("relocation.json"))?;
-			paired.validate()?;
+			let paired = Journal::read(&new_state.join("relocation.json"))?;
+
 			relocation.pair(&paired)?;
 		}
 		if crate::exists(&new_state.join("workspace.json"))? {

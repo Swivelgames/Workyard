@@ -12,11 +12,7 @@ mod transfer;
 pub(crate) use snapshot::require_live as snapshot_guard;
 pub use snapshot::{SnapshotStatus, snapshot_status};
 mod validation;
-use crate::{
-	Lock,
-	documents::{publish, read_versioned},
-	records::WorkspaceRecord,
-};
+use crate::{Lock, documents::publish, records::WorkspaceRecord};
 pub use observation::{RelocationStatus, relocation_status};
 use record::Journal;
 use std::path::{Path, PathBuf};
@@ -130,8 +126,8 @@ pub(crate) fn validate_mutation_binding(
 	{
 		return Ok(());
 	}
-	let journal: Journal = read_versioned(&path)?;
-	journal.validate()?;
+	let journal = Journal::read(&path)?;
+
 	let active = record.relocation.as_deref() == Some(&journal.id)
 		&& record.authority.as_deref() == Some("active")
 		&& ((state == journal.new_state.decode()?

@@ -315,7 +315,7 @@ fn different_link_groups_prompt_and_survive_installation() {
 
 #[cfg(unix)]
 #[test]
-fn overwrite_retires_a_verified_read_only_directory() {
+fn recovery_retains_read_only_destination_files_in_the_disclosed_backup() {
 	use std::os::unix::fs::PermissionsExt;
 
 	let copy = InterruptedCopy::after_first_repair();
@@ -326,7 +326,18 @@ fn overwrite_retires_a_verified_read_only_directory() {
 	fs::set_permissions(&read_only, fs::Permissions::from_mode(0o555)).unwrap();
 	fs::write(scratch.join("selected"), "registered").unwrap();
 
-	copy.run_recovery(true, |_| Ok(true)).unwrap();
+	let mut backup = None;
+	copy.run_recovery(true, |choice| {
+		backup = choice.backup.clone();
+		Ok(true)
+	})
+	.unwrap();
+	let retained = backup.unwrap().join("read-only");
+	assert_eq!(fs::read(retained.join("file")).unwrap(), b"local only");
+	assert_eq!(
+		fs::metadata(retained).unwrap().permissions().mode() & 0o777,
+		0o555
+	);
 	copy.assert_registered(&copy.source);
 	assert!(!read_only.exists());
 }
@@ -515,4 +526,48 @@ fn foreign_replacement_after_git_rebound_cannot_be_activated() {
 		"other work"
 	);
 	assert_eq!(fs::read_to_string(saved.join("notes")).unwrap(), "manual");
+}
+
+#[test]
+fn retry_after_install_preserves_backup_edits_and_reports_its_location() {
+	let copy = InterruptedCopy::after_first_repair();
+	let scratch = copy.displace();
+	fs::write(scratch.join("chosen"), "new").unwrap();
+	let (mut state, entry, registered) = save_scratch_selection(&copy, true);
+	state
+		.install_recovery(&entry, true, &registered, &Control::default())
+		.unwrap();
+	let backups = state.retained_backups().unwrap();
+	let [backup] = backups.as_slice() else {
+		panic!("expected one backup")
+	};
+	drop(state);
+
+	// Model a stop after the backup rename but before either journal update.
+	let journal_path = copy.source.join(".workyard/relocation.json");
+	let mut journal: serde_json::Value =
+		serde_json::from_slice(&fs::read(&journal_path).unwrap()).unwrap();
+	let member = journal["participants"]
+		.as_array_mut()
+		.unwrap()
+		.iter_mut()
+		.find(|member| member.get("backup_endpoints").is_some())
+		.unwrap();
+	member.as_object_mut().unwrap().remove("backup_endpoints");
+	member["selection"]["installed"] = false.into();
+	member.as_object_mut().unwrap().remove("recovered_source");
+	fs::write(journal_path, serde_json::to_vec_pretty(&journal).unwrap()).unwrap();
+
+	fs::write(backup.join("notes"), "edited after installation").unwrap();
+	let result = copy.recover(true);
+	assert_ok(&result);
+	assert!(
+		String::from_utf8_lossy(&result.stdout)
+			.contains(backup.file_name().unwrap().to_str().unwrap())
+	);
+	assert_eq!(
+		fs::read(backup.join("notes")).unwrap(),
+		b"edited after installation"
+	);
+	copy.assert_registered(&copy.source);
 }

@@ -24,6 +24,7 @@ pub struct RecoveryChoice {
 	pub first: PathBuf,
 	pub registered: PathBuf,
 	pub occupied: bool,
+	pub backup: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,8 +183,15 @@ pub trait RelocationState {
 	fn pending_writer_description(&self) -> Option<String> {
 		None
 	}
-	fn copy_writer(&mut self, _entry: &RelocationParticipant, _undo: bool) -> Result<(), Problem> {
+	fn participant_writer(
+		&mut self,
+		_entry: &RelocationParticipant,
+		_undo: bool,
+	) -> Result<(), Problem> {
 		self.writer(true)
+	}
+	fn copy_writer(&mut self, entry: &RelocationParticipant, undo: bool) -> Result<(), Problem> {
+		self.participant_writer(entry, undo)
 	}
 	fn writer(&mut self, pending: bool) -> Result<(), Problem>;
 	fn activate(&mut self, undo: bool) -> Result<(), Problem>;

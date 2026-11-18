@@ -7,7 +7,7 @@ use workyard_system::entry_identity;
 fn journal(source: &Path, target: &Path) -> Journal {
 	let state = source.join(".workyard");
 	Journal {
-		version: 1,
+		version: 2,
 		id: "snapshot-test".into(),
 		copy: true,
 		copy_verified: false,
@@ -15,6 +15,7 @@ fn journal(source: &Path, target: &Path) -> Journal {
 		new_root: target.into(),
 		old_state: state.as_path().into(),
 		new_state: target.join(".workyard").as_path().into(),
+		tasks: Default::default(),
 		participants: Vec::new(),
 		files: Vec::new(),
 		state_directories: Vec::new(),

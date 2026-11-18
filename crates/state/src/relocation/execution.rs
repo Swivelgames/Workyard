@@ -68,7 +68,7 @@ impl RelocationState for Relocation {
 	fn copy_participant_expected(&self, entry: &RelocationParticipant) -> bool {
 		!self.journal.participants.iter().any(|record| {
 			record.absent_at_admission
-				&& record.task.task == entry.task
+				&& record.task == entry.task
 				&& record.destination == entry.destination.as_path().into()
 		})
 	}
@@ -78,11 +78,12 @@ impl RelocationState for Relocation {
 			.participants
 			.iter()
 			.map(|entry| RelocationParticipant {
-				task: entry.task.task.clone(),
-				original: crate::records::task::decode(entry.task.clone())
-					.expect("validated task")
-					.participants[entry.index]
-					.clone(),
+				task: entry.task.clone(),
+				original: entry
+					.original(&self.journal.tasks)
+					.clone()
+					.try_into()
+					.expect("validated participant"),
 				destination: entry.destination.decode().expect("validated native path"),
 			})
 			.collect()
@@ -147,7 +148,6 @@ impl RelocationState for Relocation {
 
 		let copy = self.is_copy();
 		for (record, observed) in self.journal.participants.iter_mut().zip(participants) {
-			let mut task = crate::records::task::decode(record.task.clone())?;
 			if copy {
 				record.absent_at_admission = !observed
 					.original
@@ -155,8 +155,12 @@ impl RelocationState for Relocation {
 					.try_exists()
 					.map_err(|error| Problem::io("Inspect original participant location", error))?;
 			}
-			task.participants[record.index] = observed.original;
-			record.task = crate::TaskRecord::from(&task);
+			let task = self
+				.journal
+				.tasks
+				.get_mut(&record.task)
+				.expect("validated task");
+			task.participants[record.index] = (&observed.original).into();
 			record.destination = observed.destination.as_path().into();
 		}
 		metadata::transform(&mut self.journal)?;
@@ -221,7 +225,11 @@ impl RelocationState for Relocation {
 		}
 		content::transfer(&mut self.journal, undo, control, publish_progress)
 	}
-	fn copy_writer(&mut self, entry: &RelocationParticipant, undo: bool) -> Result<(), Problem> {
+	fn participant_writer(
+		&mut self,
+		entry: &RelocationParticipant,
+		undo: bool,
+	) -> Result<(), Problem> {
 		let location = if undo {
 			&entry.original.destination
 		} else {

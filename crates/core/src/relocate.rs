@@ -23,12 +23,11 @@ pub async fn relocate(
 		return state.cleanup();
 	}
 	if state.pending_writer() {
-		let writer = state
-			.pending_writer_description()
-			.unwrap_or_else(|| "its managed Git writer".into());
-		return Err(Problem::new(ProblemCode::ResourceBusy,
-			format!("Relocation has no durable proof that {writer} stopped."))
-			.remedy("Inspect the interrupted Workyard and Git processes. A free workspace gate does not establish writer settlement; preserve the relocation evidence."));
+		let context = state.pending_writer_description().map_or_else(
+			|| "workspace relocation".to_owned(),
+			|location| format!("worktree repair for {location}"),
+		);
+		return Err(Problem::unconfirmed_git_exit(context));
 	}
 
 	observer.phase("", "", "preparing").await?;
@@ -99,12 +98,10 @@ async fn repair_moved_worktrees(
 	for entry in participants {
 		control.check()?;
 		state.verify()?;
-		let mut participant = entry.original;
-		participant.destination = if undo {
-			participant.destination
-		} else {
-			entry.destination
-		};
+		let mut participant = entry.original.clone();
+		if !undo {
+			participant.destination.clone_from(&entry.destination);
+		}
 		// Missing/unstarted or already removed participants retain their evidence.
 		if participant.worktree_identity.is_none()
 			|| !participant
@@ -124,7 +121,7 @@ async fn repair_moved_worktrees(
 		if !current.needs_repair && current.participant.destination == participant.destination {
 			continue;
 		}
-		state.writer(true)?;
+		state.participant_writer(&entry, undo)?;
 		let result = git
 			.repair_relocation(&repository, &participant, control)
 			.await;

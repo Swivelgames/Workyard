@@ -1,7 +1,16 @@
 use trine::cli::Bindings;
 
+const EXAMPLES: &str = concat!(
+	"Examples\n",
+	"    workyard create --repo ../api --repo ../web feat/payments\n",
+	"    workyard checkout --repo ../api feat/payments\n",
+	"\n",
+	"    --remote and --from apply to all repositories.\n",
+	"    --repo-name, --repo-remote and --repo-from apply to the preceding --repo.",
+);
+
 pub(in super::super) fn bindings() -> Bindings {
-	let bindings = Bindings::new();
+	let bindings = Bindings::new().examples(EXAMPLES);
 
 	// Target branch name
 	let bindings = bindings.positional("task").complete_group(

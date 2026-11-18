@@ -20,7 +20,11 @@ use contract::PresentedStatus;
 type StatusEntry = Entry<StatusInput, PresentedStatus, PresentedStatus, Progress>;
 
 pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
-	let handler = Action::new("status", "Inspect Workyard tasks", action::present)?;
+	let handler = Action::new(
+		"status",
+		"Check participant worktrees for changes or problems",
+		action::present,
+	)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();
 

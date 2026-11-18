@@ -128,7 +128,7 @@ impl Relocation {
 		}
 		let tasks = metadata::tasks(&old_state, &old_root)?;
 		let mut participants = Vec::new();
-		for task in tasks {
+		for task in &tasks {
 			for (index, participant) in task.participants.iter().enumerate() {
 				for backing in [&participant.source, &participant.common_dir] {
 					if new_root != old_root && backing.decode()?.starts_with(&old_root) {
@@ -142,12 +142,13 @@ impl Relocation {
 					.strip_prefix(&old_root)
 					.map_or_else(|_| source.clone(), |relative| new_root.join(relative));
 				participants.push(Participant {
-					task: task.clone(),
+					task: task.task.clone(),
 					index,
 					absent_at_admission: false,
 					selection: None,
 					recovered_source: None,
 					recovered_destination: None,
+					backup_endpoints: Vec::new(),
 					destination: destination.as_path().into(),
 				});
 			}
@@ -161,7 +162,7 @@ impl Relocation {
 				.as_nanos()
 		);
 		let journal = Journal {
-			version: 1,
+			version: 2,
 			id,
 			copy,
 			copy_verified: false,
@@ -169,6 +170,10 @@ impl Relocation {
 			new_root: new_root.as_path().into(),
 			old_state: old_state.as_path().into(),
 			new_state: new_state.as_path().into(),
+			tasks: tasks
+				.into_iter()
+				.map(|task| (task.task.clone(), task))
+				.collect(),
 			participants,
 			files: metadata::snapshot(&old_state)?,
 			state_directories: metadata::directories(&old_state)?,
@@ -190,8 +195,8 @@ impl Relocation {
 			destination_gate: None,
 			started: false,
 		};
-		metadata::transform(&mut relocation.journal)?;
 		relocation.journal.validate()?;
+		metadata::transform(&mut relocation.journal)?;
 		Ok(relocation)
 	}
 }

@@ -313,7 +313,7 @@ fn failed_success_receipt_keeps_pending_writer_guard_instead_of_adopting_tree() 
 		&["recover", "feat/task", "--undo", "--yes"],
 	);
 	assert!(!result.status.success());
-	assert!(String::from_utf8_lossy(&result.stdout).contains("durable settlement"));
+	assert!(String::from_utf8_lossy(&result.stdout).contains("participant \"api\""));
 	assert_eq!(durable_task_bytes(&workspace.root), before);
 	assert!(workspace.tree("api").exists());
 	assert_eq!(runner.adds.load(Ordering::SeqCst), 1);

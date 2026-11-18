@@ -77,6 +77,10 @@ impl RelocateView {
 				&format!("{}: {retained}", snapshot.label()),
 			);
 		}
+		for backup in &outcome.backups {
+			let path = terminal.paths.root(backup.as_path());
+			terminal.hint_at(MessageScope::Workspace, &format!("Retained backup: {path}"));
+		}
 		for warning in &outcome.warnings {
 			terminal.hint_at(
 				MessageScope::Workspace,

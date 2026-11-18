@@ -54,6 +54,12 @@ impl Relocation {
 				return Ok(None);
 			}
 		}
+		let backup = if occupied {
+			let number = self.journal.participants[index].backup_endpoints.len();
+			Some(self.journal.backup_path(index, undo, number)?)
+		} else {
+			None
+		};
 		Ok(Some(RecoveryCandidates {
 			choice: RecoveryChoice {
 				participant: entry.original.name.clone(),
@@ -61,6 +67,7 @@ impl Relocation {
 				first: first.into(),
 				registered: reg.path.clone(),
 				occupied,
+				backup,
 			},
 			first_digest,
 			registered_digest,
@@ -86,7 +93,20 @@ impl Relocation {
 				.ok_or_else(|| conflict("Selected source disappeared."))?
 		};
 		let occupied = choice.occupied;
+		let backup_number = if occupied && use_registered {
+			let number = self.journal.participants[index].backup_endpoints.len();
+			let backup = self.journal.backup_path(index, undo, number)?;
+			if exists(&backup)? {
+				return Err(conflict(&format!(
+					"Backup path already occupied: {backup:?}."
+				)));
+			}
+			Some(number)
+		} else {
+			None
+		};
 		let selection = Selection {
+			backup_number,
 			registered: reg.path.as_path().into(),
 			administration: reg.administration.as_path().into(),
 			registered_id: entry_identity(&reg.path)?,

@@ -28,6 +28,7 @@ impl RelocationEvents {
 			participant: choice.participant.clone(),
 			destination: native(&choice.destination),
 			destination_occupied: choice.occupied,
+			backup: choice.backup.as_deref().map(native),
 			local_candidate: native(&choice.first),
 			registered_candidate: native(&choice.registered),
 		});
@@ -67,10 +68,13 @@ impl Observer for RelocationEvents {
 fn selection(choice: &RecoveryChoice) -> Selection {
 	let first = display(&choice.first);
 	let registered = display(&choice.registered);
-	let mut options = if choice.occupied {
+	let mut options = if let Some(backup) = &choice.backup {
 		vec![
 			format!("Keep files at {first}"),
-			format!("Overwrite with files at {registered}"),
+			format!(
+				"Use files at {registered} and keep a separate backup at {}",
+				display(backup)
+			),
 		]
 	} else {
 		vec![
@@ -108,6 +112,7 @@ mod tests {
 			},
 			registered: Path::new("scratch").join("api"),
 			destination,
+			backup: occupied.then(|| Path::new("new").join("backup")),
 			occupied,
 		}
 	}
@@ -126,7 +131,10 @@ mod tests {
 			let expected = if occupied {
 				[
 					format!("Keep files at {first}"),
-					format!("Overwrite with files at {registered}"),
+					format!(
+						"Use files at {registered} and keep a separate backup at {}",
+						display(choice.backup.as_ref().unwrap())
+					),
 				]
 			} else {
 				[

@@ -42,7 +42,8 @@ def answer_prompt(command, cwd, prompt_options, keys, before_answer=None):
 			try:
 				for index, key in enumerate(keys):
 					deadline = time.monotonic() + 12
-					while not all(option in buffer for option in prompt_options):
+					# Inquire may wrap a long path inside an option.
+					while not all(option in buffer.replace(b"\r\n", b"") for option in prompt_options):
 						assert process.poll() is None and time.monotonic() < deadline, buffer
 						if select.select([master], [], [], 0.1)[0]:
 							part = os.read(master, 65536)
@@ -69,7 +70,10 @@ def assert_pending_decision(binary, base, state, expected):
 	assert cli.returncode != 0, cli
 	outcome = json.loads(cli.stdout)["result"]
 	assert outcome["problem"]["code"] == "decision_required", outcome
-	assert outcome["recovery_choice"] == expected, outcome
+	decision = outcome["recovery_choice"].copy()
+	backup = decision.pop("backup", None)
+	assert decision == expected, outcome
+	assert bool(backup) == expected["destination_occupied"], decision
 
 	request = {
 		"jsonrpc": "2.0", "id": 1, "method": "invoke",
@@ -78,6 +82,7 @@ def assert_pending_decision(binary, base, state, expected):
 	rpc = subprocess.run([binary, "rpc"], cwd=base, input=json.dumps(request) + "\n",
 		text=True, capture_output=True, timeout=15, check=True)
 	assert json.loads(rpc.stdout)["error"]["data"] == outcome, rpc.stdout
+	return Path(backup) if backup else None
 
 
 def scenario(binary, occupied, choice, edit_during_prompt=False, cancel_key=None):
@@ -107,10 +112,10 @@ def scenario(binary, occupied, choice, edit_during_prompt=False, cancel_key=None
 			"local_candidate": str(endpoint if occupied else local),
 			"registered_candidate": str(scratch),
 		}
-		assert_pending_decision(binary, base, root / ".workyard", expected)
+		backup = assert_pending_decision(binary, base, root / ".workyard", expected)
 
 		first = f"Keep files at {endpoint}" if occupied else f"Use files at {local}"
-		second = f"Overwrite with files at {scratch}" if occupied else f"Use files at {scratch}"
+		second = f"Use files at {scratch} and keep a separate backup at {backup}" if occupied else f"Use files at {scratch}"
 		labels = [f"Recover api to {endpoint}".encode(), first.encode(), second.encode(), b"Cancel"]
 		keys = [cancel_key or b"\x1b[B" * choice + b"\r"]
 		before_answer = None
@@ -129,6 +134,11 @@ def scenario(binary, occupied, choice, edit_during_prompt=False, cancel_key=None
 			return
 		assert code == 0, result
 		use_scratch = choice == 1 and not edit_during_prompt
+		if backup and use_scratch:
+			assert (backup / "local-only").read_text() == "keep me"
+			assert backup.name.encode() in result, result
+		elif backup:
+			assert not backup.exists()
 		assert (endpoint / "scratch-only").exists() == use_scratch
 		assert (endpoint / "local-only").exists() == (occupied and not use_scratch)
 		assert str(endpoint).encode() in git(base / "api", "worktree", "list").stdout

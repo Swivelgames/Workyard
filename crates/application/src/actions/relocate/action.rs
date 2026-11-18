@@ -203,7 +203,7 @@ async fn execute(
 	.await;
 	let mut outcome =
 		outcome(session, kind).unwrap_or_else(|problem| RelocateOutcome::rejected(kind, problem));
-	outcome.recovery_choice = observer.pending.into_inner();
+	outcome.recovery_choice = observer.pending.into_inner().map(Box::new);
 	match result {
 		Ok(()) => Ok(outcome),
 		Err(problem) => {
@@ -228,6 +228,11 @@ fn outcome(session: &Relocation, kind: &'static str) -> Result<RelocateOutcome, 
 		outcome.active_tasks_root = Some(native(&session.active_root()?)?);
 		outcome.active_state_dir = Some(native(&session.active_state()?)?);
 	}
+	outcome.backups = session
+		.retained_backups()?
+		.iter()
+		.map(|path| native(path))
+		.collect::<Result<_, _>>()?;
 	outcome.cleanup_complete = session.cleanup_complete();
 	if outcome.copy && outcome.cleanup_complete {
 		outcome.snapshot = Some(retained_snapshot(session)?);

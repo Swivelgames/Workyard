@@ -66,6 +66,15 @@ impl Relocation {
 		};
 		let [stage, displaced] = selection.temporary_paths(&self.journal, index)?;
 		if !exists(&stage)? && !exists(&displaced)? {
+			// The backup rename may have reached disk just before its journal update.
+			// Settle that handoff before a new choice can supersede this selection.
+			let previous_endpoint = endpoints(entry, selection.undo).0;
+			if let Some(number) = selection.backup_number
+				&& exists(previous_endpoint)?
+				&& selection.stage_id == Some(entry_identity(previous_endpoint)?)
+			{
+				self.retain_backup(index, &selection, number, &displaced)?;
+			}
 			return Ok(());
 		}
 		if canonical_future(stage.parent().expect("staging parent"))?
@@ -130,7 +139,7 @@ impl Relocation {
 			return Err(conflict("Recovery endpoint traverses a redirected path."));
 		}
 		if exists(dest)? && selection.stage_id == Some(entry_identity(dest)?) {
-			// The selected files are published. Finish only the displaced cleanup.
+			// The selected files are published. Finish the handoff of the displaced files.
 			if exists(&displaced)? {
 				if tree::fingerprint(dest, control)? != selection.selected_digest {
 					return Err(conflict(
@@ -139,7 +148,7 @@ impl Relocation {
 				}
 				cleanup::verify_pointer(dest, &reg.administration)?;
 			}
-			return self.finish_retired(index, selection, &displaced, control);
+			return self.finish_displaced(index, selection, &displaced, control);
 		}
 		if exists(&displaced)? {
 			selection.verify_old_destination(&displaced, control)?;

@@ -1,4 +1,6 @@
 //! Decide which verified worktree supplies a recovered participant.
+mod backup;
+pub(super) use backup::BackupEndpoint;
 mod cleanup;
 mod decision;
 mod install;
@@ -32,6 +34,8 @@ pub(super) struct Selection {
 	displaced_pointer: Option<Vec<u8>>,
 	retired_entries: Vec<super::record::Content>,
 	retiring: bool,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	backup_number: Option<usize>,
 	displaced_id: Option<(u64, u64)>,
 	stage_id: Option<(u64, u64)>,
 	installed: bool,
@@ -59,9 +63,7 @@ impl Selection {
 			));
 		}
 		let member = &journal.participants[index];
-		let origin = member.task.participants[member.index]
-			.destination
-			.decode()?;
+		let origin = member.original(&journal.tasks).destination.decode()?;
 		let location = if undo {
 			origin.clone()
 		} else {
@@ -112,6 +114,12 @@ impl Selection {
 		{
 			paths.push(registered);
 		}
+		if let Some(number) = self.backup_number {
+			let backup = journal.backup_path(index, self.undo, number)?;
+			if exists(&backup)? && Some(entry_identity(&backup)?) == self.displaced_id {
+				paths.push(backup);
+			}
+		}
 		let [stage, displaced] = self.temporary_paths(journal, index)?;
 		for (path, id) in [(stage, self.stage_id), (displaced, self.displaced_id)] {
 			if exists(&path)? && id == Some(entry_identity(&path)?) {
@@ -132,7 +140,7 @@ impl Selection {
 	) -> Result<[PathBuf; 2], Problem> {
 		let p = &journal.participants[index];
 		let dest = if self.undo {
-			p.task.participants[p.index].destination.decode()?
+			p.original(&journal.tasks).destination.decode()?
 		} else {
 			p.destination.decode()?
 		};
@@ -164,7 +172,7 @@ impl Relocation {
 			.participants
 			.iter()
 			.position(|p| {
-				p.task.task == entry.task && p.destination == entry.destination.as_path().into()
+				p.task == entry.task && p.destination == entry.destination.as_path().into()
 			})
 			.ok_or_else(|| conflict("Unknown recovery participant."))
 	}

@@ -115,19 +115,25 @@ impl From<&Task> for TaskRecord {
 			participants: task
 				.participants
 				.iter()
-				.map(|participant| ParticipantRecord {
-					creation: participant.creation.map(Into::into),
-					name: participant.name.clone(),
-					source: participant.source.as_path().into(),
-					common_dir: participant.common_dir.as_path().into(),
-					backing_identity: participant.backing_identity.clone(),
-					worktree_identity: participant.worktree_identity.clone(),
-					destination: participant.destination.as_path().into(),
-					remote: participant.remote.clone(),
-					from: participant.from.clone(),
-					phase: participant.phase.as_str().into(),
-				})
+				.map(ParticipantRecord::from)
 				.collect(),
+		}
+	}
+}
+
+impl From<&workyard_core::Participant> for ParticipantRecord {
+	fn from(participant: &workyard_core::Participant) -> Self {
+		Self {
+			creation: participant.creation.map(Into::into),
+			name: participant.name.clone(),
+			source: participant.source.as_path().into(),
+			common_dir: participant.common_dir.as_path().into(),
+			backing_identity: participant.backing_identity.clone(),
+			worktree_identity: participant.worktree_identity.clone(),
+			destination: participant.destination.as_path().into(),
+			remote: participant.remote.clone(),
+			from: participant.from.clone(),
+			phase: participant.phase.as_str().into(),
 		}
 	}
 }

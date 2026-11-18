@@ -29,6 +29,23 @@ pub struct RecoveryResult {
 }
 
 impl RecoveryRecord {
+	pub(crate) fn writer_problem(&self, index: usize) -> crate::Problem {
+		let participant = &self.task.participants[index];
+		let operation = match self.task.operation.continues.or(self.task.operation.kind) {
+			Some(crate::OperationKind::Remove) => "the removal operation",
+			_ => match participant.phase {
+				crate::Phase::Creating => "worktree creation",
+				crate::Phase::Pulling => "the pull",
+				crate::Phase::Fetching => "the fetch",
+				_ => "the task operation",
+			},
+		};
+		crate::Problem::unconfirmed_git_exit(format_args!(
+			"{operation} for participant {:?} at {:?}",
+			participant.name, participant.destination
+		))
+	}
+
 	/// Effect snapshots may retain older operation provenance after final publication.
 	/// Compare reconciled resource facts, not that stale invocation outcome.
 	pub(crate) fn matches_published(&self, task: &Task) -> bool {

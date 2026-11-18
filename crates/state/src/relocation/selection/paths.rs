@@ -73,9 +73,7 @@ pub(super) fn validate_paths(
 	registered: &Path,
 ) -> Result<(), Problem> {
 	let member = &journal.participants[index];
-	let source = member.task.participants[member.index]
-		.destination
-		.decode()?;
+	let source = member.original(&journal.tasks).destination.decode()?;
 	let dest = member.destination.decode()?;
 	let root = journal.old_root.decode()?;
 	let relative = source
@@ -103,7 +101,7 @@ pub(super) fn validate_paths(
 		}
 	}
 	for (position, member) in journal.participants.iter().enumerate() {
-		let participant = &member.task.participants[member.index];
+		let participant = member.original(&journal.tasks);
 		for path in [
 			&participant.source,
 			&participant.common_dir,

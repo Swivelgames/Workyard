@@ -236,3 +236,26 @@ fn populated_status_and_info_json_preserve_their_distinct_facts() {
 	assert!(result["state_dir"].is_string());
 	assert!(info.stderr.is_empty());
 }
+
+#[test]
+fn task_help_distinguishes_checkout_and_workspace_recovery() {
+	let root = tempfile::tempdir().unwrap();
+	let help = |command: &str| {
+		let output = workyard(root.path(), &[command, "--help"]);
+		assert_ok(&output);
+		String::from_utf8(output.stdout).unwrap()
+	};
+
+	let create = help("create");
+	assert!(create.contains("<TASK>"));
+	assert!(create.contains("--checkout"));
+
+	let checkout = help("checkout");
+	assert!(checkout.contains("reusing existing target branches"));
+	assert!(!checkout.contains("--checkout"));
+
+	let recover = help("recover");
+	assert!(recover.contains("[TASK]"));
+	assert!(!recover.contains("[TASK]..."));
+	assert!(recover.contains("Resume workspace relocation"));
+}

@@ -1,17 +1,10 @@
 use crate::{Phase, Problem, ProblemCode, RecoveryRecord, TaskLifecycle};
 
 pub(super) fn validate(record: &RecoveryRecord, accept_pull: &[String]) -> Result<(), Problem> {
-	if record
-		.pending
-		.is_some_and(|index| record.task.participants[index].phase != Phase::Fetching)
+	if let Some(index) = record.pending
+		&& record.task.participants[index].phase != Phase::Fetching
 	{
-		return Err(Problem::new(
-			ProblemCode::ResourceBusy,
-			"Managed Git writers lack settlement evidence.",
-		)
-		.remedy(
-			"Inspect the interrupted Workyard and Git processes; preserve pending evidence before retrying.",
-		));
+		return Err(record.writer_problem(index));
 	}
 
 	if record.task.lifecycle != TaskLifecycle::Active

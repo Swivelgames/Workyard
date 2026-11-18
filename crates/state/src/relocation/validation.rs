@@ -5,7 +5,7 @@ use workyard_core::Problem;
 
 impl Journal {
 	pub(super) fn validate(&self) -> Result<(), Problem> {
-		if self.version != 1 || self.id.is_empty() || self.id.contains(['/', '\\']) {
+		if self.version != 2 || self.id.is_empty() || self.id.contains(['/', '\\']) {
 			return Err(conflict("Invalid relocation identity."));
 		}
 		let old_root = self.old_root.decode()?;
@@ -65,10 +65,20 @@ impl Journal {
 				return Err(conflict("Invalid workspace content inventory."));
 			}
 		}
-		for entry in &self.participants {
-			crate::records::task::validate(&entry.task, &entry.task.task, &old_root, &old_state)?;
-			crate::records::task::decode(entry.task.clone())?;
-			for participant in &entry.task.participants {
+		self.validate_membership(&old_root, &old_state)?;
+		for (index, entry) in self.participants.iter().enumerate() {
+			if let Some(selection) = &entry.selection {
+				selection.validate(self, index)?;
+			}
+		}
+		Ok(())
+	}
+
+	fn validate_membership(&self, old_root: &Path, old_state: &Path) -> Result<(), Problem> {
+		for (name, task) in &self.tasks {
+			crate::records::task::validate(task, name, old_root, old_state)?;
+			crate::records::task::decode(task.clone())?;
+			for participant in &task.participants {
 				for path in [
 					&participant.source,
 					&participant.common_dir,
@@ -79,22 +89,30 @@ impl Journal {
 					}
 				}
 			}
-			if entry.index >= entry.task.participants.len()
-				|| !entry.destination.decode()?.is_absolute()
-				|| entry
-					.destination
-					.decode()?
-					.as_os_str()
-					.as_encoded_bytes()
-					.contains(&0)
+		}
+
+		let mut seen = std::collections::BTreeSet::new();
+		for entry in &self.participants {
+			let task = self
+				.tasks
+				.get(&entry.task)
+				.ok_or_else(|| conflict("Unknown relocation task reference."))?;
+			let destination = entry.destination.decode()?;
+			if entry.index >= task.participants.len()
+				|| !seen.insert((&entry.task, entry.index))
+				|| !destination.is_absolute()
+				|| destination.as_os_str().as_encoded_bytes().contains(&0)
 			{
 				return Err(conflict("Invalid relocation participant identity."));
 			}
 		}
-		for (index, entry) in self.participants.iter().enumerate() {
-			if let Some(selection) = &entry.selection {
-				selection.validate(self, index)?;
-			}
+		let expected_count = self
+			.tasks
+			.values()
+			.map(|t| t.participants.len())
+			.sum::<usize>();
+		if seen.len() != expected_count {
+			return Err(conflict("Missing relocation participant."));
 		}
 		Ok(())
 	}

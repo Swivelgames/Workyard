@@ -22,11 +22,13 @@ type CreateEntry = Entry<CreateInput, CreateOutcome, CreateOutcome, Progress>;
 pub(crate) fn build_entry() -> Result<CreateEntry, RegistrationError> {
 	let handler = Action::new(
 		"create",
-		"Create a task across explicit Git Repositories",
+		"Create a task with a new branch in each repository",
 		action::create,
 	)?;
 
-	let checkout_shorthand = Alias::new("checkout").set("checkout", true);
+	let checkout_shorthand = Alias::new("checkout")
+		.description("Create a task, reusing existing target branches where available")
+		.set("checkout", true);
 	let cli = CliBinding::new(cli::bindings()).alias(checkout_shorthand);
 	let rpc = crate::presentation::structured::progress_binding();
 

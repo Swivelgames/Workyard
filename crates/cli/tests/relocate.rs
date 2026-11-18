@@ -491,7 +491,7 @@ fn repaired_main_clone_move_refreshes_backing_cache_before_workspace_relocation(
 	git(&moved_source, &["worktree", "repair"]);
 	assert_ok(&workyard(
 		fixture.path(),
-		&["relocate", "--old", text(&root), "--new", text(&target)],
+		&["relocate", "--old", text(&root), text(&target)],
 	));
 	assert_ok(&workyard(&target, &["recover", "feat/one"]));
 	assert_ok(&workyard(&target, &["status", "feat/one"]));

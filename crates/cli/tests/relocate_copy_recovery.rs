@@ -222,3 +222,35 @@ fn recovery_reports_an_unsettled_git_writer_with_its_participant() {
 		"{rendered}"
 	);
 }
+
+#[test]
+fn invalid_journal_references_stop_recovery_before_git_changes() {
+	let copy = InterruptedCopy::after_first_repair();
+	let path = copy.source.join(".workyard/relocation.json");
+	let original = fs::read(&path).unwrap();
+	let saved: serde_json::Value = serde_json::from_slice(&original).unwrap();
+	assert_eq!(saved["version"], 2);
+	assert_eq!(saved["tasks"].as_object().unwrap().len(), 1);
+
+	let registration = git(&copy.web, &["worktree", "list", "--porcelain"]);
+	for (field, value) in [
+		("task", serde_json::json!("absent")),
+		("index", serde_json::json!(42)),
+		("index", saved["participants"][1]["index"].clone()),
+	] {
+		let mut broken = saved.clone();
+		broken["participants"][0][field] = value;
+		let bytes = serde_json::to_vec_pretty(&broken).unwrap();
+		fs::write(&path, &bytes).unwrap();
+
+		assert!(!copy.recover(false).status.success());
+		assert_eq!(fs::read(&path).unwrap(), bytes);
+		assert_eq!(
+			git(&copy.web, &["worktree", "list", "--porcelain"]),
+			registration
+		);
+	}
+	fs::write(path, original).unwrap();
+	assert_ok(&copy.recover(false));
+	copy.assert_registered(&copy.target);
+}

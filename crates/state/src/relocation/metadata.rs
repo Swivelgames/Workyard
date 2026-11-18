@@ -63,19 +63,17 @@ pub(super) fn transform(journal: &mut Journal) -> Result<(), Problem> {
 			}
 			for participant in &mut task.participants {
 				let known = journal.participants.iter().find(|entry| {
-					entry.task.task == task.task
-						&& entry.task.generation == task.generation
-						&& entry.task.participants[entry.index].backing_identity
+					entry.task == task.task
+						&& journal.tasks[&entry.task].generation == task.generation
+						&& entry.original(&journal.tasks).backing_identity
 							== participant.backing_identity
 				});
 				if let Some(known) = known {
 					participant.destination = known.destination.clone();
-					participant.worktree_identity = known.task.participants[known.index]
-						.worktree_identity
-						.clone();
-					participant.source = known.task.participants[known.index].source.clone();
-					participant.common_dir =
-						known.task.participants[known.index].common_dir.clone();
+					let observed = known.original(&journal.tasks);
+					participant.worktree_identity = observed.worktree_identity.clone();
+					participant.source = observed.source.clone();
+					participant.common_dir = observed.common_dir.clone();
 				} else if let Ok(relative) =
 					participant.destination.decode()?.strip_prefix(&old_root)
 				{

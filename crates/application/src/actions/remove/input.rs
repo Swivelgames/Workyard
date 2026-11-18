@@ -8,8 +8,10 @@ pub struct RemoveInput {
 	pub task: String,
 	pub tasks_root: Option<NativePath>,
 	pub state_dir: Option<NativePath>,
+	/// Skip removal confirmation.
 	#[serde(default)]
 	pub yes: bool,
+	/// Allow removal of dirty worktrees and skip confirmation.
 	#[serde(default)]
 	pub force: bool,
 }

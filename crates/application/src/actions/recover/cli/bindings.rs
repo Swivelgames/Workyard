@@ -1,7 +1,13 @@
 use trine::cli::Bindings;
 
+const EXAMPLES: &str = concat!(
+	"Examples\n",
+	"    workyard recover feat/payments    Resume a task operation\n",
+	"    workyard recover                  Resume workspace relocation",
+);
+
 pub(in super::super) fn bindings() -> Bindings {
-	let bindings = Bindings::new();
+	let bindings = Bindings::new().examples(EXAMPLES);
 
 	// Target task
 	let bindings = bindings.positional("task").complete_group(

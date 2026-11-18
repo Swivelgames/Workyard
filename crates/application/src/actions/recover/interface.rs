@@ -11,12 +11,16 @@ pub(crate) struct Input {
 	pub task: Option<String>,
 	pub tasks_root: Option<NativePath>,
 	pub state_dir: Option<NativePath>,
+	/// Acknowledge an interrupted pull after inspecting the participant.
 	#[serde(default)]
 	pub accept_pull: Vec<String>,
+	/// Return an interrupted removal or relocation to its original placement.
 	#[serde(default)]
 	pub undo: bool,
+	/// Skip removal confirmation.
 	#[serde(default)]
 	pub yes: bool,
+	/// Allow removal of dirty worktrees and skip confirmation.
 	#[serde(default)]
 	pub force: bool,
 }

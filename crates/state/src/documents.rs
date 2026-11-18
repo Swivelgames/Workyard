@@ -18,6 +18,21 @@ pub(crate) fn read_supported_with_version<T: DeserializeOwned>(
 	path: &Path,
 	versions: &[u64],
 ) -> Result<(T, u64), Problem> {
+	let (value, version) = read_versioned_json(path, versions)?;
+	serde_json::from_value(value)
+		.map(|record| (record, version))
+		.map_err(|e| {
+			Problem::new(
+				workyard_core::ProblemCode::DamagedState,
+				format!("Invalid record at {path:?}: {e}"),
+			)
+		})
+}
+
+pub(crate) fn read_versioned_json(
+	path: &Path,
+	versions: &[u64],
+) -> Result<(serde_json::Value, u64), Problem> {
 	let bytes = fs::read(path).map_err(|e| Problem::io(format!("Read {path:?}"), e))?;
 	let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| {
 		Problem::new(
@@ -38,14 +53,7 @@ pub(crate) fn read_supported_with_version<T: DeserializeOwned>(
 	}
 
 	let version = value["version"].as_u64().expect("validated version");
-	serde_json::from_value(value)
-		.map(|record| (record, version))
-		.map_err(|e| {
-			Problem::new(
-				workyard_core::ProblemCode::DamagedState,
-				format!("Invalid record at {path:?}: {e}"),
-			)
-		})
+	Ok((value, version))
 }
 
 pub(crate) fn publish(path: &Path, record: &impl Serialize) -> Result<(), Problem> {
