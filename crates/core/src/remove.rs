@@ -288,12 +288,10 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 					.git
 					.inspect_removal(&task.participants[index], self.control)
 					.await?;
-				if current.destination != disclosed.destination
-					|| current.branch != disclosed.branch
-				{
+				if !current.same_worktree(&disclosed) || current.branch != disclosed.branch {
 					return Err(Problem::new(
 						ProblemCode::RepositoryChanged,
-						"Worktree location or branch changed after disclosure; inspect and retry.",
+						"Worktree or branch changed after disclosure; inspect and retry.",
 					));
 				}
 				if current.dirty_token != disclosed.dirty_token && !current.dirty_paths.is_empty() {

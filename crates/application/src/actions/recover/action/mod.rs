@@ -10,20 +10,41 @@ use super::{RecoverInput, RecoverOutcome};
 mod amendment;
 mod creation;
 mod removal;
+mod workspace;
 
 pub async fn recover(
-	input: RecoverInput,
+	mut input: RecoverInput,
 	context: InvocationContext<Progress>,
-) -> Result<RecoverOutcome, RecoverOutcome> {
-	blocking_action(run(input, context)).await
+) -> Result<super::RecoveryOutcome, super::RecoveryOutcome> {
+	use super::RecoveryOutcome::{Task, Workspace};
+	blocking_action(async move {
+		if let Some(name) = input.task.take() {
+			run(name, input, context)
+				.await
+				.map(|r| Task(Box::new(r)))
+				.map_err(|r| Task(Box::new(r)))
+		} else {
+			workspace::run(input, context)
+				.await
+				.map(Workspace)
+				.map_err(Workspace)
+		}
+	})
+	.await
 }
 
 async fn run(
+	name: String,
 	input: RecoverInput,
 	context: InvocationContext<Progress>,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
-	let name = input.task.clone();
 	let rejected = |problem| RecoverOutcome::rejected(name.clone(), problem);
+	if input.activate_here {
+		return Err(rejected(workyard_core::Problem::new(
+			ProblemCode::InvalidInput,
+			"--activate-here applies to workspace recovery. Omit the task name.",
+		)));
+	}
 	workyard_core::validate_task(&name).map_err(rejected)?;
 
 	let cancellation = context.cancellation().clone();
@@ -48,7 +69,7 @@ async fn run(
 	drop(guard);
 
 	if removing {
-		return removal::run(input, context, &runner, &control, &store).await;
+		return removal::run(name, input, context, &runner, &control, &store).await;
 	}
 
 	if input.undo || input.force || input.yes {

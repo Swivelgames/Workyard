@@ -28,20 +28,6 @@ impl Reader {
 				"Task record name does not match its deterministic filename.",
 			));
 		}
-		validate(record, &record.task, &self.root, &self.state)?;
-		for participant in &record.participants {
-			for path in [
-				&participant.source,
-				&participant.common_dir,
-				&participant.destination,
-			] {
-				if path.decode()?.as_os_str().as_encoded_bytes().contains(&0) {
-					return Err(damaged(
-						"Task record contains an unrepresentable native path (NUL).",
-					));
-				}
-			}
-		}
-		Ok(())
+		validate(record, &record.task, &self.root, &self.state)
 	}
 }

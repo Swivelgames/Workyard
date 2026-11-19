@@ -16,4 +16,5 @@ mod unix;
 mod windows;
 
 pub use process::{CommandOutput, Runner};
+pub use relationships::Placement;
 pub use repository::Repository;

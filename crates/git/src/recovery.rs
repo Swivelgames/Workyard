@@ -63,6 +63,15 @@ impl RecoveryGit for Runner {
 impl Reconciliation<'_> {
 	async fn run(&self) -> Result<RecoveryObservation, Problem> {
 		let repository = self.locate_repository().await?;
+		if self.participant.worktree_identity.is_some() {
+			let placement = self
+				.runner
+				.inspect_placement(self.participant, None, self.control)
+				.await?;
+			if placement.competing {
+				return Err(placement.diagnostic());
+			}
+		}
 		let destination = self.registered_destination(&repository).await?;
 		let operation_in_progress = match &destination {
 			Some(path) => self.inspect_registered(&repository, path).await?,
@@ -88,7 +97,17 @@ impl Reconciliation<'_> {
 	}
 
 	async fn locate_repository(&self) -> Result<Repository, Problem> {
-		// A repaired linked worktree can locate moved backing storage.
+		if self.participant.worktree_identity.is_some() {
+			let placement = self
+				.runner
+				.placement_repository(self.participant, None, self.control)
+				.await?;
+			let mut repository = Repository::from(&placement);
+			// A later network operation still uses the participant's configured choice.
+			repository.remote = self.participant.remote.clone();
+			return Ok(repository);
+		}
+		// Incomplete creation still needs its intended remote.
 		for path in [
 			&self.participant.source,
 			&self.participant.destination,
@@ -166,13 +185,7 @@ impl Reconciliation<'_> {
 			));
 		}
 
-		let current = Repository::inspect(
-			self.runner,
-			path,
-			participant.remote.as_deref(),
-			self.control,
-		)
-		.await?;
+		let current = Repository::local(self.runner, path, self.control).await?;
 		if current.identity != participant.backing_identity {
 			return Err(changed("Registered worktree backing identity differs."));
 		}

@@ -34,6 +34,14 @@ pub(crate) fn path(path: &Path) -> Option<String> {
 	argument(path.to_str()?)
 }
 
+pub(crate) fn activate_workspace(workspace: Option<&Path>) -> Option<String> {
+	let mut command = String::from("workyard recover --activate-here");
+	if let Some(workspace) = workspace {
+		command.push_str(&format!(" --workspace={}", path(workspace)?));
+	}
+	Some(command)
+}
+
 pub(crate) fn workspace_status(state: Option<&Path>) -> Option<String> {
 	let mut command = String::from("workyard status");
 	if let Some(state) = state {

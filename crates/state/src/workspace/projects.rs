@@ -17,7 +17,7 @@ impl Reader {
 	pub fn project_roots(&self) -> Result<Vec<PathBuf>, Problem> {
 		let workspace = self.state().parent().expect("workspace marker");
 		Ok(Layout::read(self.state())?
-			.project_roots()?
+			.located_roots(workspace)?
 			.into_iter()
 			.map(|root| workspace.join(root))
 			.collect())
@@ -25,6 +25,25 @@ impl Reader {
 }
 
 impl Store {
+	pub async fn remember_workspace(&self, control: &Control) -> Result<bool, Problem> {
+		let state = self.state_dir();
+		let workspace = state.parent().expect("workspace marker");
+		control.check()?;
+		if Layout::read(state)?.is_at(workspace)? {
+			return Ok(false);
+		}
+		let lock = Lock::wait(&state.join("locks/projects.lock"), control).await?;
+		self.verify()?;
+		let mut layout = Layout::read(state)?;
+		if !layout.update_workspace(workspace)? {
+			return Ok(false);
+		}
+		lock.verify()?;
+		control.check()?;
+		documents::publish(&state.join("workspace.json"), &layout)?;
+		Ok(true)
+	}
+
 	pub async fn edit_project_roots(
 		&self,
 		edit: RootEdit,
@@ -35,13 +54,15 @@ impl Store {
 			return Ok(Vec::new());
 		}
 		let workspace = self.state_dir().parent().expect("workspace marker");
+		let lock = Lock::wait(&self.state_dir().join("locks/projects.lock"), control).await?;
+		self.verify()?;
+		let mut layout = Layout::read(self.state_dir())?;
 		let roots = paths
 			.iter()
 			.map(|path| edit.registration(workspace, path))
 			.collect::<Result<BTreeSet<_>, _>>()?;
-		let lock = Lock::wait(&self.state_dir().join("locks/projects.lock"), control).await?;
-		self.verify()?;
-		let mut layout = Layout::read(self.state_dir())?;
+		// Evaluate edits against the same roots a project listing would show here.
+		layout.update_workspace(workspace)?;
 		let mut registered = layout.project_roots()?;
 		let mut changed = Vec::new();
 

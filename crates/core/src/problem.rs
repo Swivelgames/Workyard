@@ -7,7 +7,14 @@ pub enum ProjectRemedy {
 }
 
 #[derive(Clone, Debug)]
+pub struct WorktreeLocations {
+	pub registered: PathBuf,
+	pub candidate: PathBuf,
+}
+
+#[derive(Clone, Debug)]
 pub struct Problem {
+	pub worktree_locations: Option<Box<WorktreeLocations>>,
 	pub code: crate::ProblemCode,
 	pub message: String,
 	pub remedy: String,
@@ -21,6 +28,7 @@ impl Problem {
 			message: message.into(),
 			remedy: String::new(),
 			project_remedy: None,
+			worktree_locations: None,
 		}
 	}
 

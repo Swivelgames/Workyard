@@ -1,5 +1,12 @@
-use crate::path::StoredPath;
+use crate::{
+	path::StoredPath,
+	records::registrations::{located_project, relocated_registrations},
+};
 use serde::{Deserialize, Serialize};
+use std::{
+	collections::BTreeMap,
+	path::{Path, PathBuf},
+};
 use workyard_core::{AmendRequest, CreationOptions, Problem, RepositoryInput};
 
 #[derive(Serialize, Deserialize)]
@@ -19,6 +26,7 @@ struct RepositoryRecord {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RequestRecord {
 	pub(super) task: String,
+	workspace_at_request: StoredPath,
 	repositories: Vec<RepositoryRecord>,
 	checkout: bool,
 	no_fetch: bool,
@@ -27,10 +35,11 @@ pub(crate) struct RequestRecord {
 	from: Option<String>,
 }
 
-impl From<&AmendRequest> for RequestRecord {
-	fn from(request: &AmendRequest) -> Self {
+impl RequestRecord {
+	pub(crate) fn new(request: &AmendRequest, state: &Path) -> Self {
 		Self {
 			task: request.task.clone(),
+			workspace_at_request: state.parent().expect("workspace marker").into(),
 			repositories: request
 				.repositories
 				.iter()
@@ -54,10 +63,17 @@ impl From<&AmendRequest> for RequestRecord {
 			from: request.from.clone(),
 		}
 	}
-}
 
-impl RequestRecord {
-	pub(crate) fn decode(&self) -> Result<AmendRequest, Problem> {
+	pub(crate) fn decode(&self, state: &Path) -> Result<AmendRequest, Problem> {
+		let previous = self.workspace_at_request.registration()?;
+		let workspace = state.parent().expect("workspace marker");
+		let path = |stored: &StoredPath| {
+			Ok(located_project(
+				&stored.registration()?,
+				&previous,
+				workspace,
+			))
+		};
 		Ok(AmendRequest {
 			task: self.task.clone(),
 			repositories: self
@@ -68,10 +84,10 @@ impl RequestRecord {
 						registration_roots: repo
 							.registration_roots
 							.iter()
-							.map(StoredPath::registration)
+							.map(&path)
 							.collect::<Result<_, _>>()?,
 						expected_identity: repo.expected_identity.clone(),
-						path: repo.path.decode()?,
+						path: path(&repo.path)?,
 						name: repo.name.clone(),
 						remote: repo.remote.clone(),
 						from: repo.from.clone(),
@@ -86,5 +102,17 @@ impl RequestRecord {
 			remote: self.remote.clone(),
 			from: self.from.clone(),
 		})
+	}
+
+	pub(crate) fn relocated_project_roots(
+		&self,
+		workspace: &Path,
+	) -> Result<BTreeMap<PathBuf, PathBuf>, Problem> {
+		let previous = self.workspace_at_request.registration()?;
+		let roots = self
+			.repositories
+			.iter()
+			.flat_map(|repo| &repo.registration_roots);
+		relocated_registrations(roots, &previous, workspace)
 	}
 }

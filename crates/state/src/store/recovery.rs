@@ -28,6 +28,8 @@ impl RecoveryState for Store {
 		let intent: TaskRecord =
 			crate::documents::read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
 		validate(&intent, name, &self.root, &self.state)?;
+		let workspace = self.state.parent().expect("workspace marker");
+		let mut relocated_project_roots = intent.relocated_project_roots(workspace)?;
 
 		if let Some(revision) =
 			crate::revision::read(&guard.evidence_path, &intent, &self.root, &self.state)?
@@ -42,14 +44,16 @@ impl RecoveryState for Store {
 				}
 				needs_publication = serde_json::to_value(&saved).ok()
 					!= serde_json::to_value(&revision.current.task).ok();
-				Some(decode(saved)?)
+				Some(decode(saved, &self.root, &self.state)?)
 			} else {
 				None
 			};
+			relocated_project_roots.extend(revision.request.relocated_project_roots(workspace)?);
 			return Ok(RecoveryRecord {
+				relocated_project_roots,
 				needs_publication,
 				recorded,
-				task: decode(revision.current.task)?,
+				task: decode(revision.current.task, &self.root, &self.state)?,
 				pending: revision.current.pending,
 			});
 		}
@@ -91,9 +95,12 @@ impl RecoveryState for Store {
 			(record, None)
 		};
 		Ok(RecoveryRecord {
+			relocated_project_roots,
 			needs_publication,
-			recorded: recorded.map(decode).transpose()?,
-			task: decode(record)?,
+			recorded: recorded
+				.map(|r| decode(r, &self.root, &self.state))
+				.transpose()?,
+			task: decode(record, &self.root, &self.state)?,
 			pending,
 		})
 	}

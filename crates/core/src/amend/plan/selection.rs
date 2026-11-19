@@ -127,6 +127,7 @@ fn new_participant(
 	from: Option<String>,
 ) -> Participant {
 	Participant {
+		placement: None,
 		creation: Some(request.options),
 		name: name.into(),
 		source: repository.source.clone(),

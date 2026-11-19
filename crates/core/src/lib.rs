@@ -12,7 +12,6 @@ mod problem_code;
 pub mod projects;
 mod publication;
 mod recover;
-mod relocate;
 mod remove;
 mod settle_add;
 
@@ -23,11 +22,7 @@ pub use model::*;
 pub use observation::*;
 pub use paths::*;
 pub use ports::*;
-pub use problem::{Problem, ProjectRemedy};
+pub use problem::{Problem, ProjectRemedy, WorktreeLocations};
 pub use problem_code::ProblemCode;
 pub use recover::recover;
-pub use relocate::{
-	RecoveryCandidates, RecoveryChoice, RegisteredCopy, RelocationGit, RelocationParticipant,
-	RelocationState, relocate,
-};
 pub use remove::{recover_removal, remove};

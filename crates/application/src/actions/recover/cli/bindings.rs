@@ -3,6 +3,7 @@ use trine::cli::Bindings;
 
 const EXAMPLES: &str = concat!(
 	"Examples\n",
+	"    workyard recover    Repair worktree locations across the workspace\n",
 	"    workyard recover feat/payments    Resume a task operation\n",
 	"    workyard recover feat/payments --undo    Undo an interrupted removal",
 );
@@ -25,6 +26,7 @@ pub(in super::super) fn bindings() -> Bindings {
 			"Participants",
 			crate::presentation::cli::completion::unsettled_pull,
 		)
+		.option("activate_here", "activate-here")
 		.option("undo", "undo")
 		.option("yes", "yes")
 		.option("force", "force");

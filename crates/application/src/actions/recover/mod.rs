@@ -3,6 +3,7 @@ mod action;
 mod cli;
 mod contract;
 mod input;
+mod workspace;
 
 use crate::{contracts::Progress, presentation::cli::exit_status};
 use trine::{
@@ -11,15 +12,15 @@ use trine::{
 };
 
 pub use action::recover;
-pub use contract::RecoverOutcome;
+pub use contract::{RecoverOutcome, RecoveryOutcome};
 pub use input::RecoverInput;
 
-type RecoverEntry = Entry<RecoverInput, RecoverOutcome, RecoverOutcome, Progress>;
+type RecoverEntry = Entry<RecoverInput, RecoveryOutcome, RecoveryOutcome, Progress>;
 
 pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 	let handler = Action::new(
 		"recover",
-		"Resume or undo an interrupted task operation",
+		"Repair workspace locations or resume an interrupted task operation",
 		action::recover,
 	)?;
 	let cli = CliBinding::new(cli::bindings());
@@ -34,7 +35,12 @@ pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 					started: false,
 				})
 			},
-			|result| exit_status::operation(result, |outcome| &outcome.operation),
+			|result| match result {
+				Ok(RecoveryOutcome::Task(outcome)) => u8::from(
+					outcome.operation.outcome != workyard_core::OperationOutcome::Succeeded,
+				),
+				_ => exit_status::result(result),
+			},
 		)
 		.rpc(rpc))
 }

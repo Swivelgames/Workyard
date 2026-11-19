@@ -9,7 +9,15 @@ pub struct SuggestedOverride {
 }
 
 #[derive(Serialize)]
+pub struct WorktreeLocations {
+	pub registered: NativePath,
+	pub candidate: NativePath,
+}
+
+#[derive(Serialize)]
 pub struct ProblemOutcome {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub worktree_locations: Option<Box<WorktreeLocations>>,
 	pub code: String,
 	pub message: String,
 	pub remedy: String,
@@ -22,6 +30,12 @@ pub struct ProblemOutcome {
 impl From<Problem> for ProblemOutcome {
 	fn from(problem: Problem) -> Self {
 		let mut outcome = Self {
+			worktree_locations: problem.worktree_locations.map(|paths| {
+				Box::new(WorktreeLocations {
+					registered: NativePath::new(paths.registered).expect("Git path"),
+					candidate: NativePath::new(paths.candidate).expect("Git path"),
+				})
+			}),
 			code: problem.code.as_str().into(),
 			message: problem.message,
 			remedy: problem.remedy,

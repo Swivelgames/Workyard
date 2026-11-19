@@ -32,13 +32,38 @@ impl Observation<'_> {
 		participant: &Participant,
 		control: &Control,
 	) -> Result<GitFacts, Problem> {
-		let repository = self.locate_backing(participant, control).await?;
+		let repository = if participant.worktree_identity.is_some() {
+			self.runner
+				.placement_repository(participant, None, control)
+				.await?
+				.source
+		} else {
+			self.locate_backing(participant, control).await?
+		};
 		let current = self
 			.find_participant(&repository, participant, control)
 			.await?;
 		let Some(current) = current else {
+			if participant.worktree_identity.is_some()
+				&& let Ok(placement) = self
+					.runner
+					.inspect_placement(participant, None, control)
+					.await && placement.needs_repair
+			{
+				return Err(placement.diagnostic());
+			}
+			control.check()?;
 			return missing_participant(participant);
 		};
+		if participant.worktree_identity.is_some() && current.path != participant.destination {
+			let preview = self
+				.runner
+				.inspect_placement(participant, None, control)
+				.await?;
+			if preview.competing {
+				return Err(preview.diagnostic());
+			}
+		}
 		self.inspect_worktree(current, control).await
 	}
 

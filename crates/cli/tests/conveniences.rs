@@ -267,7 +267,8 @@ fn task_help_distinguishes_checkout_and_workspace_recovery() {
 	assert!(!checkout.contains("--checkout"));
 
 	let recover = help("recover");
-	assert!(recover.contains("<TASK>"));
+	assert!(recover.contains("[TASK]"));
+	assert!(recover.contains("--activate-here"));
 	assert!(!recover.contains("[TASK]..."));
 	assert!(!recover.contains("Resume workspace relocation"));
 }

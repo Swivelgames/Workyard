@@ -10,6 +10,7 @@ fn established(workspace: &support::Workspace) -> workyard_core::Task {
 	task.generation = 1;
 	task.operation.outcome = OperationOutcome::Succeeded;
 	task.participants.push(Participant {
+		placement: None,
 		creation: None,
 		name: "api".into(),
 		source: workspace.root.join("source"),

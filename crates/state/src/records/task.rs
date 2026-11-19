@@ -1,6 +1,7 @@
 mod codec;
 mod compatibility;
 mod operation;
+mod placement;
 mod removal;
 pub use removal::RemovalRecord;
 
@@ -42,6 +43,8 @@ impl From<CreationRecord> for workyard_core::CreationOptions {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ParticipantRecord {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub last_location: Option<placement::LocationRecord>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub registration_roots: Vec<StoredPath>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -106,7 +109,7 @@ impl From<&Task> for TaskRecord {
 			generation: task.generation,
 			removal: task.removal.as_ref().map(Into::into),
 			task: task.name.clone(),
-			tasks_root: task.root.as_path().into(),
+			tasks_root: placement::anchored(&task.root, &task.state_dir),
 			state_dir: task.state_dir.as_path().into(),
 			checkout: task.checkout,
 			no_fetch: task.no_fetch,
@@ -117,19 +120,20 @@ impl From<&Task> for TaskRecord {
 			participants: task
 				.participants
 				.iter()
-				.map(ParticipantRecord::from)
+				.map(|p| ParticipantRecord::new(p, &task.state_dir))
 				.collect(),
 		}
 	}
 }
 
-impl From<&workyard_core::Participant> for ParticipantRecord {
-	fn from(participant: &workyard_core::Participant) -> Self {
+impl ParticipantRecord {
+	fn new(participant: &workyard_core::Participant, state: &std::path::Path) -> Self {
 		Self {
+			last_location: placement::LocationRecord::from_participant(participant, state),
 			creation: participant.creation.map(Into::into),
 			name: participant.name.clone(),
-			source: participant.source.as_path().into(),
-			common_dir: participant.common_dir.as_path().into(),
+			source: placement::anchored(&participant.source, state),
+			common_dir: placement::anchored(&participant.common_dir, state),
 			backing_identity: participant.backing_identity.clone(),
 			registration_roots: participant
 				.registration_roots
@@ -137,10 +141,42 @@ impl From<&workyard_core::Participant> for ParticipantRecord {
 				.map(|p| p.as_path().into())
 				.collect(),
 			worktree_identity: participant.worktree_identity.clone(),
-			destination: participant.destination.as_path().into(),
+			destination: placement::anchored(&participant.destination, state),
 			remote: participant.remote.clone(),
 			from: participant.from.clone(),
 			phase: participant.phase.as_str().into(),
 		}
+	}
+}
+
+impl TaskRecord {
+	pub(crate) fn refresh_location(
+		&mut self,
+		participant: &workyard_core::Participant,
+		state: &std::path::Path,
+	) -> Result<bool, Problem> {
+		let record = self
+			.participants
+			.iter_mut()
+			.find(|record| {
+				record.name == participant.name
+					&& record.backing_identity == participant.backing_identity
+					&& record.worktree_identity == participant.worktree_identity
+			})
+			.ok_or_else(|| {
+				crate::damage::damaged("Participant identity changed during placement repair.")
+			})?;
+		let current = ParticipantRecord::new(participant, state);
+		let changed = record.source != current.source
+			|| record.common_dir != current.common_dir
+			|| record.destination != current.destination
+			|| record.last_location != current.last_location;
+		if changed {
+			record.source = current.source;
+			record.common_dir = current.common_dir;
+			record.destination = current.destination;
+			record.last_location = current.last_location;
+		}
+		Ok(changed)
 	}
 }

@@ -42,9 +42,9 @@ impl Reader {
 					snapshot.name = Some(revision.current.task.task.clone());
 					snapshot.pending = revision.current.pending;
 					snapshot.evidence =
-						decoded(revision.current.task.clone(), &mut snapshot.problems);
+						self.decoded(revision.current.task.clone(), &mut snapshot.problems);
 					if saved.is_some() {
-						snapshot.task = decoded(revision.current.task, &mut snapshot.problems);
+						snapshot.task = self.decoded(revision.current.task, &mut snapshot.problems);
 					}
 					self.inspect_task_gate(&mut snapshot);
 					self.verify()?;
@@ -69,7 +69,7 @@ impl Reader {
 			&mut snapshot,
 		);
 		if let Some(saved) = saved {
-			snapshot.task = decoded(saved, &mut snapshot.problems);
+			snapshot.task = self.decoded(saved, &mut snapshot.problems);
 		}
 
 		self.inspect_task_gate(&mut snapshot);
@@ -95,17 +95,17 @@ impl Reader {
 				}
 				snapshot.name.get_or_insert(effect.task.task.clone());
 				snapshot.pending = effect.pending;
-				snapshot.evidence = decoded(effect.task, &mut snapshot.problems);
+				snapshot.evidence = self.decoded(effect.task, &mut snapshot.problems);
 			}
 			Ok(None) => {
 				if let Some(intent) = intent {
-					snapshot.evidence = decoded(intent, &mut snapshot.problems);
+					snapshot.evidence = self.decoded(intent, &mut snapshot.problems);
 				}
 			}
 			Err(problem) => {
 				snapshot.problems.push(problem);
 				if let Some(intent) = intent {
-					snapshot.evidence = decoded(intent, &mut snapshot.problems);
+					snapshot.evidence = self.decoded(intent, &mut snapshot.problems);
 				}
 			}
 		}
@@ -163,21 +163,27 @@ impl Reader {
 
 /// Observations retain independently valid facts when a diagnostic is unknown.
 /// Recovery uses strict decoding and continues to reject that damaged diagnostic.
-fn decoded(mut record: TaskRecord, problems: &mut Vec<Problem>) -> Option<workyard_core::Task> {
-	if let Some(problem) = &record.problem
-		&& problem.code.parse::<ProblemCode>().is_err()
-	{
-		problems.push(damaged(format!(
-			"Unknown stored problem code {:?}; task facts remain available.",
-			problem.code
-		)));
-		record.problem = None;
-	}
-	match decode(record) {
-		Ok(task) => Some(task),
-		Err(problem) => {
-			problems.push(problem);
-			None
+impl Reader {
+	fn decoded(
+		&self,
+		mut record: TaskRecord,
+		problems: &mut Vec<Problem>,
+	) -> Option<workyard_core::Task> {
+		if let Some(problem) = &record.problem
+			&& problem.code.parse::<ProblemCode>().is_err()
+		{
+			problems.push(damaged(format!(
+				"Unknown stored problem code {:?}; task facts remain available.",
+				problem.code
+			)));
+			record.problem = None;
+		}
+		match decode(record, &self.root, &self.state) {
+			Ok(task) => Some(task),
+			Err(problem) => {
+				problems.push(problem);
+				None
+			}
 		}
 	}
 }

@@ -123,3 +123,10 @@ impl RecoverOutcome {
 		}
 	}
 }
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum RecoveryOutcome {
+	Task(Box<RecoverOutcome>),
+	Workspace(super::workspace::WorkspaceRecovery),
+}

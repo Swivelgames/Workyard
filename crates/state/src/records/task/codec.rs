@@ -43,8 +43,7 @@ pub(crate) fn validate(
 	}
 	workyard_core::validate_task(&record.task)?;
 	if record.task != name
-		|| record.tasks_root.decode()? != root
-		|| record.state_dir.decode()? != state
+		|| !super::placement::matches_workspace(record, root, state)?
 		|| record.participants.is_empty()
 		|| (record.pull && record.no_fetch)
 	{
@@ -63,9 +62,7 @@ pub(crate) fn validate(
 			return Err(damaged("Invalid participant membership in task evidence."));
 		}
 		for path in [&p.source, &p.common_dir, &p.destination] {
-			if !path.decode()?.is_absolute() {
-				return Err(damaged("Task evidence contains a relative Git path."));
-			}
+			super::placement::check_path(&path.decode()?)?;
 		}
 		if p.creation
 			.is_some_and(|options| options.pull && options.no_fetch)
@@ -101,13 +98,14 @@ pub(crate) fn validate(
 	Ok(())
 }
 
-pub(crate) fn decode(record: TaskRecord) -> Result<Task, Problem> {
+pub(crate) fn decode(record: TaskRecord, root: &Path, state: &Path) -> Result<Task, Problem> {
+	let prior_state = record.state_dir.decode()?;
 	Ok(Task {
 		generation: record.generation,
 		removal: record.removal.as_ref().map(|r| r.decode()).transpose()?,
 		name: record.task,
-		root: record.tasks_root.decode()?,
-		state_dir: record.state_dir.decode()?,
+		root: root.to_owned(),
+		state_dir: state.to_owned(),
 		checkout: record.checkout,
 		no_fetch: record.no_fetch,
 		pull: record.pull,
@@ -121,7 +119,7 @@ pub(crate) fn decode(record: TaskRecord) -> Result<Task, Problem> {
 		participants: record
 			.participants
 			.into_iter()
-			.map(Participant::try_from)
+			.map(|p| super::placement::participant(p, &prior_state, state))
 			.collect::<Result<_, Problem>>()?,
 	})
 }
@@ -130,6 +128,7 @@ impl TryFrom<super::ParticipantRecord> for Participant {
 	type Error = Problem;
 	fn try_from(record: super::ParticipantRecord) -> Result<Self, Problem> {
 		Ok(Self {
+			placement: record.last_location.map(|p| p.decode()).transpose()?,
 			creation: record.creation.map(Into::into),
 			name: record.name,
 			source: record.source.decode()?,

@@ -47,7 +47,7 @@ fn render(outcome: RecoverOutcome) -> String {
 		},
 		started: false,
 	};
-	smol::block_on(view.finish(&Ok(outcome))).unwrap();
+	smol::block_on(view.finish(&Ok(RecoveryOutcome::Task(Box::new(outcome))))).unwrap();
 	let output = String::from_utf8(capture.0.lock().unwrap().clone()).unwrap();
 	for absent in [
 		"Root:",

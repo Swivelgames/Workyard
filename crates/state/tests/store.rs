@@ -112,6 +112,7 @@ fn independent_intent_survives_failed_task_publication_and_blocks_recreation() {
 	fs::create_dir(&guard.record_path).unwrap();
 	let mut task = support::task(root, state, "feat/test");
 	task.participants.push(workyard_core::Participant {
+		placement: None,
 		creation: None,
 		name: "api".into(),
 		source: root.join("source"),

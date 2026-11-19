@@ -33,7 +33,7 @@ impl AmendState for Store {
 			&Revision {
 				version: 1,
 				anchor,
-				request: request.into(),
+				request: revision::RequestRecord::new(request, &self.state),
 				current: EffectRecord {
 					version: 1,
 					task: task.into(),
@@ -64,7 +64,7 @@ impl AmendState for Store {
 		guard.verify()?;
 		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
 		revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?
-			.map(|revision| revision.request.decode())
+			.map(|revision| revision.request.decode(&self.state))
 			.transpose()
 	}
 }

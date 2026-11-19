@@ -137,7 +137,27 @@ retiring/reusing a task archives the amended membership before a new incarnation
 Participant creation options are versioned separately from the original task-wide
 options so recovery preserves each participant's intended execution policy.
 
-## Recovery
+## Moving or copying a workspace
+
+Move the workspace directory with your usual filesystem tools, then run
+`workyard recover` from its new location. One invocation checks all active tasks.
+It repairs verified Git links and respects worktrees you moved outside the workspace.
+
+If you kept the original and both copies share a Git registration, recovery shows
+both paths for each affected participant and asks once whether to use this copy.
+Both directories retain their working files. Noninteractive clients receive
+`decision_required` with the candidate paths. Select this copy explicitly with
+`workyard recover --activate-here` or RPC `recover` with `{"activate_here": true}`.
+Once the links agree, repeating recovery reports `Nothing to recover`.
+
+If a backing clone also moved, run `workyard projects track /new/path/to/clone`,
+then retry recovery. Workyard verifies its Git identity. An unavailable old volume
+or a different clone at the expected path leaves that participant unresolved.
+Other verified participants can continue. Git can also reconnect other worktrees
+of a moved clone. Workyard checks those paths for conflicting owners or active
+writers before asking Git to repair them.
+
+## Task recovery
 
 ```sh
 workyard recover feat/payments --workspace /workspace

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import pty
 import select
+import shutil
 import struct
 import subprocess
 import sys
@@ -87,64 +88,70 @@ def assert_healthy_retry(root, binary, before, dirty):
 	assert retry.returncode == 0, retry.stdout
 
 
+def run_prompt(binary, root, arguments, key):
+	master, slave = pty.openpty()
+	fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+	before = termios.tcgetattr(slave)
+	process = subprocess.Popen([binary, *arguments], cwd=root,
+		stdin=slave, stdout=subprocess.PIPE, stderr=slave, start_new_session=True)
+	output = bytearray()
+	sent = False
+	deadline = time.monotonic() + 15
+	try:
+		while process.poll() is None:
+			if time.monotonic() > deadline:
+				raise AssertionError(f"prompt did not finish: {output!r}")
+			if not select.select([master], [], [], 0.1)[0]:
+				continue
+			chunk = os.read(master, 65536)
+			output.extend(chunk)
+			if b"\x1b[6n" in chunk:
+				os.write(master, b"\x1b[1;1R")
+			if not sent and b"(y/N)" in output.replace(b"\r\n", b""):
+				os.write(master, key)
+				sent = True
+
+		while select.select([master], [], [], 0)[0]:
+			output.extend(os.read(master, 65536))
+
+		assert sent, output
+		result = process.stdout.read()
+		assert b"(y/N)" not in result, "prompt contaminated stdout"
+		assert b"\x1b" not in result, "redirected result must remain plain"
+		assert b"output_failed" not in result, result
+		assert b"output_failed" not in output, output
+		assert termios.tcgetattr(slave) == before, "terminal modes were not restored"
+		return process.returncode, output, result
+	finally:
+		if process.poll() is None:
+			process.kill()
+			process.wait()
+		os.close(master)
+		os.close(slave)
+
+
 def terminal_case(binary, key, expected, consent=False, dirty=True, multiple=False):
 	with tempfile.TemporaryDirectory(prefix="workyard-terminal-") as temporary:
 		root = fixture(Path(temporary), binary, dirty=dirty, multiple=multiple)
 		before_state = durable_state(root)
-		master, slave = pty.openpty()
-		fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
-		before = termios.tcgetattr(slave)
-		arguments = [binary, "remove", "feat/task"]
+		arguments = ["remove", "feat/task"]
 		if dirty:
 			arguments.append("--yes")
-		process = subprocess.Popen(arguments, cwd=root,
-			stdin=slave, stdout=subprocess.PIPE, stderr=slave, start_new_session=True)
-		output = bytearray()
-		sent = False
-		deadline = time.monotonic() + 15
-		try:
-			while process.poll() is None:
-				if time.monotonic() > deadline:
-					raise AssertionError(f"prompt did not finish: {output!r}")
-				if not select.select([master], [], [], 0.1)[0]:
-					continue
-				chunk = os.read(master, 65536)
-				output.extend(chunk)
-				if b"\x1b[6n" in chunk:
-					os.write(master, b"\x1b[1;1R")
-				if not sent and b"(y/N)" in output.replace(b"\r\n", b""):
-					os.write(master, key)
-					sent = True
+		code, output, result = run_prompt(binary, root, arguments, key)
+		assert_disclosure(output, dirty, multiple)
+		assert expected in result, result
 
-			while select.select([master], [], [], 0)[0]:
-				output.extend(os.read(master, 65536))
+		if consent:
+			assert not (root / "tasks/feat/task/api").exists()
+			assert code == 0
+			return
 
-			assert sent, output
-			assert_disclosure(output, dirty, multiple)
-			result = process.stdout.read()
-			assert expected in result, result
-			assert b"(y/N)" not in result, "prompt contaminated stdout"
-			assert b"\x1b" not in result, "redirected result must remain plain"
-			assert b"output_failed" not in result, result
-			assert b"output_failed" not in output, output
-			assert termios.tcgetattr(slave) == before, "terminal modes were not restored"
-
-			if consent:
-				assert not (root / "tasks/feat/task/api").exists()
-				assert process.returncode == 0
-			else:
-				assert (root / "tasks/feat/task/api/file").read_text() == ("dirty\n" if dirty else "initial\n")
-				assert process.returncode != 0
-				assert b"No worktrees changed." in result, result
-				assert b"needs attention" not in result, result
-				assert b"removal unconfirmed" not in result, result
-				assert_healthy_retry(root, binary, before_state, dirty)
-		finally:
-			if process.poll() is None:
-				process.kill()
-				process.wait()
-			os.close(master)
-			os.close(slave)
+		assert (root / "tasks/feat/task/api/file").read_text() == ("dirty\n" if dirty else "initial\n")
+		assert code != 0
+		assert b"No worktrees changed." in result, result
+		assert b"needs attention" not in result, result
+		assert b"removal unconfirmed" not in result, result
+		assert_healthy_retry(root, binary, before_state, dirty)
 
 
 def closed_stdin_case(binary):
@@ -160,6 +167,41 @@ def closed_stdin_case(binary):
 		assert_healthy_retry(root, binary, before_state, True)
 
 
+def workspace_recovery_case(binary):
+	with tempfile.TemporaryDirectory(prefix="workyard-recover-terminal-") as temporary:
+		base = Path(temporary)
+		root = fixture(base, binary)
+		repository = base / "api"
+		tasks = ("feat/task", "fix/login")
+		subprocess.run([binary, "create", tasks[1], "--repo", str(repository),
+			"--from", "main", "--no-fetch"], cwd=root, check=True, capture_output=True)
+		copy = base / "copy"
+		shutil.copytree(root, copy)
+
+		for task in tasks:
+			for workspace in (root, copy):
+				(workspace / "tasks" / task / "api/file").write_text(workspace.name)
+		registered = git(repository, "worktree", "list", "--porcelain").stdout
+		state = durable_state(copy)
+
+		for answer in (b"n\r", b"\x03", b"y\r"):
+			code, disclosure, result = run_prompt(binary, copy, ["recover"], answer)
+			question = disclosure.index(b"Use this workspace")
+			for task in tasks:
+				assert disclosure.index(task.encode()) < question, disclosure
+				for workspace in (root, copy):
+					assert (workspace / "tasks" / task / "api/file").read_text() == workspace.name
+			current = git(repository, "worktree", "list", "--porcelain").stdout
+			if answer == b"y\r":
+				assert code == 0, result
+				for task in tasks:
+					path = os.fsencode((copy / "tasks" / task / "api").resolve())
+					assert b"worktree " + path in current.splitlines(), current
+			else:
+				assert code != 0, result
+				assert registered == current and state == durable_state(copy)
+
+
 if __name__ == "__main__":
 	binary = str(Path(sys.argv[1]).resolve())
 	for label, key in [("No", b"n\r"), ("Ctrl+C", b"\x03"), ("Escape", b"\x1b"), ("Ctrl+D", b"\x04")]:
@@ -171,3 +213,6 @@ if __name__ == "__main__":
 	print("Clean prompt: concise disclosure precedes task confirmation, no decoration/tabs")
 	closed_stdin_case(binary)
 	print("Closed stdin: decision required, files preserved, no hang")
+
+	workspace_recovery_case(binary)
+	print("Workspace recovery: two tasks, one decision, both copies’ files preserved")

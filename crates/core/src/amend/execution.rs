@@ -46,6 +46,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 		self.changed = true;
 		if result.is_ok() {
 			task.participants[index] = change.participant.clone();
+			task.participants[index].placement = None;
 		}
 		self.publish(task, index)?;
 		result?;

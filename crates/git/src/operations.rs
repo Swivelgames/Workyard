@@ -30,31 +30,30 @@ pub(crate) fn operations_present(git_dir: &Path, common: &Path) -> Result<bool, 
 	Ok(false)
 }
 
-/// Native writer locks exclude static merge/rebase state, which relocation preserves.
+/// Static merge or rebase state can survive a placement repair. A writer lock cannot.
 pub(crate) fn locks_present(git_dir: &Path, common: &Path) -> Result<bool, Problem> {
-	for directory in [git_dir, common] {
-		for name in [
-			"index.lock",
-			"HEAD.lock",
-			"packed-refs.lock",
-			"shallow.lock",
-			"config.lock",
-			"FETCH_HEAD.lock",
-			"ORIG_HEAD.lock",
-		] {
-			if directory
-				.join(name)
-				.try_exists()
-				.map_err(|error| Problem::io("Inspect Git writer lock", error))?
-			{
-				return Ok(true);
-			}
-		}
-		if ref_locks_present(&directory.join("refs"))? {
+	Ok(writer_lock_in(git_dir)? || writer_lock_in(common)?)
+}
+
+pub(crate) fn writer_lock_in(directory: &Path) -> Result<bool, Problem> {
+	for name in [
+		"index.lock",
+		"HEAD.lock",
+		"packed-refs.lock",
+		"shallow.lock",
+		"config.lock",
+		"FETCH_HEAD.lock",
+		"ORIG_HEAD.lock",
+	] {
+		if directory
+			.join(name)
+			.try_exists()
+			.map_err(|error| Problem::io("Inspect Git writer lock", error))?
+		{
 			return Ok(true);
 		}
 	}
-	Ok(false)
+	ref_locks_present(&directory.join("refs"))
 }
 
 /// Ref names are nested paths; inspect actual storage without following symlinks.

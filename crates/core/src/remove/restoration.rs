@@ -114,6 +114,7 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 			RemovalPhase::Restoring;
 		// The removed worktree's administrative identity cannot identify its replacement.
 		task.participants[index].worktree_identity = None;
+		task.participants[index].placement = None;
 		self.store
 			.record_effect(self.guard, task, index, EffectState::Pending)?;
 		let result = self

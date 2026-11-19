@@ -49,7 +49,7 @@ pub(crate) fn read(
 	if revision.current.version != 1 {
 		return Err(damaged("Unsupported revision effect format."));
 	}
-	let request = revision.request.decode()?;
+	let request = revision.request.decode(state)?;
 	if request.repositories.is_empty()
 		|| (request.options.no_fetch && request.options.pull)
 		|| request.repositories.iter().any(|repo| {

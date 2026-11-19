@@ -5,7 +5,11 @@ use trine::NativePath;
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RecoverInput {
-	pub task: String,
+	/// Resume a named task operation. Omit for workspace location recovery.
+	pub task: Option<String>,
+	/// Use the verified worktrees in this workspace when multiple copies exist.
+	#[serde(default)]
+	pub activate_here: bool,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,
 	#[serde(default)]

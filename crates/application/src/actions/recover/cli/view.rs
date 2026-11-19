@@ -1,4 +1,4 @@
-use super::super::RecoverOutcome;
+use super::super::{RecoverOutcome, RecoveryOutcome};
 use crate::{
 	contracts::Progress,
 	presentation::cli::render::{MessageScope, Terminal, text},
@@ -12,7 +12,7 @@ pub struct RecoverView {
 	pub started: bool,
 }
 
-impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
+impl View<RecoveryOutcome, RecoveryOutcome, Progress> for RecoverView {
 	type Completion = ();
 	type Error = io::Error;
 
@@ -34,11 +34,19 @@ impl View<RecoverOutcome, RecoverOutcome, Progress> for RecoverView {
 		self.output.stderr.write_all(terminal.output.as_bytes())
 	}
 
-	async fn finish(&mut self, result: &Result<RecoverOutcome, RecoverOutcome>) -> io::Result<()> {
+	async fn finish(
+		&mut self,
+		result: &Result<RecoveryOutcome, RecoveryOutcome>,
+	) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
-		self.finish_outcome(outcome)
+		match outcome {
+			RecoveryOutcome::Task(task) => self.finish_outcome(task),
+			RecoveryOutcome::Workspace(workspace) => {
+				super::workspace::finish(&self.output, workspace)
+			}
+		}
 	}
 }
 

@@ -309,3 +309,88 @@ fn registered_paths(workspace: &Path) -> BTreeSet<PathBuf> {
 		.map(|root| PathBuf::from(root["path"].as_str().unwrap()))
 		.collect()
 }
+
+#[test]
+fn untrack_accepts_the_displayed_root_left_behind_by_a_workspace_move() {
+	let fixture = tempfile::tempdir().unwrap();
+	let old = fixture.path().join("old");
+	let new = fixture.path().join("new");
+	init_workspace(&old);
+	let api = repo(&old, "api");
+	assert_ok(&workyard(&old, &["projects", "track", text(&api)]));
+	fs::create_dir(&new).unwrap();
+	for entry in ["tasks", ".workyard"] {
+		fs::rename(old.join(entry), new.join(entry)).unwrap();
+	}
+
+	let displayed = api.canonicalize().unwrap();
+	assert!(registered_paths(&new).contains(&displayed));
+	let untrack = workyard(&new, &["projects", "untrack", text(&displayed), "--json"]);
+	assert_ok(&untrack);
+	assert_eq!(cli_result(&untrack)["changed"], json!([displayed]));
+	assert!(!registered_paths(&new).contains(&displayed));
+	assert!(displayed.is_dir());
+}
+
+#[test]
+fn deferred_project_registration_follows_a_moved_workspace_without_rewriting_admission() {
+	for action in ["create", "amend"] {
+		let fixture = tempfile::tempdir().unwrap();
+		let old = fixture.path().join("old");
+		let new = fixture.path().join("new");
+		init_workspace(&old);
+		let projects = old.join("projects");
+		fs::create_dir(&projects).unwrap();
+		repo(&projects, "baseline");
+		let ready = repo(fixture.path(), "ready");
+		let (clone, remote) = remote_clone(fixture.path(), "deferred");
+		let deferred = old.join("deferred");
+		fs::rename(clone, &deferred).unwrap();
+		let offline = fixture.path().join("offline.git");
+		fs::rename(&remote, &offline).unwrap();
+
+		if action == "amend" {
+			assert_ok(&workyard(
+				&old,
+				&["create", "topic", "baseline", "--from", "main"],
+			));
+		}
+		let partial = workyard(
+			&old,
+			&[
+				action,
+				"topic",
+				text(&ready),
+				text(&deferred),
+				"--from",
+				"main",
+			],
+		);
+		assert!(!partial.status.success());
+		assert!(old.join("tasks/topic/ready/.git").is_file());
+		assert!(!old.join("tasks/topic/deferred/.git").exists());
+		assert_eq!(references(&inventory(&old)), ["baseline", "ready"]);
+		let admission =
+			Path::new(".workyard/evidence").join(workyard_state::task_filename("topic"));
+		let original_admission = fs::read(old.join(&admission)).unwrap();
+
+		fs::rename(&old, &new).unwrap();
+		fs::rename(&offline, &remote).unwrap();
+		assert_ok(&workyard(&new, &["recover", "topic"]));
+		assert!(new.join("tasks/topic/deferred/.git").is_file(), "{action}");
+		let expected = BTreeSet::from([
+			new.canonicalize().unwrap().join("projects"),
+			new.join("deferred").canonicalize().unwrap(),
+			ready.canonicalize().unwrap(),
+		]);
+		assert_eq!(registered_paths(&new), expected, "{action} recovery");
+		assert_eq!(
+			references(&inventory(&new)),
+			["baseline", "deferred", "ready"]
+		);
+		assert_eq!(fs::read(new.join(&admission)).unwrap(), original_admission);
+
+		assert_ok(&workyard(&new, &["recover", "topic"]));
+		assert_eq!(registered_paths(&new), expected);
+	}
+}

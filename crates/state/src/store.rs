@@ -2,6 +2,7 @@ mod admission;
 mod amendment;
 mod evidence;
 mod history;
+mod placement;
 mod recovery;
 mod workspace;
 

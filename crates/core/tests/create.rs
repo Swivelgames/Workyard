@@ -286,6 +286,7 @@ fn broken_presentation_stops_before_effect_and_records_cancellation() {
 impl RecoveryState for Fixture {
 	fn load(&self, _: &(), _: &str) -> Result<RecoveryRecord, Problem> {
 		Ok(RecoveryRecord {
+			relocated_project_roots: Default::default(),
 			recorded: None,
 			needs_publication: true,
 			task: self.saved.lock().unwrap()[0].clone(),

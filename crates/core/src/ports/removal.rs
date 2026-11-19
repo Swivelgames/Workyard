@@ -11,6 +11,8 @@ pub enum RetainedHistory {
 
 #[derive(Clone, Debug)]
 pub struct RemovalObservation {
+	pub administration_identity: String,
+	pub worktree_entry: (u64, u64),
 	pub repository: Repository,
 	pub destination: Option<PathBuf>,
 	pub branch: Option<String>,
@@ -18,6 +20,14 @@ pub struct RemovalObservation {
 	/// Content-sensitive token scoped to this inspection, never durable consent.
 	pub dirty_token: Vec<u8>,
 	pub history: RetainedHistory,
+}
+
+impl RemovalObservation {
+	pub(crate) fn same_worktree(&self, other: &Self) -> bool {
+		self.destination == other.destination
+			&& self.administration_identity == other.administration_identity
+			&& self.worktree_entry == other.worktree_entry
+	}
 }
 
 pub trait RemovalGit: Git {

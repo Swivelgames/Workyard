@@ -1,5 +1,5 @@
 use crate::{Repository, Task};
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Clone, Debug)]
 pub struct RecoveryRecord {
@@ -9,6 +9,8 @@ pub struct RecoveryRecord {
 	pub needs_publication: bool,
 	pub task: Task,
 	pub pending: Option<usize>,
+	/// Current locations of admission roots whose recorded workspace moved.
+	pub relocated_project_roots: BTreeMap<PathBuf, PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -30,6 +32,24 @@ pub struct RecoveryResult {
 }
 
 impl RecoveryRecord {
+	/// New revisions can publish current registration paths. Creation evidence
+	/// keeps its original selections for comparison against the immutable admission.
+	pub(crate) fn into_amendment_task(mut self) -> Task {
+		for participant in &mut self.task.participants {
+			locate_roots(
+				&mut participant.registration_roots,
+				&self.relocated_project_roots,
+			);
+		}
+		self.task
+	}
+
+	pub(crate) fn newly_admitted_roots(&self, task: &Task) -> Vec<PathBuf> {
+		let mut roots = task.admitted_roots(Some(&self.task));
+		locate_roots(&mut roots, &self.relocated_project_roots);
+		roots
+	}
+
 	pub(crate) fn writer_problem(&self, index: usize) -> crate::Problem {
 		let participant = &self.task.participants[index];
 		let operation = match self.task.operation.continues.or(self.task.operation.kind) {
@@ -58,5 +78,13 @@ impl RecoveryRecord {
 					&& recorded.lifecycle == task.lifecycle
 					&& recorded.removal == task.removal
 			})
+	}
+}
+
+fn locate_roots(roots: &mut [PathBuf], locations: &BTreeMap<PathBuf, PathBuf>) {
+	for root in roots {
+		if let Some(located) = locations.get(root) {
+			root.clone_from(located);
+		}
 	}
 }

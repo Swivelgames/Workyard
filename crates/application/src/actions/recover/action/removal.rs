@@ -8,13 +8,13 @@ use workyard_state::Store;
 use super::super::RecoverInput;
 
 pub(super) async fn run(
+	name: String,
 	input: RecoverInput,
 	context: InvocationContext<Progress>,
 	runner: &Runner,
 	control: &Control,
 	store: &Store,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
-	let name = input.task.clone();
 	let rejected = |problem| RecoverOutcome::rejected(name.clone(), problem);
 	if !input.accept_pull.is_empty() {
 		return Err(rejected(workyard_core::Problem::new(

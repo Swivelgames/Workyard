@@ -74,6 +74,7 @@ pub(crate) async fn preflight(
 		identities.insert(repository.common_dir.clone(), participants.len());
 		naming.push((&input.path, input.name.is_some()));
 		participants.push(Participant {
+			placement: None,
 			creation: None,
 			registration_roots: input.registration_roots.clone(),
 			worktree_identity: None,

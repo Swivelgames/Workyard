@@ -41,6 +41,44 @@ impl Layout {
 		Ok(layout)
 	}
 
+	pub fn is_at(&self, workspace: &Path) -> Result<bool, Problem> {
+		Ok(self.workspace_root.registration()? == workspace)
+	}
+
+	pub fn update_workspace(&mut self, workspace: &Path) -> Result<bool, Problem> {
+		let previous = self.workspace_root.registration()?;
+		if previous == workspace {
+			return Ok(false);
+		}
+		let roots = self.located_roots(workspace)?;
+		self.set_project_roots(&roots);
+		self.workspace_root = workspace.into();
+		Ok(true)
+	}
+
+	/// Roots under the workspace follow it. An explicitly tracked root left
+	/// behind remains discoverable; the default projects directory follows init.
+	pub fn located_roots(&self, workspace: &Path) -> Result<BTreeSet<PathBuf>, Problem> {
+		let previous = self.workspace_root.registration()?;
+		let roots = self.project_roots()?;
+		if previous == workspace {
+			return Ok(roots);
+		}
+		let mut located = BTreeSet::new();
+		for root in roots {
+			let current = workspace.join(&root);
+			let old = previous.join(&root);
+			if root.is_absolute() || root == Path::new("projects") || crate::exists(&current)? {
+				located.insert(root);
+			} else if crate::exists(&old)? {
+				located.insert(old);
+			} else {
+				located.insert(root);
+			}
+		}
+		Ok(located)
+	}
+
 	pub fn project_roots(&self) -> Result<BTreeSet<PathBuf>, Problem> {
 		self.project_roots
 			.iter()

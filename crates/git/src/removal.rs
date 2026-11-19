@@ -47,8 +47,7 @@ impl RemovalGit for Runner {
 		} else {
 			&destination
 		};
-		let repository =
-			Repository::inspect(self, source, participant.remote.as_deref(), control).await?;
+		let repository = Repository::local(self, source, control).await?;
 		if repository.identity != participant.backing_identity {
 			return Err(blocked("Restored worktree backing identity changed."));
 		}
@@ -70,7 +69,8 @@ impl RemovalGit for Runner {
 				"Managed worktree is missing; repair its registration before removal.",
 			));
 		};
-		let repository = Repository::inspect(self, &destination, None, control).await?;
+		let worktree_entry = workyard_system::entry_identity(&destination)?;
+		let repository = Repository::local(self, &destination, control).await?;
 		let output = self
 			.checked(
 				&destination,
@@ -129,6 +129,8 @@ impl RemovalGit for Runner {
 		};
 		let (dirty_paths, dirty_token) = dirty::inspect(self, &destination, control).await?;
 		Ok(RemovalObservation {
+			administration_identity: workyard_system::directory_identity(&git_dir)?,
+			worktree_entry,
 			repository: repository.into(),
 			destination: Some(destination),
 			branch,
@@ -148,6 +150,10 @@ impl RemovalGit for Runner {
 			.destination
 			.as_ref()
 			.ok_or_else(|| blocked("Removal has no verified worktree destination."))?;
+		let _gate =
+			crate::relationships::relationship_lock(&observation.repository, control).await?;
+		self.verify_removal_location(observation, destination, control)
+			.await?;
 		let mut arguments = args(&["worktree", "remove"]);
 		if discard {
 			arguments.push("--force".into());
@@ -181,7 +187,7 @@ impl RemovalGit for Runner {
 			{
 				continue;
 			}
-			let found = Repository::inspect(self, path, None, control).await?;
+			let found = Repository::local(self, path, control).await?;
 			if found.identity != participant.backing_identity {
 				return Err(blocked("Backing repository identity changed."));
 			}
@@ -236,6 +242,47 @@ impl RemovalGit for Runner {
 }
 
 impl Runner {
+	/// Removal and copy activation serialize on the backing repository. Git resolves
+	/// its worktree argument at execution, so verify its backlink while holding the gate.
+	async fn verify_removal_location(
+		&self,
+		observation: &RemovalObservation,
+		destination: &std::path::Path,
+		control: &Control,
+	) -> Result<(), Problem> {
+		use crate::relationships::pointer::{absolute, read_path, same_path};
+		let actual = destination
+			.canonicalize()
+			.map_err(|e| Problem::io("Resolve worktree before removal", e))?;
+		if !same_path(&actual, destination)
+			|| workyard_system::entry_identity(destination)? != observation.worktree_entry
+		{
+			return Err(blocked(
+				"The physical worktree at the removal destination changed. Inspect it and retry.",
+			));
+		}
+		let output = self
+			.checked(
+				destination,
+				&args(&["rev-parse", "--path-format=absolute", "--git-dir"]),
+				control,
+			)
+			.await?;
+		let admin =
+			crate::output::path_line(&output).map_err(|_| blocked("Invalid worktree path."))?;
+		let backlink = absolute(&admin, &read_path(&admin.join("gitdir"))?);
+		if !same_path(&backlink, &destination.join(".git"))
+			|| workyard_system::directory_identity(&admin)? != observation.administration_identity
+			|| workyard_system::directory_identity(&observation.repository.common_dir)?
+				!= observation.repository.identity
+		{
+			return Err(blocked(
+				"Git registration changed before removal. Inspect workyard status and retry.",
+			));
+		}
+		Ok(())
+	}
+
 	async fn retained_history(
 		&self,
 		destination: &std::path::Path,

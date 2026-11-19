@@ -70,7 +70,7 @@ async fn run(
 	admission::validate(&record, accept_pull)?;
 
 	let restore_record = record.recorded.is_none() || record.needs_publication;
-	let original = record.task;
+	let original = record.into_amendment_task();
 	if recovering {
 		admission::refresh_request(&mut request, &original, git, control).await?;
 	}

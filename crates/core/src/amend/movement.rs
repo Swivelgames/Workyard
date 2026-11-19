@@ -45,6 +45,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 		}
 
 		participant.destination = destination;
+		participant.placement = None;
 		participant.name = name;
 		task.participants[index] = participant;
 		self.changed = true;

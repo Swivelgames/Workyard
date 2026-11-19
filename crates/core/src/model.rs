@@ -9,7 +9,7 @@ mod task;
 pub use amendment::{AmendRequest, AmendResult, AmendmentChange, AmendmentChangeKind};
 pub use creation::{CreateRequest, CreateResult, CreationOptions, PullFailure, RepositoryInput};
 pub use recovery::{RecoveryObservation, RecoveryRecord, RecoveryResult};
-pub use task::{Participant, Phase, Task, TaskLifecycle};
+pub use task::{Participant, Phase, PlacementHint, Task, TaskLifecycle};
 
 pub use operation::{Operation, OperationKind, OperationOutcome};
 

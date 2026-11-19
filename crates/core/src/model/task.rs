@@ -25,7 +25,18 @@ impl Phase {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlacementHint {
+	pub source: PathBuf,
+	pub common_dir: PathBuf,
+	pub destination: PathBuf,
+	pub workspace: PathBuf,
+	pub worktree_entry: Option<(u64, u64)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Participant {
+	/// Previous verified backing and worktree paths, used to check manually moved links.
+	pub placement: Option<PlacementHint>,
 	pub registration_roots: Vec<PathBuf>,
 	pub creation: Option<super::creation::CreationOptions>,
 	pub name: String,

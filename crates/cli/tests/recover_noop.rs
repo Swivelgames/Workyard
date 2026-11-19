@@ -186,7 +186,10 @@ fn recovery_repairs_unique_manually_renamed_task_child_and_preserves_membership(
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	let task = record(&root.join(".workyard"));
 	assert_eq!(task["participants"][0]["name"], "api");
-	assert_eq!(task["participants"][0]["destination"], text(&destination));
+	assert_eq!(
+		task["participants"][0]["destination"],
+		text(destination.strip_prefix(&root).unwrap())
+	);
 	assert_eq!(
 		fs::read_to_string(destination.join("file")).unwrap(),
 		"authored edits"
@@ -221,7 +224,10 @@ fn recovery_finds_renamed_worktree_when_original_path_is_reused() {
 
 	let task = record(&root.join(".workyard"));
 	assert_eq!(task["participants"][0]["name"], "api");
-	assert_eq!(task["participants"][0]["destination"], text(&renamed));
+	assert_eq!(
+		task["participants"][0]["destination"],
+		text(renamed.strip_prefix(&root).unwrap())
+	);
 	assert_eq!(
 		fs::read_to_string(original.join("notes")).unwrap(),
 		"unrelated files"

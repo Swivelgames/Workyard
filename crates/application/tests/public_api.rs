@@ -47,6 +47,7 @@ fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields()
 		root: "workspace".into(),
 		state_dir: "state".into(),
 		participants: vec![workyard_core::Participant {
+			placement: None,
 			creation: None,
 			name: "api".into(),
 			source: "source".into(),

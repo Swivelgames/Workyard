@@ -124,8 +124,9 @@ pub async fn recover(
 		invocation_problem = Some(problem);
 	}
 	let pull_failures = recovery.pull_failures.into_inner().expect("pull failures");
+	let admitted_roots = record.newly_admitted_roots(&task);
 	Ok(crate::RecoveryResult {
-		admitted_roots: task.admitted_roots(Some(&record.task)),
+		admitted_roots,
 		operation: crate::optional_pull::invocation_operation(invocation, &pull_failures),
 		pull_failures,
 		problem: invocation_problem,

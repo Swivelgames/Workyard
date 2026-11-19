@@ -46,7 +46,7 @@ impl Reader {
 						"Invalid retired incarnation identity.",
 					));
 				}
-				let task = decode(record)?;
+				let task = decode(record, &self.root, &self.state)?;
 				records.push(TaskSnapshot {
 					name: Some(task.name.clone()),
 					record: path,

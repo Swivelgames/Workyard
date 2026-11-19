@@ -77,6 +77,9 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 		{
 			return result;
 		}
+		if result.is_ok() {
+			task.participants[index].placement = None;
+		}
 		self.store
 			.record_effect(self.guard, task, index, crate::EffectState::Settled)?;
 		result
@@ -98,6 +101,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 				|| participant.common_dir != previous.common_dir
 				|| participant.destination != previous.destination;
 			if cache_changed {
+				participant.placement = None;
 				self.observer
 					.phase(&task.name, &participant.name, "updating_worktree_location")
 					.await?;
