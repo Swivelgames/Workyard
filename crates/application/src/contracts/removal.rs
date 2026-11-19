@@ -15,8 +15,18 @@ pub struct DecisionRequirement {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub task: Option<String>,
 	pub kind: String,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub participants: Vec<String>,
 	pub participant: String,
 	pub message: String,
+}
+
+#[derive(Default, Serialize)]
+pub struct RemovalReport {
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub disclosures: Vec<Disclosure>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub decision: Option<DecisionRequirement>,
 }
 
 /// Cancellation is an invocation outcome; task condition comes from known facts.

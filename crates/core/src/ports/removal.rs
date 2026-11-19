@@ -30,6 +30,19 @@ impl RemovalObservation {
 	}
 }
 
+/// Only a destructive command can leave behind an unconfirmed unlink writer.
+#[derive(Debug)]
+pub enum UnlinkFailure {
+	BeforeLaunch(Problem),
+	Command(Problem),
+}
+
+impl From<Problem> for UnlinkFailure {
+	fn from(problem: Problem) -> Self {
+		Self::BeforeLaunch(problem)
+	}
+}
+
 pub trait RemovalGit: Git {
 	/// Only for durable successful recreation evidence, never a failed add attempt.
 	fn reconcile_recreation(
@@ -55,7 +68,8 @@ pub trait RemovalGit: Git {
 		observation: &RemovalObservation,
 		discard: bool,
 		control: &Control,
-	) -> impl Future<Output = Result<(), Problem>> + Send;
+		before_unlink: impl FnOnce() -> Result<(), Problem> + Send,
+	) -> impl Future<Output = Result<(), UnlinkFailure>> + Send;
 	fn inspect_restoration(
 		&self,
 		participant: &Participant,
@@ -67,6 +81,8 @@ pub trait RemovalGit: Git {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecisionKind {
 	RemoveTask,
+	RemoveParticipants,
+	DiscardParticipants,
 	DiscardTask,
 	DiscardFiles,
 	RetainedHistory,
@@ -78,20 +94,25 @@ pub struct Decision {
 	pub task: Option<String>,
 	pub kind: DecisionKind,
 	pub participant: String,
+	pub participants: Vec<String>,
 	pub message: String,
 }
 
 pub trait RemovalObserver: crate::Observer {
 	fn disclose(
 		&self,
-		participant: &str,
-		observation: &RemovalObservation,
-	) -> impl Future<Output = Result<(), Problem>> + Send;
+		_participant: &str,
+		_observation: &RemovalObservation,
+	) -> impl Future<Output = Result<(), Problem>> + Send {
+		async { Ok(()) }
+	}
 	/// Returns None when the interface cannot ask; never silently grants consent.
 	fn confirm(
 		&self,
-		decision: Decision,
-	) -> impl Future<Output = Result<Option<bool>, Problem>> + Send;
+		_decision: Decision,
+	) -> impl Future<Output = Result<Option<bool>, Problem>> + Send {
+		async { Ok(None) }
+	}
 }
 
 #[derive(Clone, Copy, Debug, Default)]

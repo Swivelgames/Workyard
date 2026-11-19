@@ -8,5 +8,11 @@ pub(in super::super) fn bindings() -> Bindings {
 		completion::tasks::suggest,
 	);
 
+	let bindings = bindings
+		.option("remove", "remove")
+		.complete_group("remove", "Participants", completion::task_members)
+		.option("yes", "yes")
+		.option("force", "force");
+
 	project_bindings(bindings)
 }

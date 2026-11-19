@@ -48,7 +48,11 @@ impl RecoveryState for Store {
 			} else {
 				None
 			};
-			relocated_project_roots.extend(revision.request.relocated_project_roots(workspace)?);
+			relocated_project_roots
+				.extend(revision.current.task.relocated_project_roots(workspace)?);
+			if let Some(request) = revision.request {
+				relocated_project_roots.extend(request.relocated_project_roots(workspace)?);
+			}
 			return Ok(RecoveryRecord {
 				relocated_project_roots,
 				needs_publication,

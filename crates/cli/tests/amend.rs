@@ -1,3 +1,5 @@
+#[path = "support/rpc.rs"]
+mod rpc;
 mod support;
 use std::{fs, path::Path};
 use support::{assert_ok, git, record, repo, text, workyard};
@@ -331,36 +333,16 @@ fn missing_published_record_is_rebuilt_from_revision_without_recreating_trees() 
 
 #[test]
 fn rpc_uses_same_amend_contract() {
-	use std::io::Write;
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
 	create(&root, &api);
-	let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_workyard"))
-		.current_dir(&root)
-		.arg("rpc")
-		.stdin(std::process::Stdio::piped())
-		.stdout(std::process::Stdio::piped())
-		.spawn()
-		.unwrap();
-	let request = serde_json::json!({
-		"jsonrpc": "2.0",
-		"id": "amend-1",
-		"method": "invoke",
-		"params": {
-			"action": ["amend"],
-			"input": {
-				"task": "feat/task",
-				"no_fetch": true,
-				"from": "main",
-				"repositories": [{"path": web}]
-			}
-		}
+	let input = serde_json::json!({
+		"task": "feat/task", "no_fetch": true, "from": "main",
+		"repositories": [{"path": web}]
 	});
-	writeln!(child.stdin.take().unwrap(), "{request}").unwrap();
-	let output = child.wait_with_output().unwrap();
-	let response: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	let response = rpc::invoke(&root, "amend", input);
 	assert_eq!(
 		response["result"]["operation"]["kind"], "amend",
 		"{response}"
@@ -381,3 +363,10 @@ mod identity;
 mod removal;
 #[path = "support/amendment/retry.rs"]
 mod retry;
+
+#[path = "support/amendment/guards.rs"]
+mod guards;
+#[path = "support/amendment/participants.rs"]
+mod participants;
+#[path = "support/amendment/removal_recovery.rs"]
+mod removal_recovery;

@@ -67,6 +67,16 @@ fn amended_membership_survives_partial_removal_undo_and_later_amend() {
 		);
 	}
 	assert_ok(&workyard(&root, &["recover", "feat/task", "--undo"]));
+	let completed = std::process::Command::new(env!("CARGO_BIN_EXE_workyard"))
+		.current_dir(&root)
+		.env("TRINE_COMPLETE", "bash")
+		.env("_CLAP_COMPLETE_INDEX", "4")
+		.args(["--", "workyard", "amend", "feat/task", "--remove", ""])
+		.output()
+		.unwrap();
+	assert_ok(&completed);
+	let names = String::from_utf8(completed.stdout).unwrap();
+	assert_eq!(names.split_whitespace().collect::<Vec<_>>(), ["api", "web"]);
 	assert_ok(&workyard(
 		&root,
 		&[

@@ -29,6 +29,8 @@ fn established(workspace: &support::Workspace) -> workyard_core::Task {
 fn request(task: &workyard_core::Task) -> AmendRequest {
 	AmendRequest {
 		task: task.name.clone(),
+		remove: Vec::new(),
+		removal_options: Default::default(),
 		repositories: vec![RepositoryInput {
 			registration_roots: Vec::new(),
 			expected_identity: None,
@@ -56,7 +58,9 @@ fn revision_effect_survives_publication_gap_and_reader_does_not_repair_it() {
 	store.begin(&guard, &task).unwrap();
 	let original_admission = fs::read(&guard.evidence_path).unwrap();
 	let original_record = fs::read(&guard.record_path).unwrap();
-	store.begin_amend(&guard, &task, &request(&task)).unwrap();
+	store
+		.begin_amend(&guard, &task, &request(&task), &[])
+		.unwrap();
 	task.participants[0].name = "legacy".into();
 	task.participants[0].destination = workspace.root.join("feat/task/legacy");
 	store
@@ -90,7 +94,9 @@ fn failed_task_publication_retains_revision_and_pending_writers() {
 	let guard = store.admit("feat/task").unwrap();
 	let task = established(&workspace);
 	store.begin(&guard, &task).unwrap();
-	store.begin_amend(&guard, &task, &request(&task)).unwrap();
+	store
+		.begin_amend(&guard, &task, &request(&task), &[])
+		.unwrap();
 	store
 		.record_effect(&guard, &task, 0, EffectState::Pending)
 		.unwrap();
@@ -111,12 +117,132 @@ fn unchanged_amend_restores_exact_prior_revision_bytes() {
 	let guard = store.admit("feat/task").unwrap();
 	let task = established(&workspace);
 	store.begin(&guard, &task).unwrap();
-	store.begin_amend(&guard, &task, &request(&task)).unwrap();
+	store
+		.begin_amend(&guard, &task, &request(&task), &[])
+		.unwrap();
 	let path = guard.evidence_path.with_extension("revision");
 	let value: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
 	let compact = serde_json::to_vec(&value).unwrap();
 	fs::write(&path, &compact).unwrap();
-	let checkpoint = store.begin_amend(&guard, &task, &request(&task)).unwrap();
+	let checkpoint = store
+		.begin_amend(&guard, &task, &request(&task), &[])
+		.unwrap();
 	store.unchanged_amend(&guard, checkpoint).unwrap();
 	assert_eq!(fs::read(path).unwrap(), compact);
+}
+
+#[test]
+fn confirmed_unlink_survives_stale_publication_and_a_failed_readdition() {
+	let workspace = support::Workspace::new();
+	let store = &workspace.store;
+	let guard = store.admit("feat/task").unwrap();
+	let mut task = established(&workspace);
+	let original = task.participants[0].clone();
+	let mut sibling = original.clone();
+	sibling.name = "web".into();
+	sibling.backing_identity = "web-backing".into();
+	sibling.worktree_identity = Some("web-admin".into());
+	sibling.destination = workspace.root.join("feat/task/web");
+	task.participants.push(sibling);
+	store.begin(&guard, &task).unwrap();
+
+	let target = workyard_core::RemovalTarget {
+		name: original.name.clone(),
+		backing_identity: original.backing_identity.clone(),
+		worktree_identity: original.worktree_identity.clone().unwrap(),
+	};
+	let mut removal = request(&task);
+	removal.repositories.clear();
+	removal.remove = vec![target.name.clone()];
+	removal.removal_options.force = true;
+	store
+		.begin_amend(&guard, &task, &removal, std::slice::from_ref(&target))
+		.unwrap();
+	store
+		.record_effect(&guard, &task, 0, EffectState::Pending)
+		.unwrap();
+
+	task.participants.remove(0);
+	store.settle_unlink(&guard, &task, &target).unwrap();
+	let interrupted = store.load(&guard, &task.name).unwrap();
+	assert!(interrupted.needs_publication);
+	assert!(interrupted.pending.is_none());
+	assert_eq!(interrupted.task.participants.len(), 1);
+	assert_eq!(interrupted.task.participants[0].name, "web");
+	assert_eq!(interrupted.recorded.unwrap().participants.len(), 2);
+	assert_eq!(store.removal_targets(&guard).unwrap(), [target]);
+	assert!(
+		!store
+			.amend_request(&guard)
+			.unwrap()
+			.unwrap()
+			.removal_options
+			.force
+	);
+
+	let add = request(&task);
+	store.begin_amend(&guard, &task, &add, &[]).unwrap();
+	let mut attempting = original;
+	attempting.phase = Phase::Creating;
+	attempting.worktree_identity = None;
+	task.participants.push(attempting);
+	store
+		.record_effect(&guard, &task, 1, EffectState::Pending)
+		.unwrap();
+	task.participants.pop();
+	store
+		.record_effect(&guard, &task, 0, EffectState::Settled)
+		.unwrap();
+	assert_eq!(
+		store.load(&guard, &task.name).unwrap().task.participants,
+		interrupted.task.participants
+	);
+
+	// Deleting the independent unlink receipt must expose the missing admission.
+	let path = guard.evidence_path.with_extension("revision");
+	let mut revision: serde_json::Value =
+		serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+	revision.as_object_mut().unwrap().remove("removed");
+	fs::write(path, serde_json::to_vec(&revision).unwrap()).unwrap();
+	assert_eq!(
+		store.load(&guard, &task.name).unwrap_err().code,
+		workyard_core::ProblemCode::DamagedState
+	);
+}
+
+#[test]
+fn stored_removal_cannot_bind_one_participants_name_to_anothers_identity() {
+	let workspace = support::Workspace::new();
+	let mut task = established(&workspace);
+	let mut web = task.participants[0].clone();
+	web.name = "web".into();
+	web.backing_identity = "web-backing".into();
+	web.worktree_identity = Some("web-admin".into());
+	web.destination = workspace.root.join("feat/task/web");
+	task.participants.push(web);
+	let store = &workspace.store;
+	let guard = store.admit(&task.name).unwrap();
+	store.begin(&guard, &task).unwrap();
+
+	let mut request = request(&task);
+	request.repositories.clear();
+	request.remove.push("web".into());
+	let target = workyard_core::RemovalTarget {
+		name: "web".into(),
+		backing_identity: "web-backing".into(),
+		worktree_identity: "web-admin".into(),
+	};
+	store
+		.begin_amend(&guard, &task, &request, &[target])
+		.unwrap();
+
+	let path = guard.evidence_path.with_extension("revision");
+	let mut revision: serde_json::Value =
+		serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+	revision["request"]["remove"][0]["name"] = "api".into();
+	fs::write(path, serde_json::to_vec(&revision).unwrap()).unwrap();
+	assert_eq!(
+		store.load(&guard, &task.name).unwrap_err().code,
+		workyard_core::ProblemCode::DamagedState
+	);
 }

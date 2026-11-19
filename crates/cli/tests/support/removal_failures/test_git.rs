@@ -11,6 +11,13 @@ pub(super) struct FaultGit {
 	pub(super) identity_failure: AtomicBool,
 	pub(super) add_failure: bool,
 	pub(super) adds: AtomicUsize,
+	pub(super) fail_unlink: Option<UnlinkBoundary>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum UnlinkBoundary {
+	Validate,
+	Writer,
 }
 
 impl Git for FaultGit {
@@ -124,9 +131,24 @@ impl RemovalGit for FaultGit {
 		observation: &RemovalObservation,
 		discard: bool,
 		control: &Control,
-	) -> Result<(), Problem> {
+		before_unlink: impl FnOnce() -> Result<(), Problem> + Send,
+	) -> Result<(), workyard_core::UnlinkFailure> {
+		if let Some(boundary) = self.fail_unlink {
+			let problem = Problem::new(
+				ProblemCode::SupervisionFailed,
+				"Injected supervision failure",
+			);
+			return match boundary {
+				UnlinkBoundary::Validate => Err(UnlinkFailure::BeforeLaunch(problem)),
+				UnlinkBoundary::Writer => {
+					before_unlink()?;
+					Err(UnlinkFailure::Command(problem))
+				}
+			};
+		}
+
 		self.runner
-			.remove_worktree(observation, discard, control)
+			.remove_worktree(observation, discard, control, before_unlink)
 			.await
 	}
 
@@ -138,6 +160,59 @@ impl RemovalGit for FaultGit {
 	) -> Result<Repository, Problem> {
 		self.runner
 			.inspect_restoration(participant, branch, control)
+			.await
+	}
+}
+
+impl ObservationGit for FaultGit {
+	async fn observe(
+		&self,
+		participant: &Participant,
+		control: &Control,
+	) -> Result<GitFacts, Problem> {
+		self.runner.observe(participant, control).await
+	}
+}
+
+impl RecoveryGit for FaultGit {
+	async fn reconcile(
+		&self,
+		participant: &Participant,
+		task: &str,
+		control: &Control,
+	) -> Result<RecoveryObservation, Problem> {
+		self.runner.reconcile(participant, task, control).await
+	}
+}
+
+impl AmendGit for FaultGit {
+	async fn relationship(
+		&self,
+		repository: &Repository,
+		participant: &Participant,
+		control: &Control,
+	) -> Result<Relationship, Problem> {
+		self.runner
+			.relationship(repository, participant, control)
+			.await
+	}
+	async fn repair(
+		&self,
+		repository: &Repository,
+		participant: &Participant,
+		control: &Control,
+	) -> Result<(), Problem> {
+		self.runner.repair(repository, participant, control).await
+	}
+	async fn move_worktree(
+		&self,
+		repository: &Repository,
+		participant: &Participant,
+		destination: &Path,
+		control: &Control,
+	) -> Result<(), Problem> {
+		self.runner
+			.move_worktree(repository, participant, destination, control)
 			.await
 	}
 }

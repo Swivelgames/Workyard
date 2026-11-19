@@ -6,6 +6,8 @@ struct DisruptAddition {
 	source: std::path::PathBuf,
 }
 
+impl workyard_core::RemovalObserver for DisruptAddition {}
+
 impl workyard_core::Observer for DisruptAddition {
 	async fn phase(
 		&self,
@@ -24,6 +26,8 @@ fn request(repositories: Vec<workyard_core::RepositoryInput>) -> workyard_core::
 	workyard_core::AmendRequest {
 		task: "feat/task".into(),
 		repositories,
+		remove: Vec::new(),
+		removal_options: Default::default(),
 		options: workyard_core::CreationOptions {
 			checkout: false,
 			no_fetch: true,
@@ -105,6 +109,8 @@ fn successful_rename_survives_later_failure_and_same_request_can_retry() {
 }
 
 struct CancelCreation;
+impl workyard_core::RemovalObserver for CancelCreation {}
+
 impl workyard_core::Observer for CancelCreation {
 	async fn phase(
 		&self,

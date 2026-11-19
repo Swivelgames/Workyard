@@ -1,5 +1,6 @@
 //! Atomic membership authority anchored to the original task admission.
 mod request;
+mod targets;
 use crate::{
 	TaskRecord,
 	damage::damaged,
@@ -11,6 +12,7 @@ use crate::{
 pub(crate) use request::RequestRecord;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+pub(crate) use targets::TargetRecord;
 use workyard_core::Problem;
 
 pub(crate) enum WriterUpdate {
@@ -25,7 +27,9 @@ pub(crate) struct Revision {
 	pub version: u32,
 	pub anchor: TaskRecord,
 	pub current: EffectRecord,
-	pub request: RequestRecord,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub removed: Vec<TargetRecord>,
+	pub request: Option<RequestRecord>,
 }
 
 pub(crate) fn path(intent: &Path) -> PathBuf {
@@ -49,35 +53,23 @@ pub(crate) fn read(
 	if revision.current.version != 1 {
 		return Err(damaged("Unsupported revision effect format."));
 	}
-	let request = revision.request.decode(state)?;
-	if request.repositories.is_empty()
-		|| (request.options.no_fetch && request.options.pull)
-		|| request.repositories.iter().any(|repo| {
-			!repo.path.is_absolute() || repo.path.as_os_str().as_encoded_bytes().contains(&0)
-		}) {
-		return Err(damaged("Invalid recorded amendment request."));
+	if let Some(request) = &revision.request {
+		request.validate(&intent.task, state)?;
+	} else if revision.current.task.removal.is_none() {
+		return Err(damaged(
+			"Membership revision has no owning amendment or retirement.",
+		));
 	}
 	if revision.current.task.generation != intent.generation
 		|| revision
 			.current
 			.pending
 			.is_some_and(|index| index >= revision.current.task.participants.len())
-		|| revision.request.task != intent.task
 	{
 		return Err(damaged(
 			"Membership revision disagrees with its task incarnation.",
 		));
 	}
-	// Amend may add or rename membership, but cannot remove or replace its backing repositories.
-	if intent.participants.iter().any(|original| {
-		!revision
-			.current
-			.task
-			.participants
-			.iter()
-			.any(|current| current.backing_identity == original.backing_identity)
-	}) {
-		return Err(damaged("Membership revision lost an admitted repository."));
-	}
+	targets::validate(&revision)?;
 	Ok(Some(revision))
 }

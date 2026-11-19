@@ -18,3 +18,18 @@ impl From<Participant> for ParticipantOutcome {
 		}
 	}
 }
+
+#[derive(Serialize)]
+pub struct ParticipantChange {
+	pub participant: String,
+	pub kind: &'static str,
+}
+
+impl From<workyard_core::AmendmentChange> for ParticipantChange {
+	fn from(change: workyard_core::AmendmentChange) -> Self {
+		Self {
+			participant: change.participant,
+			kind: change.kind.as_str(),
+		}
+	}
+}

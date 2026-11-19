@@ -86,7 +86,7 @@ fn forced_removal_cannot_act_on_files_replaced_after_inspection() {
 	fs::rename(&active, &detached).unwrap();
 	copy_directory(&detached, &active);
 	fs::write(active.join("file"), "replacement edits").unwrap();
-	assert!(smol::block_on(runner.remove_worktree(&preview, true, &control)).is_err());
+	assert!(smol::block_on(runner.remove_worktree(&preview, true, &control, || Ok(()))).is_err());
 	assert_eq!(registered(&api, "active"), active.canonicalize().unwrap());
 	assert_eq!(fs::read(active.join("file")).unwrap(), b"replacement edits");
 }
@@ -151,4 +151,74 @@ fn displaced_absolute_records_cannot_remove_the_original_worktree() {
 		}
 	}
 	rejected_incomplete_copy(&new, &api, &original);
+}
+
+#[test]
+fn amend_cannot_unlink_a_selected_worktree_from_a_competing_copy() {
+	let fixture = tempfile::tempdir().unwrap();
+	let original = fixture.path().join("original");
+	let copy = fixture.path().join("copy");
+	let api = repo(fixture.path(), "api");
+	let web = repo(fixture.path(), "web");
+	init_workspace(&original);
+	create(&original, "active", &api);
+	assert_ok(&workyard(
+		&original,
+		&["amend", "active", "--repo", text(&web), "--from", "main"],
+	));
+	copy_directory(&original, &copy);
+	for (workspace, content) in [(&original, "original draft"), (&copy, "copied draft")] {
+		fs::write(workspace.join("tasks/active/web/file"), content).unwrap();
+	}
+
+	let rejected = workyard(&copy, &["amend", "active", "--remove", "web", "--force"]);
+	assert!(!rejected.status.success());
+	assert_eq!(
+		registered(&web, "active"),
+		original.join("tasks/active/web").canonicalize().unwrap()
+	);
+	assert_eq!(
+		fs::read_to_string(original.join("tasks/active/web/file")).unwrap(),
+		"original draft"
+	);
+	assert_eq!(
+		fs::read_to_string(copy.join("tasks/active/web/file")).unwrap(),
+		"copied draft"
+	);
+}
+
+#[test]
+fn final_unlink_refuses_new_bytes_in_the_same_worktree() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path().join("workspace");
+	let api = repo(fixture.path(), "api");
+	init_workspace(&workspace);
+	create(&workspace, "active", &api);
+	let tree = workspace.join("tasks/active/api");
+	fs::write(tree.join("file"), "disclosed edit").unwrap();
+	let reader = Reader::open(&workspace.join(".workyard"), None).unwrap();
+	let task = reader
+		.tasks(Some("active"))
+		.unwrap()
+		.pop()
+		.unwrap()
+		.task
+		.unwrap();
+	let runner = Runner::default();
+	let control = Control::default();
+	let preview = smol::block_on(runner.inspect_removal(&task.participants[0], &control)).unwrap();
+
+	fs::write(tree.join("file"), "changed after disclosure").unwrap();
+	let refused = smol::block_on(runner.remove_worktree(&preview, true, &control, || {
+		panic!("A stale observation must be refused before writer admission")
+	}));
+	assert!(
+		matches!(refused, Err(workyard_core::UnlinkFailure::BeforeLaunch(problem))
+		if problem.code == workyard_core::ProblemCode::DecisionRequired)
+	);
+	assert_eq!(
+		fs::read_to_string(tree.join("file")).unwrap(),
+		"changed after disclosure"
+	);
+	assert_eq!(registered(&api, "active"), tree.canonicalize().unwrap());
 }

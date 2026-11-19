@@ -1,5 +1,5 @@
 //! Retire membership only after every managed worktree has been removed safely.
-mod consent;
+pub(crate) mod consent;
 mod restoration;
 mod verification;
 
@@ -255,7 +255,17 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 		}
 
 		self.inspected = true;
-		self.authorize_task(&task.name, &observations).await?;
+		consent::authorize(
+			self.observer,
+			self.options,
+			&task.name,
+			&[],
+			observations
+				.iter()
+				.flatten()
+				.any(|fact| !fact.dirty_paths.is_empty()),
+		)
+		.await?;
 
 		if task.removal.is_none() {
 			task.removal = Some(Removal {
@@ -278,62 +288,47 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 		}
 
 		for (index, observation) in observations.into_iter().enumerate() {
-			let Some(mut disclosed) = observation else {
+			let Some(observation) = observation else {
 				continue;
 			};
 			self.control.check()?;
 			self.store.verify()?;
-			loop {
-				let current = self
-					.git
-					.inspect_removal(&task.participants[index], self.control)
-					.await?;
-				if !current.same_worktree(&disclosed) || current.branch != disclosed.branch {
-					return Err(Problem::new(
-						ProblemCode::RepositoryChanged,
-						"Worktree or branch changed after disclosure; inspect and retry.",
-					));
+			let mut disclosed = observation;
+			let participant = task.participants[index].clone();
+			let result = consent::unlink(
+				self.git,
+				self.observer,
+				self.control,
+				&participant,
+				&mut disclosed,
+				|current| {
+					self.control.check()?;
+					task.participants[index].destination =
+						current.destination.clone().expect("verified destination");
+					let entry =
+						&mut task.removal.as_mut().expect("removal intent").participants[index];
+					entry.branch.clone_from(&current.branch);
+					entry.dirty_at_start |= !current.dirty_paths.is_empty();
+					self.publication_attempted = true;
+					self.store
+						.record_effect(self.guard, task, index, EffectState::Pending)
+				},
+			)
+			.await;
+			match result {
+				Ok(()) => {
+					task.removal.as_mut().expect("removal intent").participants[index].phase =
+						RemovalPhase::Removed;
+					self.publish(task, index)?;
 				}
-				if current.dirty_token != disclosed.dirty_token && !current.dirty_paths.is_empty() {
-					self.observer
-						.disclose(&task.participants[index].name, &current)
-						.await?;
-					self.authorize_changed_files(&task.participants[index].name)
-						.await?;
-					disclosed = current;
-					continue;
+				Err(crate::UnlinkFailure::BeforeLaunch(problem)) => return Err(problem),
+				Err(crate::UnlinkFailure::Command(problem)) => {
+					if problem.code != ProblemCode::SupervisionFailed {
+						self.publish(task, index)?;
+					}
+					return Err(problem);
 				}
-				disclosed = current;
-				break;
 			}
-
-			task.participants[index].destination =
-				disclosed.destination.clone().expect("verified destination");
-			task.removal.as_mut().expect("removal intent").participants[index].branch =
-				disclosed.branch.clone();
-			task.removal.as_mut().expect("removal intent").participants[index].dirty_at_start |=
-				!disclosed.dirty_paths.is_empty();
-
-			self.control.check()?;
-			self.publication_attempted = true;
-			self.store
-				.record_effect(self.guard, task, index, EffectState::Pending)?;
-			let result = self
-				.git
-				.remove_worktree(&disclosed, !disclosed.dirty_paths.is_empty(), self.control)
-				.await;
-			if result
-				.as_ref()
-				.is_err_and(|problem| problem.code == ProblemCode::SupervisionFailed)
-			{
-				return result;
-			}
-			if result.is_ok() {
-				task.removal.as_mut().expect("removal intent").participants[index].phase =
-					RemovalPhase::Removed;
-			}
-			self.publish(task, index)?;
-			result?;
 			self.observer
 				.phase(&task.name, &task.participants[index].name, "removed")
 				.await?;

@@ -1,11 +1,11 @@
 //! Settle a participant move before observing cancellation or delivering progress.
 use super::Amendment;
 use crate::{
-	AmendGit, AmendState, EffectState, Observer, Participant, Problem, ProblemCode, Repository,
-	Task,
+	AmendGit, AmendState, EffectState, Participant, Problem, ProblemCode, RemovalObserver,
+	Repository, Task,
 };
 
-impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
+impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 	pub(super) async fn rename(
 		&mut self,
 		task: &mut Task,

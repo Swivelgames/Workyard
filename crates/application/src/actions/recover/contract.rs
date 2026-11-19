@@ -17,10 +17,8 @@ pub struct RecoverOutcome {
 	pub condition: Option<crate::contracts::Condition>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub mutation_started: Option<bool>,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub disclosures: Vec<crate::contracts::removal::Disclosure>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub decision: Option<crate::contracts::removal::DecisionRequirement>,
+	#[serde(flatten)]
+	pub removal: crate::contracts::removal::RemovalReport,
 	pub operation: OperationReport,
 	/// None when this invocation could not establish task membership.
 	pub lifecycle: Option<&'static str>,
@@ -29,6 +27,8 @@ pub struct RecoverOutcome {
 	pub state_dir: Option<NativePath>,
 	pub record: Option<NativePath>,
 	pub participants: Vec<ParticipantOutcome>,
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub changes: Vec<crate::contracts::ParticipantChange>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub problem: Option<ProblemOutcome>,
 }
@@ -62,13 +62,13 @@ impl RecoverOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			changes: Vec::new(),
 			registration_problem: None,
 			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
 			mutation_started: None,
-			disclosures: Vec::new(),
-			decision: None,
+			removal: Default::default(),
 			operation: Operation {
 				kind: Some(OperationKind::Recover),
 				continues: None,
@@ -105,13 +105,13 @@ impl RecoverOutcome {
 			}
 		}
 		Self {
+			changes: Vec::new(),
 			registration_problem: None,
 			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
 			mutation_started: None,
-			disclosures: Vec::new(),
-			decision: None,
+			removal: Default::default(),
 			operation: task.operation.into(),
 			lifecycle: Some(task.lifecycle.as_str()),
 			task: task.name,

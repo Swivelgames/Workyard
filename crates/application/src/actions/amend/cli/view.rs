@@ -15,6 +15,14 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 	type Completion = ();
 	type Error = io::Error;
 
+	async fn confirm(
+		&mut self,
+		request: trine::invocation::Confirmation,
+		cancellation: trine::Cancellation,
+	) -> io::Result<Option<bool>> {
+		self.output.confirm(&request, &cancellation)
+	}
+
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
 		let mut terminal = Terminal::for_output(&self.output.stderr);
 		terminal.progress(&progress);
@@ -42,7 +50,9 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 				text(&outcome.task)
 			));
 		}
-		if !succeeded && !unchanged {
+		if succeeded {
+			terminal.removed_participants(&outcome.changes, &outcome.participants);
+		} else if !unchanged {
 			let changed = outcome
 				.changes
 				.iter()

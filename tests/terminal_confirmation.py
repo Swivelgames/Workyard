@@ -167,6 +167,36 @@ def closed_stdin_case(binary):
 		assert_healthy_retry(root, binary, before_state, True)
 
 
+def amend_removal_case(binary):
+	with tempfile.TemporaryDirectory(prefix="workyard-amend-terminal-") as temporary:
+		base = Path(temporary)
+		root = fixture(base, binary, multiple=True)
+		infra = base / "infra"
+		git(base, "clone", str(base / "api"), str(infra))
+		subprocess.run([binary, "amend", "feat/task", "--repo", str(infra), "--checkout", "--from", "main",
+			"--no-fetch"], cwd=root, check=True, capture_output=True)
+		before = durable_state(root)
+		worktrees = root / "tasks" / "feat" / "task"
+		arguments = ["amend", "feat/task", "--remove", "api", "--remove", "web"]
+
+		for key in (b"n\r", b"y\r"):
+			code, disclosure, result = run_prompt(binary, root, arguments, key)
+			prompt = disclosure.index(b"(y/N)")
+			for fact in (b"api", b"web", b"feat/task", b"Would discard: file"):
+				assert fact in disclosure[:prompt], disclosure
+			assert b"Removing this task" not in disclosure, disclosure
+			assert (worktrees / "infra/.git").is_file()
+			if key == b"n\r":
+				assert code != 0 and b"cancelled" in result, result
+				assert durable_state(root) == before
+				assert (worktrees / "api/file").read_text() == "dirty\n"
+				assert (worktrees / "web/.git").is_file()
+			else:
+				assert code == 0 and b"Removed:" in result, result
+				assert not (worktrees / "api").exists()
+				assert not (worktrees / "web").exists()
+
+
 def workspace_recovery_case(binary):
 	with tempfile.TemporaryDirectory(prefix="workyard-recover-terminal-") as temporary:
 		base = Path(temporary)
@@ -213,6 +243,9 @@ if __name__ == "__main__":
 	print("Clean prompt: concise disclosure precedes task confirmation, no decoration/tabs")
 	closed_stdin_case(binary)
 	print("Closed stdin: decision required, files preserved, no hang")
+
+	amend_removal_case(binary)
+	print("Participant removal: one decision, decline preserves membership, consent removes only the selection")
 
 	workspace_recovery_case(binary)
 	print("Workspace recovery: two tasks, one decision, both copies’ files preserved")

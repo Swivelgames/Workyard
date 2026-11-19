@@ -1,5 +1,5 @@
 //! Shared removal disclosure/decision adapter, independent of command presentation.
-use crate::contracts::removal::{DecisionRequirement, Disclosure};
+use crate::contracts::removal::{DecisionRequirement, Disclosure, RemovalReport};
 
 use crate::{contracts::Progress, execution::Events};
 use std::sync::Mutex;
@@ -10,10 +10,10 @@ use workyard_core::{
 };
 
 pub(crate) struct RemovalEvents {
-	pub events: Events,
-	pub task: String,
-	pub disclosures: Mutex<Vec<Disclosure>>,
-	pub decision: Mutex<Option<DecisionRequirement>>,
+	events: Events,
+	task: String,
+	disclosures: Mutex<Vec<Disclosure>>,
+	decision: Mutex<Option<DecisionRequirement>>,
 }
 
 impl RemovalEvents {
@@ -23,6 +23,12 @@ impl RemovalEvents {
 			task,
 			disclosures: Mutex::new(Vec::new()),
 			decision: Mutex::new(None),
+		}
+	}
+	pub fn into_report(self) -> RemovalReport {
+		RemovalReport {
+			disclosures: self.disclosures.into_inner().expect("disclosures"),
+			decision: self.decision.into_inner().expect("decision"),
 		}
 	}
 }
@@ -72,6 +78,8 @@ impl RemovalObserver for RemovalEvents {
 
 	async fn confirm(&self, decision: Decision) -> Result<Option<bool>, Problem> {
 		let code = match decision.kind {
+			DecisionKind::RemoveParticipants => "remove_participants",
+			DecisionKind::DiscardParticipants => "discard_participants",
 			DecisionKind::RemoveTask => "remove_task",
 			DecisionKind::DiscardTask => "discard_task",
 			DecisionKind::DiscardFiles => "discard_files",
@@ -81,6 +89,7 @@ impl RemovalObserver for RemovalEvents {
 		let requirement = DecisionRequirement {
 			task: decision.task,
 			kind: code.into(),
+			participants: decision.participants,
 			participant: decision.participant,
 			message: decision.message,
 		};
@@ -107,7 +116,9 @@ impl RemovalObserver for RemovalEvents {
 		if answer.is_none()
 			&& !matches!(
 				decision.kind,
-				DecisionKind::RetainedHistory | DecisionKind::RemoveTask
+				DecisionKind::RetainedHistory
+					| DecisionKind::RemoveTask
+					| DecisionKind::RemoveParticipants
 			) {
 			*self.decision.lock().expect("decision") = Some(requirement);
 		}

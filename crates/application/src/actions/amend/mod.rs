@@ -17,7 +17,11 @@ use trine::{
 type AmendEntry = Entry<AmendInput, AmendOutcome, AmendOutcome, Progress>;
 
 pub(crate) fn build_entry() -> Result<AmendEntry, RegistrationError> {
-	let handler = Action::new("amend", "Add, rename or reconnect task repositories", amend)?;
+	let handler = Action::new(
+		"amend",
+		"Add, rename, reconnect or remove task participants",
+		amend,
+	)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = crate::presentation::structured::progress_binding();
 

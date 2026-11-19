@@ -1,7 +1,7 @@
 use super::super::RecoverOutcome;
-use crate::{contracts::Progress, execution::Events};
+use crate::{contracts::Progress, execution::removal::RemovalEvents};
 use trine::InvocationContext;
-use workyard_core::{Control, OperationOutcome, ProblemCode};
+use workyard_core::{Control, OperationOutcome};
 use workyard_git::Runner;
 use workyard_state::Store;
 
@@ -15,17 +15,11 @@ pub(super) async fn run(
 	store: &Store,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
 	let rejected = |problem| RecoverOutcome::rejected(name.to_owned(), problem);
-	let result = workyard_core::recover_amend(
-		request,
-		accepted,
-		runner,
-		control,
-		&Events(context, "recover"),
-		store,
-	)
-	.await;
+	let observer = RemovalEvents::new(context, "recover", name.to_owned());
+	let result =
+		workyard_core::recover_amend(request, accepted, runner, control, &observer, store).await;
 
-	match result {
+	let mut outcome = match result {
 		Ok(result) => {
 			let nothing = !result.mutation_started;
 			let registration =
@@ -35,16 +29,19 @@ pub(super) async fn run(
 			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
 			outcome.problem = result.problem.map(Into::into);
 			outcome.operation = result.operation.into();
+			outcome.changes = result.changes.into_iter().map(Into::into).collect();
 			outcome.nothing_to_recover = nothing && outcome.problem.is_none();
-			if outcome.registration_problem.is_some()
-				|| outcome.operation.outcome == OperationOutcome::Failed
-			{
-				Err(outcome)
-			} else {
-				Ok(outcome)
-			}
+			outcome
 		}
-		Err(problem) if problem.code == ProblemCode::Cancelled => Ok(rejected(problem)),
-		Err(problem) => Err(rejected(problem)),
+		Err(problem) => rejected(problem),
+	};
+	outcome.removal = observer.into_report();
+
+	if outcome.registration_problem.is_some()
+		|| outcome.operation.outcome == OperationOutcome::Failed
+	{
+		Err(outcome)
+	} else {
+		Ok(outcome)
 	}
 }

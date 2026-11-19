@@ -26,6 +26,8 @@ struct RepositoryRecord {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RequestRecord {
 	pub(super) task: String,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub(crate) remove: Vec<super::TargetRecord>,
 	workspace_at_request: StoredPath,
 	repositories: Vec<RepositoryRecord>,
 	checkout: bool,
@@ -36,9 +38,14 @@ pub(crate) struct RequestRecord {
 }
 
 impl RequestRecord {
-	pub(crate) fn new(request: &AmendRequest, state: &Path) -> Self {
+	pub(crate) fn new(
+		request: &AmendRequest,
+		targets: &[workyard_core::RemovalTarget],
+		state: &Path,
+	) -> Self {
 		Self {
 			task: request.task.clone(),
+			remove: targets.iter().map(Into::into).collect(),
 			workspace_at_request: state.parent().expect("workspace marker").into(),
 			repositories: request
 				.repositories
@@ -64,6 +71,21 @@ impl RequestRecord {
 		}
 	}
 
+	pub(super) fn validate(&self, task: &str, state: &Path) -> Result<(), Problem> {
+		let decoded = self.decode(state)?;
+		if self.task != task
+			|| (decoded.repositories.is_empty() && decoded.remove.is_empty())
+			|| (decoded.options.no_fetch && decoded.options.pull)
+			|| decoded.repositories.iter().any(|repo| {
+				!repo.path.is_absolute() || repo.path.as_os_str().as_encoded_bytes().contains(&0)
+			}) {
+			return Err(crate::damage::damaged(
+				"Invalid recorded amendment request.",
+			));
+		}
+		Ok(())
+	}
+
 	pub(crate) fn decode(&self, state: &Path) -> Result<AmendRequest, Problem> {
 		let previous = self.workspace_at_request.registration()?;
 		let workspace = state.parent().expect("workspace marker");
@@ -76,6 +98,12 @@ impl RequestRecord {
 		};
 		Ok(AmendRequest {
 			task: self.task.clone(),
+			remove: self
+				.remove
+				.iter()
+				.map(|target| target.name.clone())
+				.collect(),
+			removal_options: Default::default(),
 			repositories: self
 				.repositories
 				.iter()

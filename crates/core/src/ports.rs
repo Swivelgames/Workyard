@@ -12,5 +12,5 @@ pub use state::{EffectState, RecoveryState, State};
 
 pub use removal::{
 	Decision, DecisionKind, RemovalGit, RemovalObservation, RemovalObserver, RemovalOptions,
-	RetainedHistory,
+	RetainedHistory, UnlinkFailure,
 };

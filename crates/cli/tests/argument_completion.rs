@@ -535,3 +535,54 @@ fn repository_completion_preserves_non_unicode_paths() {
 
 	assert_eq!(query(root.path(), "zsh", &arguments, 6), ["api", "origin"]);
 }
+
+#[test]
+fn amend_remove_suggests_task_members_after_their_projects_are_untracked() {
+	let fixture = tempfile::tempdir().unwrap();
+	let root = fixture.path().join("workspace");
+	let api = repo(fixture.path(), "api");
+	let web = repo(fixture.path(), "web");
+	init_workspace(&root);
+	assert_ok(&workyard(
+		&root,
+		&[
+			"create",
+			"feat/one",
+			"--repo",
+			text(&api),
+			"--repo",
+			text(&web),
+			"--from",
+			"main",
+			"--no-fetch",
+		],
+	));
+	assert_ok(&workyard(
+		&root,
+		&[
+			"create",
+			"feat/two",
+			"--repo",
+			text(&api),
+			"--from",
+			"main",
+			"--no-fetch",
+		],
+	));
+	assert_ok(&workyard(&root, &["projects", "untrack", text(&web)]));
+
+	for shell in ["bash", "zsh", "fish", "powershell"] {
+		let members = |task, prefix| {
+			complete(
+				&root,
+				shell,
+				&["workyard", "amend", task, "--remove", prefix],
+				4,
+			)
+		};
+		assert_eq!(members("feat/one", ""), ["api", "web"], "{shell}");
+		assert_eq!(members("feat/one", "w"), ["web"], "{shell}");
+		assert_eq!(members("feat/two", ""), ["api"], "{shell}");
+		assert!(members("unknown", "").is_empty(), "{shell}");
+	}
+}

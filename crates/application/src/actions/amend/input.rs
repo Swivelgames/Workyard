@@ -12,6 +12,15 @@ pub struct AmendInput {
 	pub projects: Vec<NativePath>,
 	#[serde(default)]
 	pub repositories: Vec<RepositoryInput>,
+	/// Task participant names to remove. Repeat to remove several in one amendment.
+	#[serde(default)]
+	pub remove: Vec<String>,
+	/// Skip confirmation when removing clean participants.
+	#[serde(default)]
+	pub yes: bool,
+	/// Discard disclosed changes in the selected worktrees and skip confirmation.
+	#[serde(default)]
+	pub force: bool,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,
 	/// Reuse an existing target branch when available.

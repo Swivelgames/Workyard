@@ -1,6 +1,7 @@
 use crate::{Runner, process::args};
 use sha2::{Digest, Sha256};
 use std::{
+	collections::BTreeSet,
 	io::Read,
 	path::{Path, PathBuf},
 };
@@ -22,12 +23,13 @@ pub(super) async fn inspect(
 				"--porcelain=v1",
 				"-z",
 				"--untracked-files=all",
+				"--ignore-submodules=none",
 				"--ignored=matching",
 			]),
 			control,
 		)
 		.await?;
-	let mut paths = Vec::new();
+	let mut paths = BTreeSet::new();
 	let mut fields = status
 		.split(|byte| *byte == 0)
 		.filter(|field| !field.is_empty());
@@ -37,7 +39,7 @@ pub(super) async fn inspect(
 		}
 		let path = crate::output::path_field(&field[3..])
 			.map_err(|_| super::blocked("Invalid dirty-file path."))?;
-		paths.push(path);
+		paths.insert(path);
 		if field[..2]
 			.iter()
 			.any(|status| matches!(status, b'R' | b'C'))
@@ -51,9 +53,15 @@ pub(super) async fn inspect(
 	let mut hash = Sha256::new();
 	frame(&mut hash, &status);
 	let index = runner
-		.checked(destination, &args(&["ls-files", "--stage", "-z"]), control)
+		.checked(
+			destination,
+			&args(&["ls-files", "-v", "--stage", "-z"]),
+			control,
+		)
 		.await?;
 	frame(&mut hash, &index);
+	super::index::include_hidden_paths(&index, destination, &mut paths)?;
+	super::protected::parents(destination, &paths)?;
 	for path in &paths {
 		control.check()?;
 		frame(&mut hash, path.as_os_str().as_encoded_bytes());
@@ -61,7 +69,7 @@ pub(super) async fn inspect(
 		hash_path(&destination.join(path), &mut entry, control)?;
 		frame(&mut hash, &entry.finalize());
 	}
-	Ok((paths, hash.finalize().to_vec()))
+	Ok((paths.into_iter().collect(), hash.finalize().to_vec()))
 }
 
 fn hash_path(path: &Path, hash: &mut Sha256, control: &Control) -> Result<(), Problem> {
@@ -82,6 +90,7 @@ fn hash_path(path: &Path, hash: &mut Sha256, control: &Control) -> Result<(), Pr
 		return Ok(());
 	}
 	if metadata.is_dir() {
+		super::protected::directory(path)?;
 		frame(hash, b"directory");
 		let mut children = std::fs::read_dir(path)
 			.map_err(|e| Problem::io("Inspect disclosed directory", e))?

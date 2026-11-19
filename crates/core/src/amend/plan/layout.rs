@@ -2,7 +2,11 @@ use super::Change;
 use crate::{AmendState, Problem, ProblemCode, Task};
 use std::collections::HashSet;
 
-pub(super) fn allocate_names(task: &Task, changes: &mut [Change]) -> Result<(), Problem> {
+pub(super) fn allocate_names(
+	task: &Task,
+	changes: &mut [Change],
+	targets: &[crate::RemovalTarget],
+) -> Result<(), Problem> {
 	use crate::projects::names::{self, NameRequest};
 	let selected: HashSet<_> = changes
 		.iter()
@@ -12,14 +16,14 @@ pub(super) fn allocate_names(task: &Task, changes: &mut [Change]) -> Result<(), 
 		.participants
 		.iter()
 		.enumerate()
-		.filter(|(index, _)| !selected.contains(index))
+		.filter(|(index, p)| !selected.contains(index) && !targets.iter().any(|t| t.matches(p)))
 		.map(|(_, p)| (p.name.as_str(), p.source.as_path()));
 	let requested: Vec<_> = changes
 		.iter()
 		.map(|change| NameRequest {
 			path: &change.name_source,
 			name: &change.name,
-			fixed: change.fixed_name,
+			fixed: change.explicit_name || change.existing.is_some(),
 		})
 		.collect();
 	let names = names::allocate(&requested, reserved)?;
@@ -36,6 +40,7 @@ pub(super) fn allocate_names(task: &Task, changes: &mut [Change]) -> Result<(), 
 pub(super) fn validate_layout(
 	task: &Task,
 	changes: &[Change],
+	targets: &[crate::RemovalTarget],
 	state: &impl AmendState,
 ) -> Result<(), Problem> {
 	for change in changes {
@@ -51,7 +56,18 @@ pub(super) fn validate_layout(
 				&& other.name != other.participant.name
 				&& other.participant.destination == destination
 		});
-		if !vacated {
+		let mut removed = false;
+		for participant in task
+			.participants
+			.iter()
+			.filter(|p| targets.iter().any(|t| t.matches(p)))
+		{
+			if state.same_destination(&participant.destination, &destination)? {
+				removed = true;
+				break;
+			}
+		}
+		if !vacated && !removed {
 			state.validate_destination(&destination)?;
 		}
 	}

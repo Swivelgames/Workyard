@@ -4,7 +4,7 @@ pub(crate) mod projects;
 mod repositories;
 pub(crate) mod tasks;
 
-pub(crate) use participants::unsettled_pull;
+pub(crate) use participants::{task_members, unsettled_pull};
 pub(crate) use repositories::{checkout, common_from, common_remote, repo_from, repo_remote};
 
 use std::{

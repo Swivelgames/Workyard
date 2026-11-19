@@ -108,6 +108,8 @@ reports uncertainty, even if the desired JSON is already visible; visibility doe
 workyard amend feat/payments --repo /repos/worker --from main
 workyard amend feat/payments --repo /repos/api --repo-name legacy-api --repo /repos/new-api --repo-name api --from main
 workyard amend feat/payments --repo /new/location/api
+workyard amend feat/payments --remove infra --remove docs
+workyard amend feat/payments --remove api --repo /repos/new-api --repo-name api
 ```
 
 Amend requires an explicit active task and existing state. It adds repositories,
@@ -116,6 +118,21 @@ when a supplied moved repository retains its backing identity. Existing particip
 keep their names unless `--repo-name` explicitly changes them. Dirty or detached
 worktrees retain their files and branch state. Unrelated participants do not need
 to be clean. Rename cycles require an intermediate unused name.
+
+Use `--remove` with the participant name shown by `workyard list`. It unlinks the
+selected worktree and keeps the backing repository, branch and project registration.
+A participant can still be removed after its project is untracked. To retire the
+entire task, run `workyard remove feat/payments`.
+
+You can combine additions, renames and removals in one amendment. Workyard checks
+the final membership and shows the selected worktrees before asking once. Declining
+at this point leaves the task intact. In unattended use, clean worktrees can be
+removed with local commits retained on their branches. `--yes` skips the courtesy
+prompt. `--force` also authorizes discarding the changes disclosed in the selected
+worktrees. Files hidden from Git status by index flags also appear in the disclosure.
+A nested Git repository must be moved out of the selected worktree before removal.
+New changes require a fresh decision. If removal is interrupted after
+a worktree changes, run `workyard recover feat/payments` to resume.
 
 New participants use creation's source, remote, fetch and pull options; existing
 branches require `--checkout`. These flags do not pull or reset established
@@ -254,7 +271,9 @@ response before sending commands that depend on the workspace.
 Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
 `{"task":"feat/payments","accept_pull":["api"],"workspace":"/workspace"}`.
 Amend uses `action: ["amend"]` and the same repository groups/options as creation,
-with an explicit task and existing-state selection. Its result separates operation
+with an explicit task and existing-state selection. For example,
+`{"task":"feat/payments","remove":["infra","docs"],"yes":true}` removes two
+participants. Its result separates operation
 outcome, retained participant facts and per-participant changes.
 Inspection uses `action: ["list"]`, `["status"]` or `["info"]` with optional `workspace`.
 Status also accepts an explicit `task`.

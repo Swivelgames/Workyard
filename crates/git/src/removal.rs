@@ -1,5 +1,8 @@
 //! Destructive worktree operations verify Git ownership independently of cached paths.
 mod dirty;
+mod index;
+mod protected;
+mod validation;
 
 use crate::{Repository, Runner, process::args};
 use workyard_core::{
@@ -69,6 +72,17 @@ impl RemovalGit for Runner {
 				"Managed worktree is missing; repair its registration before removal.",
 			));
 		};
+		if destination != participant.destination {
+			match std::fs::symlink_metadata(&participant.destination) {
+				Ok(_) => {
+					return Err(blocked(
+						"The recorded participant location is occupied by other files. Inspect both locations before removing the worktree.",
+					));
+				}
+				Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+				Err(error) => return Err(Problem::io("Inspect recorded worktree location", error)),
+			}
+		}
 		let worktree_entry = workyard_system::entry_identity(&destination)?;
 		let repository = Repository::local(self, &destination, control).await?;
 		let output = self
@@ -85,45 +99,16 @@ impl RemovalGit for Runner {
 				"Main worktrees cannot be removed as task participants.",
 			));
 		}
-		if facts.operation_in_progress || facts.conflicted || git_dir.join("locked").exists() {
-			return Err(blocked(
-				"Worktree has a Git lock, conflict or unfinished operation.",
-			));
+		if facts.conflicted {
+			return Err(blocked("Worktree has unresolved Git conflicts."));
 		}
+		validation::require_idle(&git_dir, &repository.common_dir)?;
 
 		let branch = facts.branch.filter(|branch| branch != "HEAD");
 		let history = match &branch {
-			Some(branch) => {
-				if repository
-					.common_dir
-					.join("refs/heads")
-					.join(format!("{branch}.lock"))
-					.try_exists()
-					.map_err(|e| Problem::io("Inspect retained branch lock", e))?
-				{
-					return Err(blocked("Retained branch has an active Git lock."));
-				}
-				self.retained_history(&destination, branch, control).await?
-			}
+			Some(branch) => self.retained_history(&destination, branch, control).await?,
 			None => {
-				let references = self
-					.checked(
-						&destination,
-						&args(&[
-							"for-each-ref",
-							"--contains=HEAD",
-							"--format=%(refname)",
-							"refs/heads",
-							"refs/tags",
-						]),
-						control,
-					)
-					.await?;
-				if references.is_empty() {
-					return Err(blocked(
-						"Detached HEAD is not reachable from a retained local branch or tag. Create a branch or tag before removal.",
-					));
-				}
+				self.require_retained_head(&destination, control).await?;
 				RetainedHistory::Detached
 			}
 		};
@@ -145,14 +130,18 @@ impl RemovalGit for Runner {
 		observation: &RemovalObservation,
 		discard: bool,
 		control: &Control,
-	) -> Result<(), Problem> {
+		before_unlink: impl FnOnce() -> Result<(), Problem> + Send,
+	) -> Result<(), workyard_core::UnlinkFailure> {
 		let destination = observation
 			.destination
 			.as_ref()
 			.ok_or_else(|| blocked("Removal has no verified worktree destination."))?;
 		let _gate =
 			crate::relationships::relationship_lock(&observation.repository, control).await?;
-		self.verify_removal_location(observation, destination, control)
+		let admin = self
+			.verify_removal_location(observation, destination, control)
+			.await?;
+		self.validate_disclosure(observation, destination, &admin, control)
 			.await?;
 		let mut arguments = args(&["worktree", "remove"]);
 		if discard {
@@ -160,8 +149,10 @@ impl RemovalGit for Runner {
 		}
 		arguments.push("--".into());
 		arguments.push(destination.into());
+		before_unlink()?;
 		self.effect(&observation.repository.common_dir, &arguments, control)
 			.await
+			.map_err(workyard_core::UnlinkFailure::Command)
 	}
 
 	async fn inspect_restoration(
@@ -249,7 +240,7 @@ impl Runner {
 		observation: &RemovalObservation,
 		destination: &std::path::Path,
 		control: &Control,
-	) -> Result<(), Problem> {
+	) -> Result<std::path::PathBuf, Problem> {
 		use crate::relationships::pointer::{absolute, read_path, same_path};
 		let actual = destination
 			.canonicalize()
@@ -280,7 +271,7 @@ impl Runner {
 				"Git registration changed before removal. Inspect workyard status and retry.",
 			));
 		}
-		Ok(())
+		Ok(admin)
 	}
 
 	async fn retained_history(
@@ -318,7 +309,7 @@ impl Runner {
 	}
 }
 
-fn blocked(message: &str) -> Problem {
+fn blocked(message: impl Into<String>) -> Problem {
 	Problem::new(ProblemCode::RepositoryChanged, message)
 		.remedy("Inspect git status and git worktree list; preserve files and repair Git relationships before retrying. Force cannot bypass this check.")
 }

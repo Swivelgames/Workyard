@@ -1,10 +1,10 @@
 use super::{AmendInput, AmendOutcome};
 use crate::{
 	contracts::Progress,
-	execution::{Events, blocking_action},
+	execution::{blocking_action, removal::RemovalEvents},
 };
 use trine::InvocationContext;
-use workyard_core::{Control, OperationOutcome, ProblemCode};
+use workyard_core::{Control, OperationOutcome};
 
 pub async fn amend(
 	input: AmendInput,
@@ -24,33 +24,38 @@ async fn run(
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
+	let explicit_workspace = input.workspace.is_some();
 	let prepared = input.prepare(&control).await.map_err(rejected)?;
 	let store = workyard_state::Store::open_existing(&prepared.state, None).map_err(rejected)?;
 
+	let observer = RemovalEvents::new(context, "amend", name.clone());
 	let result = workyard_core::amend(
 		prepared.request,
 		&workyard_git::Runner::default(),
 		&control,
-		&Events(context, "amend"),
+		&observer,
 		&store,
 	)
 	.await;
 
-	match result {
+	let mut outcome = match result {
 		Ok(result) => {
 			let registration =
 				crate::projects::register(&store, &result.admitted_roots, &control).await;
 			let mut outcome = AmendOutcome::from_result(result);
 			outcome.registration_problem = registration.map(Into::into);
-			if outcome.registration_problem.is_some()
-				|| outcome.operation.outcome == OperationOutcome::Failed
-			{
-				Err(outcome)
-			} else {
-				Ok(outcome)
-			}
+			outcome
 		}
-		Err(problem) if problem.code == ProblemCode::Cancelled => Ok(rejected(problem)),
-		Err(problem) => Err(rejected(problem)),
+		Err(problem) => rejected(problem),
+	};
+	outcome.removal = observer.into_report();
+	outcome.guide_retirement(&prepared.state, explicit_workspace);
+
+	if outcome.registration_problem.is_some()
+		|| outcome.operation.outcome == OperationOutcome::Failed
+	{
+		Err(outcome)
+	} else {
+		Ok(outcome)
 	}
 }

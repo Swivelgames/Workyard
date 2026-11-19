@@ -8,15 +8,12 @@ pub(super) fn validate(record: &RecoveryRecord, accept_pull: &[String]) -> Resul
 	}
 
 	if record.task.lifecycle != TaskLifecycle::Active
-		|| record.task.removal.as_ref().is_some_and(|removal| {
-			removal.direction == crate::RemovalDirection::Remove
-				|| removal.participants.iter().any(|p| {
-					!matches!(
-						p.phase,
-						crate::RemovalPhase::Present | crate::RemovalPhase::Restored
-					)
-				})
-		}) {
+		|| record
+			.task
+			.removal
+			.as_ref()
+			.is_some_and(|removal| !removal.restoration_complete())
+	{
 		return Err(Problem::new(
 			ProblemCode::InvalidInput,
 			"Amend requires an active task without an incomplete removal.",

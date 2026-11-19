@@ -1,10 +1,10 @@
 use super::Amendment;
 use crate::{
-	AmendGit, AmendResult, AmendState, Observer, Operation, OperationKind, OperationOutcome,
-	Problem, ProblemCode, Task,
+	AmendGit, AmendResult, AmendState, Operation, OperationKind, OperationOutcome, Problem,
+	ProblemCode, RemovalObserver, Task,
 };
 
-impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
+impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 	pub(super) fn finish(
 		mut self,
 		mut task: Task,
@@ -49,7 +49,9 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 			{
 				task.problem = None;
 			}
-			if let Err(error) = self.store.save(self.guard, &task) {
+			if !self.uncertain
+				&& let Err(error) = self.store.save(self.guard, &task)
+			{
 				problem = Some(error);
 			}
 		}

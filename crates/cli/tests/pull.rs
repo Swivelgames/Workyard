@@ -1,33 +1,9 @@
+use rpc::invoke;
+#[path = "support/rpc.rs"]
+mod rpc;
 mod support;
-use std::{
-	fs,
-	io::Write,
-	path::Path,
-	process::{Command, Stdio},
-};
+use std::{fs, path::Path};
 use support::*;
-
-fn invoke(root: &Path, action: &str, input: serde_json::Value) -> serde_json::Value {
-	let mut child = Command::new(env!("CARGO_BIN_EXE_workyard"))
-		.current_dir(root)
-		.arg("rpc")
-		.stdin(Stdio::piped())
-		.stdout(Stdio::piped())
-		.env("GIT_CONFIG_NOSYSTEM", "1")
-		.env(
-			"GIT_CONFIG_GLOBAL",
-			if cfg!(windows) { "NUL" } else { "/dev/null" },
-		)
-		.spawn()
-		.unwrap();
-	let request = serde_json::json!({
-		"jsonrpc":"2.0", "id":"pull-test", "method":"invoke",
-		"params":{"action":[action], "input": input}
-	});
-	writeln!(child.stdin.take().unwrap(), "{request}").unwrap();
-	let output = child.wait_with_output().unwrap();
-	serde_json::from_slice(&output.stdout).unwrap()
-}
 
 #[test]
 fn create_and_amend_rpc_report_all_optional_failures_without_persisting_them() {
@@ -147,6 +123,8 @@ fn pull_conflict_is_current_git_damage_not_incomplete_membership() {
 
 /// Interrupt only after Git addition has settled, before optional pull starts.
 struct StopBeforePull;
+impl workyard_core::RemovalObserver for StopBeforePull {}
+
 impl workyard_core::Observer for StopBeforePull {
 	async fn phase(&self, _: &str, _: &str, phase: &str) -> Result<(), workyard_core::Problem> {
 		if matches!(phase, "worktree_created" | "added") {
@@ -200,6 +178,8 @@ fn interrupted_addition(root: &Path, source: &Path, action: &str) {
 		let request = workyard_core::AmendRequest {
 			task: "feat/task".into(),
 			repositories,
+			remove: Vec::new(),
+			removal_options: Default::default(),
 			options: workyard_core::CreationOptions {
 				checkout: false,
 				no_fetch: false,

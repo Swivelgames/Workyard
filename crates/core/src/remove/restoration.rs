@@ -26,9 +26,10 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 				task: Some(task.name.clone()),
 				kind: DecisionKind::LostChanges,
 				participant: String::new(),
+				participants: Vec::new(),
 				message: "Recreating worktrees restores retained branch contents only. Discarded modified, untracked and ignored files cannot be restored. Continue?".into(),
 			};
-			self.require(decision).await?;
+			super::consent::require(self.observer, decision).await?;
 		}
 
 		// Validate survivors as well as destinations before publishing or recreating anything.

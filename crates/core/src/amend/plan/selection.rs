@@ -26,7 +26,7 @@ impl Change {
 			.iter()
 			.position(|participant| participant.backing_identity == repository.identity);
 		let prior = existing.map(|index| &task.participants[index]);
-		let fixed_name = input.name.is_some() || prior.is_some();
+		let explicit_name = input.name.is_some();
 		let name = match input
 			.name
 			.as_deref()
@@ -68,7 +68,7 @@ impl Change {
 				participant: relation.participant,
 				existing,
 				name,
-				fixed_name,
+				explicit_name,
 				name_source: input.path.clone(),
 				repair: relation.needs_repair,
 				addition: false,
@@ -111,7 +111,7 @@ impl Change {
 			participant,
 			existing,
 			name,
-			fixed_name,
+			explicit_name,
 			name_source: input.path.clone(),
 			repair: false,
 			addition: true,

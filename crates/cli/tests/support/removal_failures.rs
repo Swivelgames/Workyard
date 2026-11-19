@@ -318,3 +318,55 @@ fn failed_success_receipt_keeps_pending_writer_guard_instead_of_adopting_tree() 
 	assert!(workspace.tree("api").exists());
 	assert_eq!(runner.adds.load(Ordering::SeqCst), 1);
 }
+
+#[test]
+fn only_an_unsupervised_destructive_unlink_retains_writer_evidence() {
+	use test_git::UnlinkBoundary::{Validate, Writer};
+	for (boundary, expect_writer) in [(Validate, false), (Writer, true)] {
+		let workspace = Workspace::new();
+		let store =
+			workyard_state::Store::open_existing(&workspace.root.join(".workyard"), None).unwrap();
+		let git = FaultGit {
+			fail_unlink: Some(boundary),
+			..Default::default()
+		};
+		let request = AmendRequest {
+			task: "feat/task".into(),
+			repositories: Vec::new(),
+			remove: vec!["web".into()],
+			options: CreationOptions {
+				checkout: false,
+				no_fetch: true,
+				pull: false,
+			},
+			removal_options: RemovalOptions {
+				yes: true,
+				..Default::default()
+			},
+			remote: None,
+			from: None,
+		};
+		let result =
+			smol::block_on(amend(request, &git, &Control::default(), &Quiet, &store)).unwrap();
+		assert_eq!(result.problem.unwrap().code, ProblemCode::SupervisionFailed);
+		assert_eq!(result.mutation_started, expect_writer);
+		let guard = store.admit("feat/task").unwrap();
+		let saved = store.load(&guard, "feat/task").unwrap();
+		assert_eq!(
+			saved
+				.pending
+				.map(|i| saved.task.participants[i].name.as_str()),
+			expect_writer.then_some("web")
+		);
+		assert_eq!(
+			guard.evidence_path.with_extension("revision").exists(),
+			expect_writer
+		);
+		if expect_writer {
+			drop(guard);
+			let refused = workyard(&workspace.root, &["recover", "feat/task", "--force"]);
+			assert!(!refused.status.success());
+			assert!(workspace.tree("web").join(".git").exists());
+		}
+	}
+}

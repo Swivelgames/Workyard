@@ -10,7 +10,7 @@ mod repository;
 
 pub use condition::Condition;
 pub use operation::OperationReport;
-pub use participant::ParticipantOutcome;
+pub use participant::{ParticipantChange, ParticipantOutcome};
 pub use problem::ProblemOutcome;
 pub use progress::Progress;
 pub use pull::PullFailure;

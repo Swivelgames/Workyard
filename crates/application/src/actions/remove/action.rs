@@ -40,8 +40,7 @@ async fn run(
 		Ok(result) => RemoveOutcome::from_removal(result),
 		Err(problem) => rejected(problem),
 	};
-	outcome.disclosures = observer.disclosures.into_inner().expect("disclosures");
-	outcome.decision = observer.decision.into_inner().expect("decision");
+	outcome.removal = observer.into_report();
 	if outcome.operation.outcome == OperationOutcome::Failed
 		&& outcome
 			.problem

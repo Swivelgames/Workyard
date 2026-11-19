@@ -1,10 +1,10 @@
 use super::{Amendment, plan::Change};
 use crate::{
-	AmendGit, AmendState, AmendmentChangeKind as Kind, EffectState, Observer, Phase, Problem,
-	ProblemCode, SourceResolution, Task,
+	AmendGit, AmendState, AmendmentChangeKind as Kind, EffectState, Phase, Problem, ProblemCode,
+	RemovalObserver, SourceResolution, Task,
 };
 
-impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
+impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 	pub(super) async fn add(&mut self, task: &mut Task, change: Change) -> Result<(), Problem> {
 		self.git
 			.revalidate(&change.repository, self.control)
@@ -22,7 +22,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 			}
 		};
 		let result = self
-			.create_participant(task, index, &change.repository)
+			.create_participant(task, index, &change.repository, &change.name)
 			.await;
 		let observed_worktree = task.participants[index].worktree_identity.is_some()
 			|| task.participants[index].phase == Phase::WorktreeCreated;
@@ -52,13 +52,12 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 		task: &mut Task,
 		index: usize,
 		repository: &crate::Repository,
+		name: &str,
 	) -> Result<(), Problem> {
 		let options = task.creation_options(index);
 		if !options.no_fetch && repository.remote.is_some() {
 			task.participants[index].phase = Phase::Fetching;
-			self.observer
-				.phase(&task.name, &task.participants[index].name, "fetching")
-				.await?;
+			self.observer.phase(&task.name, name, "fetching").await?;
 			self.control.check()?;
 			self.store
 				.record_effect(self.guard, task, index, EffectState::Pending)?;
@@ -67,9 +66,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 				.record_effect(self.guard, task, index, EffectState::Settled)?;
 			result?;
 		}
-		self.observer
-			.phase(&task.name, &task.participants[index].name, "creating")
-			.await?;
+		self.observer.phase(&task.name, name, "creating").await?;
 		self.control.check()?;
 		self.store.verify()?;
 		self.git.revalidate(repository, self.control).await?;
@@ -113,8 +110,8 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 		crate::settle_add::settle_add(result, task, index, self.git, self.store, self.guard)
 			.await?;
 		self.publish(task, index)?;
-		self.report(task, index, Kind::Added).await?;
-		self.finish_addition(task, index, repository).await
+		self.report_named(task, name, Kind::Added).await?;
+		self.finish_addition(task, index, repository, name).await
 	}
 
 	pub(super) async fn finish_addition(
@@ -122,6 +119,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 		task: &mut Task,
 		index: usize,
 		repository: &crate::Repository,
+		name: &str,
 	) -> Result<(), Problem> {
 		if task.participants[index].phase == Phase::Pulling
 			&& self.accept_pull.contains(&task.participants[index].name)
@@ -143,9 +141,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 
 		if task.creation_options(index).pull {
 			self.begin(task)?;
-			self.observer
-				.phase(&task.name, &task.participants[index].name, "pulling")
-				.await?;
+			self.observer.phase(&task.name, name, "pulling").await?;
 			self.control.check()?;
 			task.participants[index].phase = Phase::Pulling;
 			self.store
@@ -165,9 +161,10 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 				self.uncertain = true;
 				return result;
 			}
-			if let Some(failure) =
+			if let Some(mut failure) =
 				crate::optional_pull::settle_pull(result, task, index, self.store, self.guard)?
 			{
+				failure.participant = name.to_owned();
 				self.pull_failures.push(failure);
 			}
 		}

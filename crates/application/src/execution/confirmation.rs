@@ -25,6 +25,7 @@ mod tests {
 		let mut question = DecisionRequirement {
 			task: Some("feat/界\n".into()),
 			kind: "remove_task".into(),
+			participants: Vec::new(),
 			participant: "api\u{1b}[31m".into(),
 			message: "Unknown\tdecision".into(),
 		};

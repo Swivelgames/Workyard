@@ -31,6 +31,16 @@ pub struct Removal {
 	pub retired_at: Option<u64>,
 }
 
+impl Removal {
+	pub fn restoration_complete(&self) -> bool {
+		self.direction == RemovalDirection::Restore
+			&& self
+				.participants
+				.iter()
+				.all(|p| matches!(p.phase, RemovalPhase::Present | RemovalPhase::Restored))
+	}
+}
+
 /// An invocation outcome does not replace task history when nothing was changed.
 pub struct RemovalResult {
 	pub nothing_to_recover: bool,

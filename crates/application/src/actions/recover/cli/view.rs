@@ -66,6 +66,7 @@ impl RecoverView {
 			));
 		}
 
+		terminal.removed_participants(&outcome.changes, &outcome.participants);
 		if !succeeded {
 			if outcome.mutation_started == Some(false) {
 				terminal.hint_at(MessageScope::Workspace, "No worktrees changed.");

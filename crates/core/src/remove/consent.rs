@@ -1,67 +1,136 @@
-use super::RemovalRun;
+//! Consent belongs to one invocation and the content disclosed by that invocation.
 use crate::{
-	Decision, DecisionKind, Problem, ProblemCode, RecoveryState, RemovalGit, RemovalObservation,
-	RemovalObserver,
+	Control, Decision, DecisionKind, Participant, Problem, ProblemCode, RemovalGit,
+	RemovalObservation, RemovalObserver, RemovalOptions,
 };
 
-impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O> {
-	pub(super) async fn authorize_task(
-		&self,
-		task: &str,
-		observations: &[Option<RemovalObservation>],
-	) -> Result<(), Problem> {
-		let discards_files = observations
-			.iter()
-			.flatten()
-			.any(|item| !item.dirty_paths.is_empty());
-		if self.options.force || (self.options.yes && !discards_files) {
+pub(crate) async fn authorize(
+	observer: &impl RemovalObserver,
+	options: RemovalOptions,
+	task: &str,
+	participants: &[String],
+	discards_files: bool,
+) -> Result<(), Problem> {
+	if options.force || (options.yes && !discards_files) {
+		return Ok(());
+	}
+
+	let (kind, message) = if participants.is_empty() {
+		if discards_files {
+			(DecisionKind::DiscardTask, "Remove the task and discard the disclosed files? Discarded changes cannot be restored.".into())
+		} else {
+			(
+				DecisionKind::RemoveTask,
+				"Remove the task worktrees while retaining branches and local commits?".into(),
+			)
+		}
+	} else {
+		let names = participants.join(", ");
+		if discards_files {
+			(
+				DecisionKind::DiscardParticipants,
+				format!("Remove {names} from {task} and discard the disclosed files?"),
+			)
+		} else {
+			(
+				DecisionKind::RemoveParticipants,
+				format!("Remove {names} from {task}?"),
+			)
+		}
+	};
+	let decision = Decision {
+		task: Some(task.into()),
+		kind,
+		participant: String::new(),
+		participants: participants.to_vec(),
+		message,
+	};
+	if discards_files {
+		return require(observer, decision).await;
+	}
+
+	if observer.confirm(decision).await? == Some(false) {
+		return Err(declined());
+	}
+	Ok(())
+}
+
+async fn recheck(
+	git: &impl RemovalGit,
+	observer: &impl RemovalObserver,
+	control: &Control,
+	participant: &Participant,
+	disclosed: &mut RemovalObservation,
+) -> Result<(), Problem> {
+	loop {
+		let current = git.inspect_removal(participant, control).await?;
+		if !current.same_worktree(disclosed) || current.branch != disclosed.branch {
+			return Err(Problem::new(
+				ProblemCode::RepositoryChanged,
+				"Worktree or branch changed after disclosure; inspect and retry.",
+			));
+		}
+		if current.dirty_paths.is_empty() || current.dirty_token == disclosed.dirty_token {
+			*disclosed = current;
 			return Ok(());
 		}
 
-		let decision = Decision {
-			task: Some(task.into()),
-			participant: String::new(),
-			kind: if discards_files {
-				DecisionKind::DiscardTask
-			} else {
-				DecisionKind::RemoveTask
+		observer.disclose(&participant.name, &current).await?;
+		require(
+			observer,
+			Decision {
+				task: None,
+				kind: DecisionKind::DiscardFiles,
+				participant: participant.name.clone(),
+				participants: Vec::new(),
+				message: "Discard the newly disclosed files? These changes cannot be restored."
+					.into(),
 			},
-			message: if discards_files {
-				"Remove the task and discard the disclosed files? Discarded changes cannot be restored.".into()
-			} else {
-				"Remove the task worktrees while retaining branches and local commits?".into()
-			},
-		};
-		if discards_files {
-			return self.require(decision).await;
-		}
-
-		// Noninteractive removal of clean trees needs no convenience confirmation.
-		if self.observer.confirm(decision).await? == Some(false) {
-			return Err(declined());
-		}
-		Ok(())
+		)
+		.await?;
+		*disclosed = current;
 	}
+}
 
-	pub(super) async fn authorize_changed_files(&self, participant: &str) -> Result<(), Problem> {
-		self.require(Decision {
-			task: None,
-			kind: DecisionKind::DiscardFiles,
-			participant: participant.into(),
-			message: "Discard the newly disclosed files? These changes cannot be restored by undo."
-				.into(),
-		})
-		.await
-	}
-
-	pub(super) async fn require(&self, decision: Decision) -> Result<(), Problem> {
-		let message = decision.message.clone();
-		match self.observer.confirm(decision).await? {
-			Some(true) => Ok(()),
-			Some(false) => Err(declined()),
-			None => Err(Problem::new(ProblemCode::DecisionRequired, message)
-				.remedy("Review the disclosed facts. Use --force only to authorize file discard, or --yes to acknowledge an informational undo warning.")),
+/// A repository gate can outlive the first disclosure. Only start writer
+/// evidence after the gate accepts the exact files authorized by the caller.
+pub(crate) async fn unlink(
+	git: &impl RemovalGit,
+	observer: &impl RemovalObserver,
+	control: &Control,
+	participant: &Participant,
+	disclosed: &mut RemovalObservation,
+	mut before_unlink: impl FnMut(&RemovalObservation) -> Result<(), Problem> + Send,
+) -> Result<(), crate::UnlinkFailure> {
+	loop {
+		recheck(git, observer, control, participant, disclosed).await?;
+		let discard = !disclosed.dirty_paths.is_empty();
+		let result = git
+			.remove_worktree(disclosed, discard, control, || before_unlink(disclosed))
+			.await;
+		if matches!(&result, Err(crate::UnlinkFailure::BeforeLaunch(problem)) if problem.code == ProblemCode::DecisionRequired)
+		{
+			continue;
 		}
+		return result;
+	}
+}
+
+pub(crate) async fn require(
+	observer: &impl RemovalObserver,
+	decision: Decision,
+) -> Result<(), Problem> {
+	let remedy = match decision.kind {
+		DecisionKind::LostChanges => {
+			"Review the warning, then use --yes to acknowledge the limits of undo."
+		}
+		_ => "Review the disclosed files. Use --force only to authorize their discard.",
+	};
+	let message = decision.message.clone();
+	match observer.confirm(decision).await? {
+		Some(true) => Ok(()),
+		Some(false) => Err(declined()),
+		None => Err(Problem::new(ProblemCode::DecisionRequired, message).remedy(remedy)),
 	}
 }
 

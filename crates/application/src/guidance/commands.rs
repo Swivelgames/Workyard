@@ -59,7 +59,15 @@ pub(crate) fn status(task: &str, state: Option<&Path>) -> Option<String> {
 }
 
 pub(crate) fn recover(task: &str, state: Option<&Path>) -> Option<String> {
-	let mut command = String::from("workyard recover");
+	task_command("recover", task, state)
+}
+
+pub(crate) fn remove(task: &str, state: Option<&Path>) -> Option<String> {
+	task_command("remove", task, state)
+}
+
+fn task_command(action: &str, task: &str, state: Option<&Path>) -> Option<String> {
+	let mut command = format!("workyard {action}");
 	if let Some(state) = state {
 		command.push_str(&format!(" --workspace={}", path(state.parent()?)?));
 	}

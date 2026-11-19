@@ -72,14 +72,25 @@ async fn run(
 		return removal::run(name, input, context, &runner, &control, &store).await;
 	}
 
-	if input.undo || input.force || input.yes {
+	if input.undo {
 		return Err(rejected(workyard_core::Problem::new(
 			ProblemCode::InvalidInput,
-			"--undo, --yes and --force currently apply only to removal recovery.",
+			"--undo applies only to whole-task removal recovery.",
 		)));
 	}
 
-	if let Some(request) = amendment {
+	let resuming_removals = amendment
+		.as_ref()
+		.is_some_and(|request| !request.remove.is_empty());
+	if (input.force || input.yes) && !resuming_removals {
+		return Err(rejected(workyard_core::Problem::new(
+			ProblemCode::InvalidInput,
+			"--yes and --force require a pending removal.",
+		)));
+	}
+	if let Some(mut request) = amendment {
+		request.removal_options.yes = input.yes;
+		request.removal_options.force = input.force;
 		return amendment::run(
 			request,
 			&name,

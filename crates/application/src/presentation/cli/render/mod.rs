@@ -1,4 +1,5 @@
 //! Shared supplied-fact renderers; views choose content and completion policy.
+mod amendment;
 mod disclosure;
 mod operation;
 mod participants;

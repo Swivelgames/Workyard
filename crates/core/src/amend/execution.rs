@@ -1,29 +1,51 @@
 use super::{Amendment, plan::Change};
 use crate::{
-	AmendGit, AmendState, AmendmentChangeKind as Kind, EffectState, Observer, Problem, ProblemCode,
-	Task,
+	AmendGit, AmendState, AmendmentChangeKind as Kind, EffectState, Problem, ProblemCode,
+	RemovalObserver, Task,
 };
 
-impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
+impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 	pub(super) async fn execute(
 		&mut self,
 		task: &mut Task,
 		changes: Vec<Change>,
+		report_settled: bool,
 	) -> Result<(), Problem> {
-		for change in changes.iter().filter(|change| change.repair) {
+		let removals = self.inspect_removals(task, report_settled).await?;
+		let schedule =
+			super::replacement::Schedule::prepare(task, changes, !removals.is_empty(), self.store)?;
+		for change in schedule
+			.before
+			.iter()
+			.chain(&schedule.after)
+			.filter(|change| change.repair)
+		{
 			self.repair(task, change).await?;
 		}
 
-		for change in changes {
-			self.control.check()?;
-			if change.addition {
-				self.add(task, change).await?;
-			} else {
-				self.existing(task, change).await?;
-			}
+		for change in schedule.before {
+			self.apply(task, change).await?;
 		}
-
+		for (target, observation) in removals {
+			self.unlink(task, &target, observation).await?;
+		}
+		for change in schedule.after {
+			self.apply(task, change).await?;
+		}
 		Ok(())
+	}
+
+	async fn apply(&mut self, task: &mut Task, mut change: Change) -> Result<(), Problem> {
+		self.control.check()?;
+		// Unlinking compacts membership; an index from the initial plan is now stale.
+		change.existing = task
+			.participants
+			.iter()
+			.position(|p| p.backing_identity == change.repository.identity);
+		if change.addition {
+			return self.add(task, change).await;
+		}
+		self.existing(task, change).await
 	}
 
 	async fn repair(&mut self, task: &mut Task, change: &Change) -> Result<(), Problem> {

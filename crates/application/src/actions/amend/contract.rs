@@ -1,16 +1,12 @@
-use crate::contracts::{OperationReport, ParticipantOutcome, ProblemOutcome};
+use crate::contracts::{OperationReport, ParticipantChange, ParticipantOutcome, ProblemOutcome};
 use serde::Serialize;
 use trine::NativePath;
 use workyard_core::{AmendResult, Operation, OperationKind, OperationOutcome, Problem};
 
 #[derive(Serialize)]
-pub struct ParticipantChange {
-	pub participant: String,
-	pub kind: &'static str,
-}
-
-#[derive(Serialize)]
 pub struct AmendOutcome {
+	#[serde(flatten)]
+	pub removal: crate::contracts::removal::RemovalReport,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub pull_failures: Vec<crate::contracts::PullFailure>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +29,7 @@ impl AmendOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			removal: Default::default(),
 			registration_problem: None,
 			pull_failures: Vec::new(),
 			operation: Operation {
@@ -50,8 +47,24 @@ impl AmendOutcome {
 		}
 	}
 
+	pub(super) fn guide_retirement(&mut self, state: &std::path::Path, explicit_workspace: bool) {
+		let Some(problem) = self
+			.problem
+			.as_mut()
+			.filter(|p| p.code == workyard_core::ProblemCode::EmptyTask.as_str())
+		else {
+			return;
+		};
+		let scope = explicit_workspace.then_some(state);
+		if let Some(command) = crate::guidance::commands::remove(&self.task, scope) {
+			problem.remedy = format!("To retire the task, run {command}");
+		}
+		self.state_dir = NativePath::new(state.to_path_buf()).ok();
+	}
+
 	pub fn from_result(result: AmendResult) -> Self {
 		Self {
+			removal: Default::default(),
 			registration_problem: None,
 			pull_failures: result.pull_failures.into_iter().map(Into::into).collect(),
 			operation: result.operation.into(),
@@ -64,14 +77,7 @@ impl AmendOutcome {
 				.into_iter()
 				.map(Into::into)
 				.collect(),
-			changes: result
-				.changes
-				.into_iter()
-				.map(|change| ParticipantChange {
-					participant: change.participant,
-					kind: change.kind.as_str(),
-				})
-				.collect(),
+			changes: result.changes.into_iter().map(Into::into).collect(),
 			problem: result.problem.map(Into::into),
 		}
 	}
