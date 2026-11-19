@@ -23,23 +23,20 @@ impl View<InfoOutcome, InfoOutcome, Progress> for InfoView {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		if let (Some(root), Some(state)) = (&outcome.tasks_root, &outcome.state_dir) {
-			writeln!(
-				terminal.output,
-				"Root:  {}",
-				terminal.paths.root(root.as_path())
-			)
-			.expect("string output");
-			writeln!(
-				terminal.output,
-				"State: {}",
-				terminal.paths.within(root.as_path(), state.as_path())
-			)
-			.expect("string output");
+		if let (Some(workspace), Some(tasks), Some(state)) =
+			(&outcome.workspace, &outcome.tasks_root, &outcome.state_dir)
+		{
+			let root = workspace.as_path();
+			let label = terminal.paths.root(root);
+			let tasks = terminal.paths.within(root, tasks.as_path());
+			let state = terminal.paths.within(root, state.as_path());
+			writeln!(terminal.output, "Workspace: {label}").expect("string output");
+			writeln!(terminal.output, "Tasks dir: {tasks}").expect("string output");
+			writeln!(terminal.output, "State:     {state}").expect("string output");
 		}
 		if let Some(source) = outcome.discovery {
 			let source = match source {
-				DiscoverySource::Explicit => "explicit --state-dir",
+				DiscoverySource::Explicit => "explicit --workspace",
 				DiscoverySource::Ancestor => "ancestor .workyard search",
 			};
 			writeln!(terminal.output, "Discovery: {source}").expect("string output");
@@ -52,7 +49,7 @@ impl View<InfoOutcome, InfoOutcome, Progress> for InfoView {
 			if outcome.unresolved_records > 0 {
 				let state = outcome.state_dir.as_ref().map(|path| path.as_path());
 				let command = crate::guidance::commands::workspace_status(state)
-					.unwrap_or_else(|| "workyard status with the same state directory".into());
+					.unwrap_or_else(|| "workyard status with the same workspace".into());
 				writeln!(
 					terminal.output,
 					"Unresolved records: {} (inspect with {command})",

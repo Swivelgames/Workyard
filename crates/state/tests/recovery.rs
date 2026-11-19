@@ -82,32 +82,28 @@ fn legacy_completed_records_load_but_uncertain_effects_remain_diagnostic() {
 }
 
 #[test]
-fn explicit_state_wins_and_existing_open_checks_root_without_bootstrap() {
+fn explicit_workspace_wins_and_missing_selection_does_not_bootstrap() {
 	let workspace = support::Workspace::new();
-	let root = &workspace.root;
-	let state = &workspace.state;
-	let temporary = &workspace.temporary;
-	let nested = root.join("nested");
+	let nested = workspace.root.join("nested");
 	fs::create_dir(&nested).unwrap();
-	assert_eq!(discover_state(&nested, None).unwrap(), *state);
-	assert_eq!(discover_state(root, None).unwrap(), *state);
-	let external_root = temporary.path().join("external-root");
-	let external = temporary.path().join("external-state");
-	let external_store = Store::open(&external_root, &external).unwrap();
-	assert_eq!(discover_state(&nested, Some(&external)).unwrap(), external);
-	assert!(Store::open_existing(&external, Some(&external_root)).is_ok());
+	assert_eq!(discover_state(&nested, None).unwrap(), workspace.state);
+
+	let other = workspace.temporary.path().join("other");
+	let other_root = workyard_state::initialize_workspace(&other, None).unwrap();
+	let state = discover_state(&nested, Some(&other)).unwrap();
+	assert_eq!(state, other.join(".workyard"));
+	assert!(Store::open_existing(&state, Some(&other_root)).is_ok());
 	assert_eq!(
-		Store::open_existing(&external, Some(root))
+		Store::open_existing(&state, Some(&workspace.root))
 			.err()
 			.unwrap()
 			.code,
 		ProblemCode::WorkspaceBindingConflict
 	);
-	let missing = temporary.path().join("missing");
-	assert_eq!(discover_state(&nested, Some(&missing)).unwrap(), missing);
-	assert!(Store::open_existing(&missing, None).is_err());
+
+	let missing = workspace.temporary.path().join("missing");
+	assert!(discover_state(&nested, Some(&missing)).is_err());
 	assert!(!missing.exists());
-	drop(external_store);
 }
 
 #[test]

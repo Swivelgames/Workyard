@@ -19,10 +19,8 @@ impl CreateInput {
 			));
 		}
 
-		let location = crate::workspace::placement::new_workspace(
-			self.tasks_root.as_ref().map(NativePath::as_path),
-			self.state_dir.as_ref().map(NativePath::as_path),
-		)?;
+		let state = crate::workspace::required(self.workspace.as_ref().map(NativePath::as_path))?;
+		let reader = workyard_state::Reader::open(&state, None)?;
 		Ok(CreateRequest {
 			task: self.task,
 			repositories: self
@@ -35,8 +33,8 @@ impl CreateInput {
 					from: repo.from,
 				})
 				.collect(),
-			tasks_root: location.root,
-			state_dir: location.state,
+			tasks_root: reader.root().to_path_buf(),
+			state_dir: state,
 			checkout: self.checkout,
 			no_fetch: self.no_fetch,
 			pull: self.pull,

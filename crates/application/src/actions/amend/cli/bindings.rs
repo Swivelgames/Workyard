@@ -1,3 +1,4 @@
+use crate::presentation::cli::workspace_binding;
 use trine::cli::Bindings;
 
 pub(in super::super) fn bindings() -> Bindings {
@@ -12,11 +13,7 @@ pub(in super::super) fn bindings() -> Bindings {
 		.option("no_fetch", "no-fetch")
 		.option("pull", "pull");
 
-	let bindings = bindings
-		.option("tasks_root", "tasks-root")
-		.native_path("tasks_root")
-		.option("state_dir", "state-dir")
-		.native_path("state_dir");
+	let bindings = workspace_binding(bindings);
 
 	let bindings = bindings
 		.option("remote", "remote")

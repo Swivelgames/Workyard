@@ -44,6 +44,7 @@ fn json_inventory_and_argument_failures_are_single_documents() {
 #[test]
 fn json_creation_preserves_grouped_repositories_and_domain_failure() {
 	let root = tempfile::tempdir().unwrap();
+	init_workspace(root.path());
 	let api = repo(root.path(), "api");
 	let web = repo(root.path(), "web");
 	let args = [
@@ -69,7 +70,11 @@ fn json_creation_preserves_grouped_repositories_and_domain_failure() {
 	assert_eq!(value["result"]["participants"][0]["name"], "backend");
 	assert_eq!(value["result"]["participants"][1]["name"], "frontend");
 	assert!(created.stderr.is_empty());
-	assert!(root.path().join("feat/payments/backend/.git").exists());
+	assert!(
+		root.path()
+			.join("tasks/feat/payments/backend/.git")
+			.exists()
+	);
 
 	let duplicate = workyard(root.path(), &args);
 	assert!(!duplicate.status.success());
@@ -82,6 +87,7 @@ fn json_creation_preserves_grouped_repositories_and_domain_failure() {
 #[test]
 fn json_remove_never_implies_consent_or_damages_usable_state() {
 	let root = tempfile::tempdir().unwrap();
+	init_workspace(root.path());
 	let api = repo(root.path(), "api");
 	assert_ok(&workyard(
 		root.path(),
@@ -95,7 +101,7 @@ fn json_remove_never_implies_consent_or_damages_usable_state() {
 			"main",
 		],
 	));
-	let participant = root.path().join("feat/payments/api");
+	let participant = root.path().join("tasks/feat/payments/api");
 	fs::write(participant.join("file"), "uncommitted work\n").unwrap();
 	let before = record(&root.path().join(".workyard"));
 
@@ -164,6 +170,7 @@ fn display_commands_stay_plain_and_json_rejects_transports_and_scripts() {
 #[test]
 fn optional_pull_failure_is_an_invocation_result_not_damaged_membership() {
 	let root = tempfile::tempdir().unwrap();
+	init_workspace(root.path());
 	let (api, _) = remote_clone(root.path(), "api");
 	let output = workyard(
 		root.path(),
@@ -193,6 +200,7 @@ fn optional_pull_failure_is_an_invocation_result_not_damaged_membership() {
 #[test]
 fn populated_status_and_info_json_preserve_their_distinct_facts() {
 	let root = tempfile::tempdir().unwrap();
+	init_workspace(root.path());
 	let api = repo(root.path(), "api");
 	let created = workyard(
 		root.path(),
@@ -207,7 +215,11 @@ fn populated_status_and_info_json_preserve_their_distinct_facts() {
 		],
 	);
 	assert_ok(&created);
-	fs::write(root.path().join("feat/payments/api/file"), "modified\n").unwrap();
+	fs::write(
+		root.path().join("tasks/feat/payments/api/file"),
+		"modified\n",
+	)
+	.unwrap();
 
 	let status = workyard(root.path(), &["status", "feat/payments", "--json"]);
 	assert_ok(&status);
@@ -255,7 +267,7 @@ fn task_help_distinguishes_checkout_and_workspace_recovery() {
 	assert!(!checkout.contains("--checkout"));
 
 	let recover = help("recover");
-	assert!(recover.contains("[TASK]"));
+	assert!(recover.contains("<TASK>"));
 	assert!(!recover.contains("[TASK]..."));
-	assert!(recover.contains("Resume workspace relocation"));
+	assert!(!recover.contains("Resume workspace relocation"));
 }

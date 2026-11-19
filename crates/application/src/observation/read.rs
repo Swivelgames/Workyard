@@ -6,15 +6,13 @@ use workyard_core::{Control, Problem};
 
 pub(crate) async fn read(
 	task: Option<String>,
-	root: Option<NativePath>,
-	state: Option<NativePath>,
+	workspace: Option<NativePath>,
 	selection: Selection,
 	context: InvocationContext<Progress>,
 ) -> Result<Observation, Observation> {
 	let result = observe(
 		task.as_deref(),
-		root.as_ref().map(NativePath::as_path),
-		state.as_ref().map(NativePath::as_path),
+		workspace.as_ref().map(NativePath::as_path),
 		selection,
 		context,
 	)
@@ -27,8 +25,7 @@ pub(crate) async fn read(
 
 async fn observe(
 	task: Option<&str>,
-	root: Option<&Path>,
-	explicit: Option<&Path>,
+	workspace: Option<&Path>,
 	selection: Selection,
 	context: InvocationContext<Progress>,
 ) -> Result<Observation, Problem> {
@@ -41,15 +38,9 @@ async fn observe(
 	control.check()?;
 
 	let cwd = std::env::current_dir().map_err(|e| Problem::io("Read current directory", e))?;
-	if let Some(state) = workyard_state::find_state(root.unwrap_or(&cwd), explicit)?
-		&& let Some(mut observation) = super::placement::inspect(&state)?
-	{
-		observation.selected_task = task.map(str::to_owned);
-		return Ok(observation);
-	}
-	let Some(reader) = crate::workspace::reader::optional(&cwd, root, explicit)? else {
+	let Some(reader) = crate::workspace::reader(&cwd, workspace)? else {
 		return Ok(Observation {
-			guidance: Some(guidance::missing_state(root, explicit)),
+			guidance: Some(guidance::missing_state(workspace)),
 			..Observation::default()
 		});
 	};
@@ -82,7 +73,7 @@ async fn observe(
 	if observation.tasks.is_empty() {
 		observation.guidance = Some(match selection {
 			Selection::Active => "No active tasks found.".into(),
-			Selection::Inventory => guidance::empty_workspace(reader.state(), reader.root()),
+			Selection::Inventory => guidance::empty_workspace(workspace),
 		});
 	}
 

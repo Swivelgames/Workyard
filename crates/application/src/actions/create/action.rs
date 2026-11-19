@@ -29,7 +29,8 @@ async fn run(
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
-	let store = Store::open(&request.tasks_root, &request.state_dir).map_err(rejected)?;
+	let store =
+		Store::open_existing(&request.state_dir, Some(&request.tasks_root)).map_err(rejected)?;
 	let runner = Runner::default();
 
 	let result = workyard_core::create(
@@ -71,9 +72,12 @@ mod tests {
 	fn blocked_state_work_does_not_block_host_polling() {
 		let workspace = tempfile::tempdir().unwrap();
 		let state = workspace.path().join(".workyard");
-		fs::create_dir(&state).unwrap();
-		let manifest = state.join("workspace.json");
-		let path = std::ffi::CString::new(manifest.as_os_str().as_encoded_bytes()).unwrap();
+		workyard_state::initialize_workspace(workspace.path(), None).unwrap();
+		let repo = workspace.path().join("api");
+		make_repository(&repo);
+
+		let blocked_record = state.join("tasks/other.json");
+		let path = std::ffi::CString::new(blocked_record.as_os_str().as_encoded_bytes()).unwrap();
 		// A real synchronous state read blocks until the host releases its writer.
 		assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
 
@@ -85,7 +89,7 @@ mod tests {
 				match OpenOptions::new()
 					.write(true)
 					.custom_flags(libc::O_NONBLOCK)
-					.open(&manifest)
+					.open(&blocked_record)
 				{
 					Ok(pipe) => break pipe,
 					Err(error) if error.raw_os_error() == Some(libc::ENXIO) => {
@@ -105,13 +109,12 @@ mod tests {
 		let input = crate::create::CreateInput {
 			task: "feat/responsive".into(),
 			repositories: vec![crate::contracts::RepositoryInput {
-				path: trine::NativePath::new(workspace.path()).unwrap(),
+				path: trine::NativePath::new(repo).unwrap(),
 				name: None,
 				remote: None,
 				from: None,
 			}],
-			tasks_root: Some(trine::NativePath::new(workspace.path()).unwrap()),
-			state_dir: None,
+			workspace: Some(trine::NativePath::new(workspace.path()).unwrap()),
 			checkout: false,
 			no_fetch: true,
 			pull: false,
@@ -130,5 +133,26 @@ mod tests {
 		));
 		assert!(writer.join().unwrap(), "state read blocked host polling");
 		assert!(result.is_err(), "fixture must reach the invalid state read");
+	}
+
+	fn make_repository(path: &std::path::Path) {
+		fs::create_dir(path).unwrap();
+		for args in [
+			&["init", "-b", "main"][..],
+			&["commit", "--allow-empty", "-m", "fixture"],
+		] {
+			let result = std::process::Command::new("git")
+				.current_dir(path)
+				.args([
+					"-c",
+					"user.name=Test",
+					"-c",
+					"user.email=test@example.invalid",
+				])
+				.args(args)
+				.output()
+				.unwrap();
+			assert!(result.status.success(), "{result:?}");
+		}
 	}
 }

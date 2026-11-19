@@ -1,22 +1,37 @@
 # Workyard
 
-Workyard creates a task across explicitly selected Git repositories. The same core
-operation is exposed through CLI views and Trine's on-demand stdio RPC host.
+Workyard creates branch-named tasks across Git repositories. The CLI and on-demand
+stdio RPC host run the same actions. MCP and the persistent TUI are planned.
 
-This experimental slice implements `create`, its `checkout` alias, `recover`,
-`amend`, `remove`, `relocate`, `list`, `status`, `info`, `rpc`, and `completion`.
-Other lifecycle commands, MCP and TUI are not implemented yet.
+## Start a workspace
 
 ```sh
-cargo build --bin workyard
-workyard create --repo /repos/api --repo /repos/web --from main feat/payments
-workyard checkout --repo /repos/api --repo /repos/web feat/existing
+mkdir my-workspace
+cd my-workspace
+workyard init
+workyard create feat/payments --repo /repos/api --repo /repos/web
+workyard status feat/payments
 ```
 
-Each task occupies `<tasks-root>/<branch>/<participant>`. The tasks root defaults
-to CWD and state defaults to `<tasks-root>/.workyard`. `--tasks-root` and
-`--state-dir` override those paths independently. An explicit state directory
-contains the state files directly. Each state directory belongs to one tasks root.
+Bare `workyard init` targets the current directory. It creates the fixed state
+directory `.workyard/` and the default worktree directory `tasks/`. The example
+above puts participants in `tasks/feat/payments/api/` and `tasks/feat/payments/web/`.
+The workspace records `projects/` as its default project root. Supply each backing
+repository with `--repo` in this increment.
+
+For a workspace with a nested tasks directory, run the following command.
+
+```sh
+workyard init my-other-workspace --tasks dev/worktrees
+```
+
+The tasks path is relative to the selected workspace. Repeating init on a matching
+workspace preserves its state. An explicit conflicting tasks path returns an error.
+Task commands find the nearest ancestor workspace or accept `--workspace <directory>`.
+Only init creates workspace state. For example, `workyard list --workspace my-other-workspace`
+shows tasks in that workspace from outside its directory.
+
+## Creating and checking out tasks
 
 Use `--repo-name`, `--repo-remote` and `--repo-from` immediately after their `--repo`
 to override that participant. Common `--remote` and `--from` apply irrespective of
@@ -35,8 +50,8 @@ Git's branch/worktree constraints and configuration still apply.
 
 ## State and partial results
 
-`.workyard/workspace.json` binds placement. `tasks/<slug>-<sha256>.json` contains
-the task's participants and latest outcome; `evidence/` independently preserves
+`.workyard/workspace.json` records the layout. Each record in `.workyard/tasks/`
+contains the task’s participants and latest outcome. `.workyard/evidence/` preserves
 admission intent and pending/settled effect snapshots. Documents use tabs and a
 trailing newline. The format is private, versioned and experimental; newer or damaged documents fail without reset.
 
@@ -88,34 +103,14 @@ retiring/reusing a task archives the amended membership before a new incarnation
 Participant creation options are versioned separately from the original task-wide
 options so recovery preserves each participant's intended execution policy.
 
-## Relocating workspaces
-
-```sh
-workyard relocate --old /workspace/tasks --new /work/tasks
-workyard relocate --keep-source --old /workspace/tasks --new /new/tasks
-workyard relocate --old /work/tasks --new-state-dir /workyard-state
-workyard recover --state-dir /workspace/tasks/.workyard
-workyard recover --state-dir /workspace/tasks/.workyard --undo
-```
-
-Relocation moves workspace contents and repairs Git relationships, then activates
-verified destination state. Use `--keep-source` to retain an inactive source snapshot.
-Inspect or modify Git state at the active worktree. Relocation preserves incomplete
-tasks and authored files. Externally located participants stay fixed. Pending relocation blocks ordinary
-mutations and supports fixed-endpoint continuation or pre-activation undo.
-See [Workspace relocation](docs/relocation.md) for selection, recovery, formats and
-native-platform acceptance limits.
-
 ## Recovery
 
 ```sh
-workyard recover feat/payments --state-dir /workspace/.workyard
+workyard recover feat/payments --workspace /workspace
 workyard recover feat/payments --accept-pull api --accept-pull web
 ```
 
-Recovery requires existing authoritative state. Explicit `--state-dir` wins;
-otherwise the first ancestor `.workyard` of CWD or explicit `--tasks-root` is used.
-Recovery preserves completed trees and authored changes, reconciles verified Git
+Recovery opens an initialized workspace. It preserves completed trees and authored changes, reconciles verified Git
 moves/repairs, and resumes only remaining safe work. Healthy tasks do not fetch or
 pull for freshness. Branch-valued sources resolve their current tips; explicit
 commit sources retain their exact meaning.
@@ -147,7 +142,7 @@ allows explicit recovery retry under the existing native Git coordination rules.
 workyard list
 workyard status
 workyard info
-workyard status feat/payments --state-dir /workspace/.workyard
+workyard status feat/payments --workspace /workspace
 ```
 
 List inspects active tasks and presents a compact inventory: task name, condition
@@ -156,21 +151,17 @@ current participant detail for active tasks, including modified or missing workt
 an explicit task selects that active record. Both retain actionable diagnostics for
 unresolved state. Neither prints a primary title or workspace metadata.
 
-Use info for workspace root, state directory, discovery source and current record
-counts. Explicit state and ancestor `.workyard` are the implemented discovery
-sources; the optional user-global locator cache remains deferred. Info reads existing
-state only and never initializes a store or mutates Git.
+Use info for workspace context, including the tasks directory, state directory,
+discovery source and current record counts.
 
 Saved outcomes, independent effect evidence, task-lock contention and current Git
 facts remain distinct in structured responses. Lock availability and recorded phases
 do not establish that Git writers stopped.
 
-Explicit state takes precedence over ancestor `.workyard` discovery. Missing state
-returns no tasks with a create example; existing damage and unknown tasks have
-distinct diagnostics. Inspection does not initialize state, fetch, repair worktrees,
-refresh the Git index or publish cached locations. Verified moved worktree paths
-appear in the response while the saved path remains visible. Listings are
-per-record observations, not a global workspace snapshot.
+An explicit workspace selects that directory directly. Missing state returns init
+guidance. Existing damage and unknown tasks have distinct diagnostics. Inspection
+never initializes state, fetches or repairs worktrees. Listings use per-task
+observations and can run concurrently with work on other tasks.
 
 ## Removing tasks
 
@@ -197,19 +188,22 @@ slice; a passing ordinary scenario is not a claim of production readiness.
 
 ## RPC
 
-Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout:
+Run `workyard rpc` and exchange newline-delimited JSON-RPC 2.0 on stdin/stdout.
+Pass empty input to initialize the host’s current directory. Wait for the init
+response before sending commands that depend on the workspace.
 
 ```json
-{"jsonrpc":"2.0","id":1,"method":"invoke","params":{"action":["create"],"input":{"task":"feat/payments","repositories":[{"path":"/repos/api"}],"from":"main"},"observe":true}}
+{"jsonrpc":"2.0","id":1,"method":"invoke","params":{"action":["init"],"input":{}}}
+{"jsonrpc":"2.0","id":2,"method":"invoke","params":{"action":["create"],"input":{"task":"feat/payments","repositories":[{"path":"/repos/api"}],"from":"main"},"observe":true}}
 ```
 
 Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
-`{"task":"feat/payments","accept_pull":["api"],"state_dir":"/workspace/.workyard"}`.
+`{"task":"feat/payments","accept_pull":["api"],"workspace":"/workspace"}`.
 Amend uses `action: ["amend"]` and the same repository groups/options as creation,
 with an explicit task and existing-state selection. Its result separates operation
 outcome, retained participant facts and per-participant changes.
-Inspection uses `action: ["list"]`, `["status"]` or `["info"]` with optional `state_dir` and
-`tasks_root`; status additionally accepts optional `task`.
+Inspection uses `action: ["list"]`, `["status"]` or `["info"]` with optional `workspace`.
+Status also accepts an explicit `task`.
 
 RPC uses Trine's shared invocation, progress, cancellation and terminal response
 contract. Native Git output never enters protocol stdout. Clean stdin EOF drains
@@ -234,12 +228,13 @@ accepted work; shutdown, read failure or output failure requests cancellation.
 Small inseparable concepts stay together: `CommandOutput` owns its diagnostics,
 `TaskGuard` owns verification of its locks, and Windows containment keeps its handle
 owner beside the managed process. The supervisor visibly allocates drain workers,
-launches, waits for the process tree, then joins the drains. Workspace bootstrap
-releases exclusive protection before shared binding verification; task publication
-still writes independent evidence before the mutable record. Native process behavior
+launches, waits for the process tree, then joins the drains. Init publishes the workspace marker as a unit. Task publication writes independent
+evidence before the mutable record. Native process behavior
 and the standalone prototype stay independent of the application capability layout.
 
-Trine is a sibling path dependency (`../trine`). Builds require both checkouts.
+Trine is a sibling path dependency (`../trine`). With both checkouts in place,
+build the CLI from the Workyard checkout using `cargo build --bin workyard`.
+The executable is `target/debug/workyard` (or `workyard.exe` on Windows).
 The earlier process-wrap experiment remains `examples/process_prototype.rs`.
 Production supervision uses native groups/jobs so cancellation and full managed-tree
 completion remain observable independently of the root process's exit.
@@ -294,9 +289,8 @@ completion uses the installed executable to query current data.
 
 `amend`, `remove`, `status`, and `recover` suggest recorded non-retired task names.
 Damaged or busy tasks can still appear; a suggestion is not a promise that an
-operation will succeed. Placement follows CWD ancestry, `--tasks-root`, and explicit
-`--state-dir`. Recorded-task completion reads existing state only: it never checks
-Git, fetches, initializes state, creates locks or waits for locks. Unavailable context returns
+operation will succeed. Completion uses the same workspace selection as the action.
+Recorded-task completion only reads existing state. Unavailable context returns
 no suggestions. `create` and `checkout` task names remain free-form, without file
 suggestions. Path options still complete files and directories.
 

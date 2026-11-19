@@ -118,8 +118,8 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 					participant.name
 				);
 				let remedy = format!(
-					"Inspect git status and complete or abort the pull yourself. Then run recover {:?} --state-dir {:?} --accept-pull {:?}. No pull will be replayed.",
-					task.name, task.state_dir, participant.name
+					"Inspect git status and complete or abort the pull yourself. Then run workyard recover {:?} --accept-pull {:?} from the workspace. No pull will be replayed.",
+					task.name, participant.name
 				);
 				return Err(Problem::new(ProblemCode::GitFailed, message).remedy(remedy));
 			}

@@ -8,8 +8,8 @@ use trine::NativePath;
 pub struct AmendInput {
 	pub task: String,
 	pub repositories: Vec<RepositoryInput>,
-	pub tasks_root: Option<NativePath>,
-	pub state_dir: Option<NativePath>,
+	/// Explicit workspace directory containing .workyard.
+	pub workspace: Option<NativePath>,
 	/// Reuse an existing target branch when available.
 	#[serde(default)]
 	pub checkout: bool,

@@ -9,7 +9,6 @@ mod recovery;
 mod selection;
 mod snapshot;
 mod transfer;
-pub(crate) use snapshot::require_live as snapshot_guard;
 pub use snapshot::{SnapshotStatus, snapshot_status};
 mod validation;
 use crate::{Lock, documents::publish, records::WorkspaceRecord};
@@ -102,43 +101,4 @@ impl Relocation {
 
 fn conflict(message: &str) -> Problem {
 	Problem::new(ProblemCode::WorkspaceBindingConflict, message).remedy("Inspect both relocation endpoints and preserve existing content. Use recover with the original state selection only for an admitted relocation.")
-}
-
-/// A completed marker authorizes normal mutations only at its paired active anchor.
-pub(crate) fn validate_mutation_binding(
-	state: &Path,
-	record: &WorkspaceRecord,
-) -> Result<(), Problem> {
-	snapshot::require_live(state, record)?;
-	if record
-		.authority
-		.as_deref()
-		.is_some_and(|status| status != "active")
-	{
-		return Err(conflict(
-			"Workspace relocation is unsettled or this state is inactive. Use workspace recover with this state selection.",
-		));
-	}
-	let path = state.join("relocation.json");
-	if !path
-		.try_exists()
-		.map_err(|error| Problem::io("Inspect relocation admission", error))?
-	{
-		return Ok(());
-	}
-	let journal = Journal::read(&path)?;
-
-	let active = record.relocation.as_deref() == Some(&journal.id)
-		&& record.authority.as_deref() == Some("active")
-		&& ((state == journal.new_state.decode()?
-			&& record.tasks_root.decode()? == journal.new_root.decode()?)
-			|| (journal.undone
-				&& state == journal.old_state.decode()?
-				&& record.tasks_root.decode()? == journal.old_root.decode()?));
-	if !active {
-		return Err(conflict(
-			"Workspace relocation is pending; ordinary mutations are blocked.",
-		));
-	}
-	Ok(())
 }

@@ -37,7 +37,7 @@ pub(crate) fn path(path: &Path) -> Option<String> {
 pub(crate) fn workspace_status(state: Option<&Path>) -> Option<String> {
 	let mut command = String::from("workyard status");
 	if let Some(state) = state {
-		command.push_str(&format!(" --state-dir={}", path(state)?));
+		command.push_str(&format!(" --workspace={}", path(state.parent()?)?));
 	}
 	Some(command)
 }
@@ -53,7 +53,7 @@ pub(crate) fn status(task: &str, state: Option<&Path>) -> Option<String> {
 pub(crate) fn recover(task: &str, state: Option<&Path>) -> Option<String> {
 	let mut command = String::from("workyard recover");
 	if let Some(state) = state {
-		command.push_str(&format!(" --state-dir={}", path(state)?));
+		command.push_str(&format!(" --workspace={}", path(state.parent()?)?));
 	}
 	if task.starts_with('-') {
 		command.push_str(" --");
@@ -92,8 +92,8 @@ mod tests {
 	#[test]
 	fn status_keeps_option_like_paths_as_values() {
 		assert_eq!(
-			status("feat/example", Some(Path::new("-state"))).unwrap(),
-			"workyard status --state-dir=-state -- feat/example"
+			status("feat/example", Some(Path::new("-workspace/.workyard"))).unwrap(),
+			"workyard status --workspace=-workspace -- feat/example"
 		);
 	}
 
@@ -102,7 +102,7 @@ mod tests {
 	fn non_unicode_paths_require_manual_native_quoting() {
 		use std::os::unix::ffi::OsStrExt;
 		let native = Path::new(std::ffi::OsStr::from_bytes(b"state-\xff"));
-		assert!(status("feat/example", Some(native)).is_none());
+		assert!(status("feat/example", Some(&native.join(".workyard"))).is_none());
 	}
 
 	#[cfg(windows)]

@@ -173,9 +173,7 @@ fn arguments() -> Bindings {
 		.option("pull");
 
 	// Workspace placement.
-	let bindings = bindings
-		.path_option("tasks-root")
-		.path_option("state-dir");
+	let bindings = bindings.path_option("workspace");
 
 	// Repository selection and per-repository overrides.
 	bindings

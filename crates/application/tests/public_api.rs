@@ -10,8 +10,7 @@ fn invalid_request() -> CreateInput {
 			remote: None,
 			from: None,
 		}],
-		tasks_root: None,
-		state_dir: None,
+		workspace: None,
 		checkout: false,
 		no_fetch: true,
 		pull: false,
@@ -81,21 +80,22 @@ fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields()
 	assert_eq!(serde_json::to_value(recover).unwrap(), expected);
 }
 
-#[cfg(unix)]
 #[test]
-fn public_normalize_resolves_future_placement_without_creating_state() {
+fn normalize_uses_the_selected_workspace_layout() {
 	let workspace = tempfile::tempdir().unwrap();
-	let root = workspace.path().join("future-root");
-	let state = workspace.path().join("external-state");
+	let tasks = workyard_state::initialize_workspace(
+		workspace.path(),
+		Some(std::path::Path::new("worktrees")),
+	)
+	.unwrap();
 	let mut input = invalid_request();
 	input.task = "feat/placement".into();
-	input.tasks_root = Some(NativePath::new(&root).unwrap());
-	input.state_dir = Some(NativePath::new(&state).unwrap());
+	input.workspace = Some(NativePath::new(workspace.path()).unwrap());
 
 	let request = input.normalize().unwrap();
-
-	assert_eq!(request.tasks_root, root);
-	assert_eq!(request.state_dir, state);
-	assert!(!root.exists());
-	assert!(!state.exists());
+	assert_eq!(request.tasks_root, tasks);
+	assert_eq!(
+		request.state_dir,
+		workspace.path().canonicalize().unwrap().join(".workyard")
+	);
 }

@@ -15,7 +15,7 @@ impl Workspace {
 		let api = repo(temp.path(), "api");
 		let web = repo(temp.path(), "web");
 		let root = temp.path().join("workspace");
-		fs::create_dir(&root).unwrap();
+		init_workspace(&root);
 		let workspace = Self {
 			_temp: temp,
 			root,
@@ -44,7 +44,7 @@ impl Workspace {
 	}
 
 	fn tree(&self, participant: &str) -> PathBuf {
-		self.root.join("feat/task").join(participant)
+		self.root.join("tasks/feat/task").join(participant)
 	}
 }
 
@@ -135,7 +135,7 @@ fn force_does_not_bypass_unfinished_git_or_unprotected_detached_history() {
 #[test]
 fn unrelated_task_directory_files_are_preserved() {
 	let workspace = Workspace::new();
-	let unrelated = workspace.root.join("feat/task/notes");
+	let unrelated = workspace.root.join("tasks/feat/task/notes");
 	fs::write(&unrelated, "user notes").unwrap();
 	assert_ok(&workyard(&workspace.root, &["remove", "feat/task"]));
 	assert_eq!(fs::read_to_string(unrelated).unwrap(), "user notes");
@@ -331,7 +331,7 @@ fn clean_unpushed_branch_is_disclosed_without_noninteractive_confirmation() {
 	git(&api, &["config", "user.email", "fixture@example.invalid"]);
 	git(&api, &["config", "user.name", "Fixture"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -344,7 +344,7 @@ fn clean_unpushed_branch_is_disclosed_without_noninteractive_confirmation() {
 			"--no-fetch",
 		],
 	));
-	let tree = root.join("feat/task/api");
+	let tree = root.join("tasks/feat/task/api");
 	git(&tree, &["branch", "--set-upstream-to=origin/main"]);
 	fs::write(tree.join("file"), "unpushed").unwrap();
 	git(&tree, &["commit", "-am", "local commit"]);

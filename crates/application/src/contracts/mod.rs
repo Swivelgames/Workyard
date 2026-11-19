@@ -5,7 +5,6 @@ mod participant;
 mod problem;
 mod progress;
 mod pull;
-pub(crate) mod relocation;
 pub(crate) mod removal;
 mod repository;
 

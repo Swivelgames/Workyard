@@ -3,15 +3,15 @@ use std::{fs, process::Command};
 use support::*;
 
 #[test]
-fn creates_two_repositories_with_external_state_and_keeps_sources_untouched() {
+fn creates_two_repositories_in_selected_workspace_and_keeps_sources_untouched() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	let state = fixture.path().join("state");
-	fs::create_dir(&root).unwrap();
+	let state = root.join(".workyard");
+	init_workspace(&root);
 	let output = workyard(
-		&root,
+		fixture.path(),
 		&[
 			"create",
 			"feat/payments",
@@ -21,8 +21,8 @@ fn creates_two_repositories_with_external_state_and_keeps_sources_untouched() {
 			text(&web),
 			"--from",
 			"main",
-			"--state-dir",
-			text(&state),
+			"--workspace",
+			text(&root),
 		],
 	);
 	assert_ok(&output);
@@ -32,7 +32,7 @@ fn creates_two_repositories_with_external_state_and_keeps_sources_untouched() {
 	for name in ["api", "web"] {
 		assert_eq!(
 			git(
-				&root.join("feat/payments").join(name),
+				&root.join("tasks/feat/payments").join(name),
 				&["branch", "--show-current"]
 			),
 			"feat/payments"
@@ -41,7 +41,7 @@ fn creates_two_repositories_with_external_state_and_keeps_sources_untouched() {
 	let stored = record(&state);
 	assert_eq!(stored["operation"]["outcome"], "succeeded");
 	assert_eq!(stored["participants"].as_array().unwrap().len(), 2);
-	assert!(!root.join(".workyard").exists());
+	assert!(root.join(".workyard").is_dir());
 	assert_eq!(fs::read_dir(state.join("evidence")).unwrap().count(), 2);
 }
 
@@ -52,7 +52,7 @@ fn existing_paths_and_branch_conflicts_leave_other_repos_untouched() {
 	let web = repo(fixture.path(), "web");
 	git(&web, &["branch", "feat/existing"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let output = workyard(
 		&root,
 		&[
@@ -67,9 +67,9 @@ fn existing_paths_and_branch_conflicts_leave_other_repos_untouched() {
 		],
 	);
 	assert!(!output.status.success());
-	assert!(!root.join("feat/existing").exists());
+	assert!(!root.join("tasks/feat/existing").exists());
 	assert!(!git(&api, &["branch", "--list", "feat/existing"]).contains("feat/existing"));
-	fs::create_dir_all(root.join("feat/occupied")).unwrap();
+	fs::create_dir_all(root.join("tasks/feat/occupied")).unwrap();
 	let output = workyard(
 		&root,
 		&[
@@ -95,7 +95,7 @@ fn checkout_reuses_local_branch_without_resetting_its_history() {
 	let tip = git(&api, &["rev-parse", "HEAD"]);
 	git(&api, &["checkout", "main"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -108,7 +108,7 @@ fn checkout_reuses_local_branch_without_resetting_its_history() {
 		],
 	));
 	assert_eq!(
-		git(&root.join("feat/reuse/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/reuse/api"), &["rev-parse", "HEAD"]),
 		tip
 	);
 }
@@ -132,6 +132,7 @@ fn missing_default_requires_source_and_conflicting_flags_do_not_initialize_state
 	);
 	assert!(!output.status.success());
 	assert!(!root.join(".workyard").exists());
+	init_workspace(&root);
 	let output = workyard(&root, &["create", "feat/new", "--repo", text(&api)]);
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stdout).contains("default_branch_unknown"));
@@ -143,7 +144,7 @@ fn pull_failure_preserves_created_trees_and_continues_participants() {
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let output = workyard(
 		&root,
 		&[
@@ -159,8 +160,8 @@ fn pull_failure_preserves_created_trees_and_continues_participants() {
 		],
 	);
 	assert!(!output.status.success());
-	assert!(root.join("feat/pull/api/.git").is_file());
-	assert!(root.join("feat/pull/web/.git").exists());
+	assert!(root.join("tasks/feat/pull/api/.git").is_file());
+	assert!(root.join("tasks/feat/pull/web/.git").exists());
 	let stored = record(&root.join(".workyard"));
 	assert_eq!(stored["operation"]["outcome"], "succeeded");
 	assert_eq!(stored["participants"][0]["phase"], "completed");
@@ -168,12 +169,12 @@ fn pull_failure_preserves_created_trees_and_continues_participants() {
 }
 
 #[test]
-fn known_binding_conflict_does_not_initialize_second_store() {
+fn explicit_uninitialized_workspace_does_not_fall_back_or_bootstrap() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	let external = fixture.path().join("external");
-	fs::create_dir(&root).unwrap();
+	let missing = fixture.path().join("missing");
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&["create", "feat/one", "--repo", text(&api), "--from", "main"],
@@ -187,12 +188,13 @@ fn known_binding_conflict_does_not_initialize_second_store() {
 			text(&api),
 			"--from",
 			"main",
-			"--state-dir",
-			text(&external),
+			"--workspace",
+			text(&missing),
 		],
 	);
 	assert!(!output.status.success());
-	assert!(!external.join("workspace.json").exists());
+	assert!(!missing.exists());
+	assert!(!root.join("tasks/feat/two").exists());
 }
 
 #[test]
@@ -202,17 +204,17 @@ fn remote_only_checkout_tracks_target_and_default_creation_uses_local_tip() {
 	git(&remote, &["branch", "feat/remote"]);
 	git(&api, &["fetch"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let rejected = workyard(&root, &["create", "feat/remote", "--repo", text(&api)]);
 	assert!(!rejected.status.success());
-	assert!(!root.join("feat/remote").exists());
+	assert!(!root.join("tasks/feat/remote").exists());
 	assert_ok(&workyard(
 		&root,
 		&["checkout", "feat/remote", "--repo", text(&api)],
 	));
 	assert_eq!(
 		git(
-			&root.join("feat/remote/api"),
+			&root.join("tasks/feat/remote/api"),
 			&["rev-parse", "--abbrev-ref", "@{upstream}"]
 		),
 		"origin/feat/remote"
@@ -228,7 +230,7 @@ fn remote_only_checkout_tracks_target_and_default_creation_uses_local_tip() {
 		&["create", "feat/local", "--repo", text(&api)],
 	));
 	assert_eq!(
-		git(&root.join("feat/local/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/local/api"), &["rev-parse", "HEAD"]),
 		old_tip
 	);
 	assert_ne!(git(&api, &["rev-parse", "origin/main"]), old_tip);
@@ -244,7 +246,7 @@ fn remote_only_checkout_tracks_target_and_default_creation_uses_local_tip() {
 		],
 	));
 	assert_eq!(
-		git(&root.join("feat/fresh/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/fresh/api"), &["rev-parse", "HEAD"]),
 		git(&api, &["rev-parse", "origin/main"])
 	);
 }
@@ -257,7 +259,7 @@ fn fetch_revalidation_stops_after_prior_participant_success() {
 	// The target is deliberately absent from the clone's cached remote refs.
 	git(&remote, &["branch", "feat/race"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let output = workyard(
 		&root,
 		&[
@@ -272,8 +274,8 @@ fn fetch_revalidation_stops_after_prior_participant_success() {
 		],
 	);
 	assert!(!output.status.success());
-	assert!(root.join("feat/race/api/.git").exists());
-	assert!(!root.join("feat/race/web").exists());
+	assert!(root.join("tasks/feat/race/api/.git").exists());
+	assert!(!root.join("tasks/feat/race/web").exists());
 	let stored = record(&root.join(".workyard"));
 	assert_eq!(stored["participants"][0]["phase"], "completed");
 	assert_eq!(stored["participants"][1]["phase"], "fetching");
@@ -286,7 +288,7 @@ fn rpc_and_cli_create_equivalent_task_outcomes() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&["create", "feat/cli", "--repo", text(&api), "--from", "main"],
@@ -315,8 +317,8 @@ fn rpc_and_cli_create_equivalent_task_outcomes() {
 	assert_eq!(terminal["result"]["operation"]["outcome"], "succeeded");
 	assert_eq!(terminal["result"]["participants"][0]["phase"], "completed");
 	assert_eq!(
-		git(&root.join("feat/cli/api"), &["rev-parse", "HEAD"]),
-		git(&root.join("feat/rpc/api"), &["rev-parse", "HEAD"])
+		git(&root.join("tasks/feat/cli/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/rpc/api"), &["rev-parse", "HEAD"])
 	);
 }
 
@@ -325,7 +327,7 @@ fn aliases_deduplicate_and_conflicting_names_fail_before_worktrees() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -362,7 +364,7 @@ fn aliases_deduplicate_and_conflicting_names_fail_before_worktrees() {
 		],
 	);
 	assert!(!output.status.success());
-	assert!(!root.join("feat/conflict").exists());
+	assert!(!root.join("tasks/feat/conflict").exists());
 }
 
 #[test]
@@ -375,7 +377,7 @@ fn explicit_remote_source_wins_over_same_spelled_local_branch() {
 	git(&upstream, &["commit", "-am", "update"]);
 	git(&upstream, &["push", text(&remote), "main"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -388,11 +390,11 @@ fn explicit_remote_source_wins_over_same_spelled_local_branch() {
 		],
 	));
 	assert_eq!(
-		git(&root.join("feat/fresh/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/fresh/api"), &["rev-parse", "HEAD"]),
 		git(&api, &["rev-parse", "refs/remotes/origin/main"])
 	);
 	assert_ne!(
-		git(&root.join("feat/fresh/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/fresh/api"), &["rev-parse", "HEAD"]),
 		git(&api, &["rev-parse", "refs/heads/origin/main"])
 	);
 }
@@ -402,7 +404,7 @@ fn repeating_create_reports_existing_task_without_mutating_it() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let args = [
 		"create",
 		"feat/repeat",
@@ -430,7 +432,7 @@ fn native_non_unicode_repository_paths_round_trip_in_state() {
 		.join(std::ffi::OsString::from_vec(b"repo-\xff".to_vec()));
 	fs::rename(original, &native).unwrap();
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let output = Command::new(env!("CARGO_BIN_EXE_workyard"))
 		.current_dir(&root)
 		.args(["create", "feat/native", "--repo"])
@@ -441,7 +443,7 @@ fn native_non_unicode_repository_paths_round_trip_in_state() {
 	assert_ok(&output);
 	let stored = record(&root.join(".workyard"));
 	assert!(stored["participants"][0]["source"]["unix"].is_array());
-	assert!(root.join("feat/native/api/.git").exists());
+	assert!(root.join("tasks/feat/native/api/.git").exists());
 }
 
 #[cfg(unix)]
@@ -452,7 +454,7 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let hook = api.join(".git/hooks/post-checkout");
 	fs::write(&hook, "#!/bin/sh\nchmod 500 \"$WORKYARD_FAULT_DIR\"\n").unwrap();
 	fs::set_permissions(&hook, fs::Permissions::from_mode(0o700)).unwrap();
@@ -477,8 +479,8 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 	let summary = String::from_utf8_lossy(&output.stdout);
 	assert!(summary.contains("publication_uncertain"), "{summary}");
 	assert!(summary.contains("created"), "{summary}");
-	assert!(root.join("feat/publication/api/.git").exists());
-	assert!(!root.join("feat/publication/web").exists());
+	assert!(root.join("tasks/feat/publication/api/.git").exists());
+	assert!(!root.join("tasks/feat/publication/web").exists());
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"][0]["phase"],
 		"creating"

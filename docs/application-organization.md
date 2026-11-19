@@ -15,7 +15,7 @@ application's action implementations or command views.
 | `actions/<capability>/cli/` | Flags/completion bindings, command layout and interface policy |
 | `contracts/` | Vocabulary shared by multiple actions and pure core-to-contract conversions |
 | `execution/` | Blocking worker boundary, core progress and removal decision adaptation to Trine |
-| `workspace/` | Explicit new/existing placement policies and optional read-only reader assembly |
+| `workspace/` | Workspace selection and optional read-only reader assembly |
 | `observation/` | Read-only orchestration, selection, projections and condition classification |
 | `guidance/` | Existing cross-interface human guidance, shell command quoting and safe message text |
 | `presentation/structured.rs` | Workyard's structured progress binding defaults |
@@ -36,11 +36,10 @@ produce quiet empty suggestions. Candidate names do not promise action success.
 
 ## Placement and recovery
 
-`workspace::placement::new_workspace` permits future paths and defaults state under
-the selected root. `existing` requires authoritative existing state. The optional
-reader allows absent state without creating directories or locks. These are distinct
-policies rather than flags on one universal discovery helper. Info retains its own
-discovery-source reporting because that provenance is part of its diagnostic contract.
+Only the init action creates workspace state. Other actions discover an existing
+marker in the current directory or its ancestors, or accept a selected workspace.
+The optional reader reports missing state without creating directories or locks.
+Info exposes the discovery source as part of its diagnostic contract.
 
 Recovery's `action/mod.rs` validates, checks cancellation, resolves state, reads the
 record under admission, releases that guard, and routes to removal, amendment or

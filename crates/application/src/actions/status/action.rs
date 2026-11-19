@@ -13,7 +13,7 @@ pub(super) async fn present(
 	input: StatusInput,
 	context: InvocationContext<Progress>,
 ) -> Result<PresentedStatus, PresentedStatus> {
-	let explicit_placement = input.tasks_root.is_some() || input.state_dir.is_some();
+	let explicit_placement = input.workspace.is_some();
 	let present = |outcome| PresentedStatus {
 		outcome,
 		explicit_placement,
@@ -27,8 +27,7 @@ async fn run(
 ) -> Result<StatusOutcome, StatusOutcome> {
 	crate::observation::read(
 		input.task,
-		input.tasks_root,
-		input.state_dir,
+		input.workspace,
 		crate::observation::Selection::Active,
 		context,
 	)

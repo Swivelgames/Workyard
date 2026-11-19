@@ -12,17 +12,17 @@ fn empty_workspace_messages_belong_at_workspace_level() {
 		assert_ok(&output);
 		let output = String::from_utf8(output.stdout).unwrap();
 		assert!(
-			output.contains("No Workyard state found.\nGet started: workyard create"),
+			output.contains("No Workyard workspace found. Get started: workyard init"),
 			"{output}"
 		);
 		assert!(!output.contains("        No Workyard"), "{output}");
 		assert!(!output.ends_with("\n\n"), "{output}");
 	}
 
-	let output = workyard(fixture.path(), &["status", "--state-dir", "absent"]);
+	let output = workyard(fixture.path(), &["status", "--workspace", "absent"]);
 	assert_ok(&output);
 	let output = String::from_utf8(output.stdout).unwrap();
-	assert!(output.contains("--state-dir=absent"), "{output}");
+	assert!(output.contains("workyard init -- absent"), "{output}");
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn summaries_omit_repetition_but_keep_branch_exceptions() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 
 	let output = workyard(
 		&root,
@@ -64,7 +64,10 @@ fn summaries_omit_repetition_but_keep_branch_exceptions() {
 			.contains("api branch:")
 	);
 
-	git(&root.join("feat/example/api"), &["checkout", "-b", "other"]);
+	git(
+		&root.join("tasks/feat/example/api"),
+		&["checkout", "-b", "other"],
+	);
 	let output = workyard(&root, &["status", "feat/example"]);
 	assert_ok(&output);
 	let output = String::from_utf8(output.stdout).unwrap();

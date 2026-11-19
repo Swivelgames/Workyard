@@ -48,6 +48,11 @@ pub fn workyard(root: &Path, args: &[&str]) -> Output {
 		.unwrap()
 }
 
+pub fn init_workspace(root: &Path) {
+	fs::create_dir_all(root).unwrap();
+	assert_ok(&workyard(root, &["init"]));
+}
+
 pub fn text(path: &Path) -> &str {
 	path.to_str().unwrap()
 }

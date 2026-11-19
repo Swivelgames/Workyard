@@ -52,9 +52,9 @@ fn healthy_recovery_preserves_commits_and_reconstructs_missing_record() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
-	let tree = root.join("feat/task/api");
+	let tree = root.join("tasks/feat/task/api");
 	fs::write(tree.join("authored"), "keep me").unwrap();
 	git(&tree, &["add", "authored"]);
 	git(&tree, &["commit", "-m", "user work"]);
@@ -91,13 +91,13 @@ fn missing_corrupt_and_mismatched_state_never_bootstraps_or_adopts() {
 	let missing = fixture.path().join("absent");
 	let result = workyard(
 		fixture.path(),
-		&["recover", "feat/task", "--state-dir", text(&missing)],
+		&["recover", "feat/task", "--workspace", text(&missing)],
 	);
 	assert!(!result.status.success());
 	assert!(!missing.exists());
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
 	let task_file = state_file(&root, "tasks", "json");
 	let original = fs::read(&task_file).unwrap();
@@ -125,7 +125,7 @@ fn settled_pull_failures_leave_membership_ready_and_report_each_repo() {
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let first = workyard(
 		&root,
 		&[
@@ -168,7 +168,7 @@ fn acknowledgement_never_bypasses_pending_writer_or_git_operation() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert!(
 		!workyard(
 			&root,
@@ -186,7 +186,7 @@ fn acknowledgement_never_bypasses_pending_writer_or_git_operation() {
 		.success()
 	);
 	legacy_pull_evidence(&root, false);
-	let tree = root.join("feat/task/api");
+	let tree = root.join("tasks/feat/task/api");
 	let git_dir = PathBuf::from(git(&tree, &["rev-parse", "--absolute-git-dir"]));
 	fs::write(
 		git_dir.join("MERGE_HEAD"),
@@ -219,13 +219,13 @@ fn repaired_main_and_linked_moves_refresh_git_locations() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
 	let moved = fixture.path().join("moved-main");
 	fs::rename(&api, &moved).unwrap();
 	git(&moved, &["worktree", "repair"]);
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
-	let old_tree = root.join("feat/task/api");
+	let old_tree = root.join("tasks/feat/task/api");
 	let moved_tree = fixture.path().join("moved-tree");
 	git(
 		&moved,
@@ -244,7 +244,7 @@ fn rpc_recovery_returns_same_completed_participants_as_cli() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
 	for _ in 0..2 {
 		let mut child = Command::new(env!("CARGO_BIN_EXE_workyard"))
@@ -278,7 +278,7 @@ fn real_git_success_publication_gap_recovers_remaining_work() {
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let tasks = root.join(".workyard/tasks");
 	let hook = api.join(".git/hooks/post-checkout");
 	fs::write(&hook, "#!/bin/sh\nchmod 500 \"$WORKYARD_FAULT_DIR\"\n").unwrap();
@@ -301,16 +301,16 @@ fn real_git_success_publication_gap_recovers_remaining_work() {
 		.unwrap();
 	fs::set_permissions(&tasks, fs::Permissions::from_mode(0o700)).unwrap();
 	assert!(!result.status.success());
-	let tree = root.join("feat/task/api");
+	let tree = root.join("tasks/feat/task/api");
 	fs::write(tree.join("authored"), "kept").unwrap();
 	fs::remove_file(hook).unwrap();
 	fs::write(web.join("file"), "new source tip").unwrap();
 	git(&web, &["commit", "-am", "advance source"]);
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	assert_eq!(fs::read_to_string(tree.join("authored")).unwrap(), "kept");
-	assert!(root.join("feat/task/web/.git").exists());
+	assert!(root.join("tasks/feat/task/web/.git").exists());
 	assert_eq!(
-		git(&root.join("feat/task/web"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/task/web"), &["rev-parse", "HEAD"]),
 		git(&web, &["rev-parse", "main"])
 	);
 }
@@ -320,7 +320,7 @@ fn healthy_remote_task_does_not_fetch_for_freshness() {
 	let fixture = tempfile::tempdir().unwrap();
 	let (api, remote) = remote_clone(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -341,9 +341,9 @@ fn replaced_worktree_identity_is_not_adopted() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
-	let tree = root.join("feat/task/api");
+	let tree = root.join("tasks/feat/task/api");
 	let original_git_dir = PathBuf::from(git(&tree, &["rev-parse", "--absolute-git-dir"]));
 	// Keep the old inode allocated while a replacement registration is created.
 	let held = fixture.path().join("old-administration");
@@ -362,7 +362,7 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 	let web = repo(fixture.path(), "web");
 	let commit = git(&web, &["rev-parse", "HEAD"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	struct StopAfterApi;
 	impl workyard_core::Observer for StopAfterApi {
 		async fn phase(
@@ -382,7 +382,7 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 	}
 
 	{
-		let store = workyard_state::Store::open(&root, &root.join(".workyard")).unwrap();
+		let store = workyard_state::Store::open_existing(&root.join(".workyard"), None).unwrap();
 		let request = workyard_core::CreateRequest {
 			task: "feat/task".into(),
 			repositories: vec![
@@ -399,7 +399,7 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 					from: Some(commit.clone()),
 				},
 			],
-			tasks_root: root.clone(),
+			tasks_root: root.join("tasks"),
 			state_dir: root.join(".workyard"),
 			checkout: false,
 			no_fetch: true,
@@ -424,7 +424,7 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 			workyard_core::Phase::NotStarted
 		);
 	}
-	assert!(!root.join("feat/task/web").exists());
+	assert!(!root.join("tasks/feat/task/web").exists());
 
 	fs::write(web.join("file"), "advanced").unwrap();
 	git(&web, &["commit", "-am", "advance"]);
@@ -435,7 +435,7 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 		"completed"
 	);
 	assert_eq!(
-		git(&root.join("feat/task/web"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/task/web"), &["rev-parse", "HEAD"]),
 		commit
 	);
 }
@@ -446,7 +446,7 @@ fn registered_native_path_ending_in_newline_is_preserved() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
 	let moved = fixture.path().join("moved\n");
 	git(
@@ -454,7 +454,7 @@ fn registered_native_path_ending_in_newline_is_preserved() {
 		&[
 			"worktree",
 			"move",
-			text(&root.join("feat/task/api")),
+			text(&root.join("tasks/feat/task/api")),
 			text(&moved),
 		],
 	);
@@ -489,7 +489,7 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert!(
 		!workyard(
 			&root,
@@ -510,7 +510,11 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 	);
 	git(
 		&web,
-		&["worktree", "remove", text(&root.join("feat/task/web"))],
+		&[
+			"worktree",
+			"remove",
+			text(&root.join("tasks/feat/task/web")),
+		],
 	);
 	git(&web, &["branch", "-D", "feat/task"]);
 	legacy_pull_evidence(&root, true);
@@ -533,7 +537,7 @@ fn cancellation_during_recovery_preserves_durable_completed_participant() {
 		workyard_core::OperationOutcome::Cancelled
 	);
 	assert_eq!(task.participants[0].phase, workyard_core::Phase::Completed);
-	assert!(!root.join("feat/task/web").exists());
+	assert!(!root.join("tasks/feat/task/web").exists());
 	assert_eq!(
 		record(&root.join(".workyard"))["operation"]["outcome"],
 		"cancelled"
@@ -550,7 +554,7 @@ fn failed_fetch_recovers_against_restored_advanced_remote() {
 	let unavailable = fixture.path().join("remote-offline.git");
 	fs::rename(&remote, &unavailable).unwrap();
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 
 	let failed = workyard(
 		&root,
@@ -568,7 +572,7 @@ fn failed_fetch_recovers_against_restored_advanced_remote() {
 		record(&root.join(".workyard"))["participants"][0]["phase"],
 		"fetching"
 	);
-	assert!(!root.join("feat/task/api").exists());
+	assert!(!root.join("tasks/feat/task/api").exists());
 
 	let upstream = fixture.path().join("api-upstream");
 	fs::write(upstream.join("file"), "remote advanced during interruption").unwrap();
@@ -579,7 +583,7 @@ fn failed_fetch_recovers_against_restored_advanced_remote() {
 
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	assert_eq!(
-		git(&root.join("feat/task/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/task/api"), &["rev-parse", "HEAD"]),
 		expected
 	);
 	let durable = record(&root.join(".workyard"));
@@ -597,9 +601,9 @@ fn missing_completed_participant_never_claims_current_availability() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "infra");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &api, "feat/task");
-	fs::remove_dir_all(root.join("feat/task/infra")).unwrap();
+	fs::remove_dir_all(root.join("tasks/feat/task/infra")).unwrap();
 
 	let output = workyard(&root, &["recover", "feat/task"]);
 	assert!(!output.status.success());
@@ -608,7 +612,7 @@ fn missing_completed_participant_never_claims_current_availability() {
 	assert!(!output.contains("Recorded progress"), "{output}");
 	assert!(!output.contains("available"), "{output}");
 	assert!(output.contains("workyard status"), "{output}");
-	assert!(output.contains("--state-dir"), "{output}");
+	assert!(output.contains("--workspace"), "{output}");
 	assert!(output.contains("feat/task"), "{output}");
 
 	let status = workyard(&root, &["status"]);
@@ -623,22 +627,19 @@ fn missing_completed_participant_never_claims_current_availability() {
 	);
 	assert!(!status.contains("git worktree repair"), "{status}");
 
-	let state = root.join(".workyard");
-	let in_workspace = workyard(&root, &["status", "--state-dir", ".workyard"]);
+	let in_workspace = workyard(&root, &["status", "--workspace", "."]);
 	assert_ok(&in_workspace);
 	let in_workspace = String::from_utf8(in_workspace.stdout).unwrap();
 	assert!(
-		in_workspace.contains("Try: workyard recover --state-dir=.workyard feat/task"),
+		in_workspace.contains("Try: workyard recover --workspace=. feat/task"),
 		"{in_workspace}"
 	);
 
-	let explicit = workyard(fixture.path(), &["status", "--state-dir", text(&state)]);
+	let explicit = workyard(fixture.path(), &["status", "--workspace", text(&root)]);
 	assert_ok(&explicit);
 	let explicit = String::from_utf8(explicit.stdout).unwrap();
 	assert!(
-		explicit.contains("Try: workyard recover --state-dir=workspace/.workyard feat/task")
-			|| explicit
-				.contains("Try: workyard recover --state-dir='workspace\\.workyard' feat/task"),
+		explicit.contains("Try: workyard recover --workspace=workspace feat/task"),
 		"{explicit}"
 	);
 }

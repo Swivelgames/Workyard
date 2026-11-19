@@ -8,7 +8,7 @@ fn repository_routing_environment_cannot_redirect_selected_git_effects() {
 	let selected = repo(fixture.path(), "selected");
 	let unrelated = repo(fixture.path(), "unrelated");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let unrelated_before = git(&unrelated, &["show-ref"]);
 	let output = Command::new(env!("CARGO_BIN_EXE_workyard"))
 		.current_dir(&root)
@@ -46,7 +46,7 @@ fn repository_routing_environment_cannot_redirect_selected_git_effects() {
 	);
 	assert_eq!(
 		git(
-			&root.join("feat/selected/selected"),
+			&root.join("tasks/feat/selected/selected"),
 			&["rev-parse", "--git-common-dir"]
 		),
 		text(&selected.join(".git"))
@@ -59,7 +59,7 @@ fn enabled_fetch_resolves_new_selected_remote_source_but_no_fetch_does_not() {
 	let (api, remote) = remote_clone(fixture.path(), "api");
 	git(&remote, &["branch", "new-source"]);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	let rejected = workyard(
 		&root,
 		&[
@@ -73,7 +73,7 @@ fn enabled_fetch_resolves_new_selected_remote_source_but_no_fetch_does_not() {
 		],
 	);
 	assert!(!rejected.status.success());
-	assert!(!root.join("feat/offline").exists());
+	assert!(!root.join("tasks/feat/offline").exists());
 	assert!(git(&api, &["branch", "-r", "--list", "origin/new-source"]).is_empty());
 
 	assert_ok(&workyard(
@@ -88,7 +88,7 @@ fn enabled_fetch_resolves_new_selected_remote_source_but_no_fetch_does_not() {
 		],
 	));
 	assert_eq!(
-		git(&root.join("feat/fetched/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/fetched/api"), &["rev-parse", "HEAD"]),
 		git(&remote, &["rev-parse", "refs/heads/new-source"])
 	);
 	assert!(!git(&api, &["branch", "-r", "--list", "origin/new-source"]).is_empty());
@@ -105,7 +105,7 @@ fn enabled_fetch_resolves_new_selected_remote_source_but_no_fetch_does_not() {
 		],
 	);
 	assert!(!local_missing.status.success());
-	assert!(!root.join("feat/local-missing").exists());
+	assert!(!root.join("tasks/feat/local-missing").exists());
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn completed_ancestor_task_blocks_descendant_destination_even_without_task_recor
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&["create", "feat/one", "--repo", text(&api), "--from", "main"],
@@ -142,7 +142,7 @@ fn completed_ancestor_task_blocks_descendant_destination_even_without_task_recor
 		);
 		assert!(!output.status.success());
 		assert!(String::from_utf8_lossy(&output.stdout).contains("path_overlap"));
-		assert!(!root.join("feat/one/api/child").exists());
+		assert!(!root.join("tasks/feat/one/api/child").exists());
 		assert!(git(&web, &["branch", "--list", "feat/one/api/child"]).is_empty());
 	}
 }
@@ -158,7 +158,7 @@ fn no_fetch_uses_cached_remote_source_without_refreshing_it() {
 	git(&upstream, &["push", text(&remote), "main"]);
 	assert_ne!(cached, git(&remote, &["rev-parse", "main"]));
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -172,7 +172,7 @@ fn no_fetch_uses_cached_remote_source_without_refreshing_it() {
 		],
 	));
 	assert_eq!(
-		git(&root.join("feat/cached/api"), &["rev-parse", "HEAD"]),
+		git(&root.join("tasks/feat/cached/api"), &["rev-parse", "HEAD"]),
 		cached
 	);
 	assert_eq!(
@@ -207,7 +207,7 @@ fn per_repository_remote_and_source_override_common_options() {
 	git(&web_upstream, &["push", text(&web_origin), "main"]);
 
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -228,11 +228,17 @@ fn per_repository_remote_and_source_override_common_options() {
 		],
 	));
 	assert_eq!(
-		git(&root.join("feat/overrides/api"), &["rev-parse", "HEAD"]),
+		git(
+			&root.join("tasks/feat/overrides/api"),
+			&["rev-parse", "HEAD"]
+		),
 		git(&api_remote, &["rev-parse", "common-source"])
 	);
 	assert_eq!(
-		git(&root.join("feat/overrides/web"), &["rev-parse", "HEAD"]),
+		git(
+			&root.join("tasks/feat/overrides/web"),
+			&["rev-parse", "HEAD"]
+		),
 		git(&alternate_remote, &["rev-parse", "topic"])
 	);
 	assert_eq!(
@@ -256,7 +262,7 @@ enum MutationDuringProgress {
 struct MutatingObserver {
 	mutation: MutationDuringProgress,
 	source: PathBuf,
-	workspace: PathBuf,
+	tasks_root: PathBuf,
 }
 
 impl workyard_core::Observer for MutatingObserver {
@@ -273,7 +279,7 @@ impl workyard_core::Observer for MutatingObserver {
 				git(&self.source, &["branch", task]);
 			}
 			MutationDuringProgress::OccupyDestination => {
-				fs::create_dir(self.workspace.join(task).join("api")).unwrap();
+				fs::create_dir(self.tasks_root.join(task).join("api")).unwrap();
 			}
 		}
 		Ok(())
@@ -300,14 +306,14 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 		let fixture = tempfile::tempdir().unwrap();
 		let api = repo(fixture.path(), "api");
 		let root = fixture.path().join("workspace");
-		fs::create_dir(&root).unwrap();
+		init_workspace(&root);
 		let root = root.canonicalize().unwrap();
 		let state = root.join(".workyard");
-		let store = workyard_state::Store::open(&root, &state).unwrap();
+		let store = workyard_state::Store::open_existing(&state, None).unwrap();
 		let observer = MutatingObserver {
 			mutation,
 			source: api.clone(),
-			workspace: root.clone(),
+			tasks_root: root.join("tasks"),
 		};
 		let request = CreateRequest {
 			task: "feat/revalidate".into(),
@@ -317,7 +323,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 				remote: None,
 				from: None,
 			}],
-			tasks_root: root.clone(),
+			tasks_root: root.join("tasks"),
 			state_dir: state,
 			checkout: false,
 			no_fetch: true,
@@ -336,7 +342,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 		let task = result.task;
 		assert_eq!(task.operation.outcome, OperationOutcome::Failed);
 		assert_eq!(task.problem.unwrap().code, expected);
-		assert!(!root.join("feat/revalidate/api/.git").exists());
+		assert!(!root.join("tasks/feat/revalidate/api/.git").exists());
 		assert_eq!(
 			git(&api, &["worktree", "list", "--porcelain"])
 				.matches("worktree ")

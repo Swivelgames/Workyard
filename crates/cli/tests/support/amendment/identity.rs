@@ -14,7 +14,7 @@ fn relative_git_links_and_nonstandard_worktree_locations_are_preserved() {
 		&[
 			"worktree",
 			"move",
-			text(&root.join("feat/task/api")),
+			text(&root.join("tasks/feat/task/api")),
 			text(&external),
 		],
 	);
@@ -111,7 +111,7 @@ fn native_repository_path_survives_amend_and_recovery() {
 		.unwrap();
 	assert_ok(&output);
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
-	assert!(root.join("feat/task/web/.git").exists());
+	assert!(root.join("tasks/feat/task/web/.git").exists());
 }
 
 #[test]

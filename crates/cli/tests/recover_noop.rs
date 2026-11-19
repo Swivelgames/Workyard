@@ -38,9 +38,9 @@ fn healthy_dirty_task_noop_preserves_history_evidence_and_rejects_invalid_flags(
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
-	fs::write(root.join("feat/task/api/file"), "authored changes").unwrap();
+	fs::write(root.join("tasks/feat/task/api/file"), "authored changes").unwrap();
 	let state = root.join(".workyard");
 	let before = snapshot(&state);
 
@@ -63,7 +63,7 @@ fn repair_then_repeat_noop_preserves_success_despite_stale_failed_effect_provena
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
 	let state = root.join(".workyard");
 	let name = workyard_state::task_filename("feat/task");
@@ -101,7 +101,7 @@ fn retired_plain_recovery_is_noop_but_undo_stays_invalid() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
 	assert_ok(&workyard(&root, &["remove", "feat/task", "--yes"]));
 	let state = root.join(".workyard");
@@ -122,7 +122,7 @@ fn repaired_git_move_is_real_metadata_work_then_becomes_noop() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
 	let destination = fixture.path().join("moved");
 	git(
@@ -130,7 +130,7 @@ fn repaired_git_move_is_real_metadata_work_then_becomes_noop() {
 		&[
 			"worktree",
 			"move",
-			text(&root.join("feat/task/api")),
+			text(&root.join("tasks/feat/task/api")),
 			text(&destination),
 		],
 	);
@@ -154,10 +154,10 @@ fn missing_worktree_failure_preserves_evidence_and_external_repair_restores_heal
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
 	let destination = fixture.path().join("external");
-	fs::rename(root.join("feat/task/api"), &destination).unwrap();
+	fs::rename(root.join("tasks/feat/task/api"), &destination).unwrap();
 	let state = root.join(".workyard");
 	let before = snapshot(&state);
 
@@ -177,10 +177,10 @@ fn recovery_repairs_unique_manually_renamed_task_child_and_preserves_membership(
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
-	let destination = root.join("feat/task/renamed");
-	fs::rename(root.join("feat/task/api"), &destination).unwrap();
+	let destination = root.join("tasks/feat/task/renamed");
+	fs::rename(root.join("tasks/feat/task/api"), &destination).unwrap();
 	fs::write(destination.join("file"), "authored edits").unwrap();
 
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
@@ -202,10 +202,10 @@ fn recovery_finds_renamed_worktree_when_original_path_is_reused() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
-	let original = root.join("feat/task/api");
-	let renamed = root.join("feat/task/oops");
+	let original = root.join("tasks/feat/task/api");
+	let renamed = root.join("tasks/feat/task/oops");
 	fs::rename(&original, &renamed).unwrap();
 	fs::create_dir(&original).unwrap();
 	fs::write(original.join("notes"), "unrelated files").unwrap();
@@ -240,9 +240,9 @@ fn recovery_accepts_a_registered_worktree_with_a_symlinked_git_pointer() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
-	let worktree = root.join("feat/task/api");
+	let worktree = root.join("tasks/feat/task/api");
 	fs::rename(worktree.join(".git"), worktree.join("git-pointer")).unwrap();
 	std::os::unix::fs::symlink("git-pointer", worktree.join(".git")).unwrap();
 	let state = root.join(".workyard");
@@ -260,11 +260,11 @@ fn ambiguous_task_children_are_not_repaired_or_published() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source);
-	let first = root.join("feat/task/first");
-	let second = root.join("feat/task/second");
-	fs::rename(root.join("feat/task/api"), &first).unwrap();
+	let first = root.join("tasks/feat/task/first");
+	let second = root.join("tasks/feat/task/second");
+	fs::rename(root.join("tasks/feat/task/api"), &first).unwrap();
 	fs::create_dir(&second).unwrap();
 	fs::copy(first.join(".git"), second.join(".git")).unwrap();
 	let before = snapshot(&root.join(".workyard"));

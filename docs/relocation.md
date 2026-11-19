@@ -1,4 +1,8 @@
-# Relocating a workspace or state
+# Historical relocation experiment
+
+The pre-release relocation command was retired when Workyard adopted explicit
+workspace initialization. This page records the previous implementation. For
+current commands, see [Start a workspace](../README.md#start-a-workspace).
 
 ```sh
 workyard relocate --old /work/tasks --new /work/moved

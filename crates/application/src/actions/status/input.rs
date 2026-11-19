@@ -6,6 +6,6 @@ use trine::NativePath;
 #[serde(deny_unknown_fields)]
 pub struct StatusInput {
 	pub task: Option<String>,
-	pub tasks_root: Option<NativePath>,
-	pub state_dir: Option<NativePath>,
+	/// Explicit workspace directory containing .workyard.
+	pub workspace: Option<NativePath>,
 }

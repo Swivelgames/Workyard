@@ -60,6 +60,7 @@ def main():
 			check=True, capture_output=True)
 		workspace = root / "workspace"
 		workspace.mkdir()
+		subprocess.run([str(binary), "init"], cwd=workspace, check=True, capture_output=True)
 		for task in ["fix/one", "fix/two"]:
 			subprocess.run([str(binary), "create", task, "--repo", str(repo), "--from", "main", "--no-fetch"],
 				cwd=workspace, check=True, capture_output=True)
@@ -128,26 +129,26 @@ def main():
 			assert "ARGS:<status><fix/one>" in output, output
 			print(shell, "unique task remains exact")
 			for quote in ["", "'", '\"']:
-				typed = f"workyard info --state-dir {quote}so\tc\t"
+				typed = f"workyard info --workspace {quote}so\tc\t"
 				# Zsh leaves the user's original quote open for directory continuation.
 				# Bash closes it automatically; its next completion requotes the word.
 				if quote and shell == "zsh":
 					typed += quote
 				output = capture(shell, inspect, typed + "\n")
-				assert "ARGS:<info><--state-dir><some space/child/>" in output, output
+				assert "ARGS:<info><--workspace><some space/child/>" in output, output
 				print(shell, "two-Tab path", repr(quote), "passed")
 			if shell == "bash":
 				fallback = inspect + "; enable -n compopt"
 				output = capture(shell, fallback, "workyard status fix/o\t\n")
 				assert "ARGS:<status><fix/one>" in output, output
-				output = capture(shell, fallback, "workyard info --state-dir so\tc\t\n")
-				assert "ARGS:<info><--state-dir><some space/child/>" in output, output
+				output = capture(shell, fallback, "workyard info --workspace so\tc\t\n")
+				assert "ARGS:<info><--workspace><some space/child/>" in output, output
 				assert "compopt" not in output, output
 				print(shell, "no-compopt fallback passed")
 
 			# Explicitly exercise backslash-escaped placement independently of quotes.
-			escaped_state = str(workspace / "some space" / ".." / ".workyard").replace(" ", "\\ ")
-			output = capture(shell, inspect, f"workyard status --state-dir {escaped_state} fix/o\t\n")
+			escaped_workspace = str(workspace / "some space" / "..").replace(" ", "\\ ")
+			output = capture(shell, inspect, f"workyard status --workspace {escaped_workspace} fix/o\t\n")
 			assert "<fix/one>" in output.split("ARGS:")[-1], output
 			print(shell, "escaped placement passed")
 
@@ -165,7 +166,7 @@ def main():
 			print(shell, "local remote/source and checkout branch insertion passed")
 
 			setup += f"; cd {shlex.quote(str(root))}"
-			typed = f"workyard amend --state-dir={shlex.quote(str(workspace / '.workyard'))} f\t"
+			typed = f"workyard amend --workspace={shlex.quote(str(workspace))} f\t"
 			output = capture(shell, setup, typed)
 			assert "fix/" in output, output
 			print(shell, "explicit equals placement passed")

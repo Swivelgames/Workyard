@@ -1,9 +1,10 @@
+use crate::presentation::cli::workspace_binding;
 use trine::cli::Bindings;
 
 const EXAMPLES: &str = concat!(
 	"Examples\n",
 	"    workyard recover feat/payments    Resume a task operation\n",
-	"    workyard recover                  Resume workspace relocation",
+	"    workyard recover feat/payments --undo    Undo an interrupted removal",
 );
 
 pub(in super::super) fn bindings() -> Bindings {
@@ -29,9 +30,5 @@ pub(in super::super) fn bindings() -> Bindings {
 		.option("force", "force");
 
 	// Global arguments
-	bindings
-		.option("tasks_root", "tasks-root")
-		.native_path("tasks_root")
-		.option("state_dir", "state-dir")
-		.native_path("state_dir")
+	workspace_binding(bindings)
 }

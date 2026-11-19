@@ -98,10 +98,6 @@ impl From<TaskInspection> for TaskReport {
 
 #[derive(Serialize, Default)]
 pub struct Observation {
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub relocation: Option<crate::contracts::relocation::WorkspaceRelocation>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub snapshot: Option<crate::contracts::relocation::WorkspaceSnapshot>,
 	pub state_dir: Option<NativePath>,
 	pub tasks_root: Option<NativePath>,
 	pub tasks: Vec<TaskReport>,

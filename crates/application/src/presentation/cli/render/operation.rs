@@ -8,7 +8,7 @@ impl Terminal {
 		if let Some(command) = crate::guidance::commands::status(task, state) {
 			self.hint(&format!("Inspect: {command}"));
 		} else {
-			self.hint("Inspect with workyard status, supplying the task and --state-dir using your shell's native-path quoting.");
+			self.hint("Inspect with workyard status, supplying the task and --workspace using your shell's native-path quoting.");
 		}
 	}
 

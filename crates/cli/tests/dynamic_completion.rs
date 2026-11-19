@@ -46,9 +46,9 @@ fn tasks(root: &Path, command: &str, prefix: &str) -> Vec<String> {
 	)
 }
 
-fn create(root: &Path, repo: &Path, name: &str, state: &Path) {
+fn create(workspace: &Path, repo: &Path, name: &str) {
 	assert_ok(&workyard(
-		root,
+		workspace,
 		&[
 			"create",
 			name,
@@ -57,8 +57,6 @@ fn create(root: &Path, repo: &Path, name: &str, state: &Path) {
 			"--from",
 			"main",
 			"--no-fetch",
-			"--state-dir",
-			text(state),
 		],
 	));
 }
@@ -81,9 +79,10 @@ fn files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 fn recorded_tasks_are_live_read_only_and_distinct_from_files() {
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
+	init_workspace(root.path());
 	let state = root.path().join(".workyard");
 	for task in ["fix/two", "fix/one", "fix/retired"] {
-		create(root.path(), &api, task, &state);
+		create(root.path(), &api, task);
 	}
 	assert_ok(&workyard(root.path(), &["remove", "fix/retired", "--yes"]));
 	fs::create_dir_all(root.path().join("feat/decoy")).unwrap();
@@ -135,12 +134,12 @@ fn recorded_tasks_are_live_read_only_and_distinct_from_files() {
 fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 	let root = tempfile::tempdir().unwrap();
 	let workspace = root.path().join("workspace");
-	fs::create_dir(&workspace).unwrap();
+	init_workspace(&workspace);
 	let api = repo(root.path(), "api");
-	let state = root.path().join("external state");
-	create(&workspace, &api, "fix/one", &state);
+	let state = workspace.join(".workyard");
+	create(&workspace, &api, "fix/one");
 	let before = files(&state);
-	let state_option = format!("--state-dir={}", text(&state));
+	let workspace_option = format!("--workspace={}", text(&workspace));
 	for shell in ["bash", "zsh", "fish", "powershell"] {
 		assert_eq!(
 			query(
@@ -151,7 +150,7 @@ fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 					"workyard".as_ref(),
 					"amend".as_ref(),
 					"fix/".as_ref(),
-					state_option.as_ref()
+					workspace_option.as_ref()
 				]
 			),
 			["fix/one"]
@@ -165,9 +164,7 @@ fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 					"workyard".as_ref(),
 					"amend".as_ref(),
 					"fix/".as_ref(),
-					"--state-dir".as_ref(),
-					state.as_os_str(),
-					"--tasks-root".as_ref(),
+					"--workspace".as_ref(),
 					workspace.as_os_str()
 				]
 			),
@@ -182,7 +179,7 @@ fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 					"workyard".as_ref(),
 					"amend".as_ref(),
 					"fix/".as_ref(),
-					"--state-dir".as_ref()
+					"--workspace".as_ref()
 				]
 			)
 			.is_empty()
@@ -196,8 +193,7 @@ fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 					"workyard".as_ref(),
 					"amend".as_ref(),
 					"fix/".as_ref(),
-					state_option.as_ref(),
-					"--tasks-root".as_ref(),
+					"--workspace".as_ref(),
 					root.path().as_os_str()
 				]
 			)
@@ -217,7 +213,7 @@ fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 				"workyard".as_ref(),
 				"amend".as_ref(),
 				"fix/".as_ref(),
-				"--state-dir".as_ref(),
+				"--workspace".as_ref(),
 				missing.as_os_str()
 			]
 		)
@@ -230,8 +226,9 @@ fn explicit_placement_after_cursor_and_missing_context_are_quiet() {
 fn busy_and_damaged_records_remain_suggestible_without_creating_gates() {
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
+	init_workspace(root.path());
 	let state = root.path().join(".workyard");
-	create(root.path(), &api, "fix/one", &state);
+	create(root.path(), &api, "fix/one");
 	let filename = workyard_state::task_filename("fix/one");
 	let record = state.join("tasks").join(&filename);
 	let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
@@ -256,9 +253,10 @@ fn busy_and_damaged_records_remain_suggestible_without_creating_gates() {
 fn bash_line_transport_reassembles_equals_and_colons_without_evaluation() {
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
-	let state = root.path().join("some state");
-	create(root.path(), &api, "fix/one", &state);
-	let line = format!("workyard amend f --state-dir='{}'", text(&state));
+	let workspace = root.path().join("some workspace");
+	init_workspace(&workspace);
+	create(&workspace, &api, "fix/one");
+	let line = format!("workyard amend f --workspace='{}'", text(&workspace));
 	let output = Command::new(env!("CARGO_BIN_EXE_workyard"))
 		.current_dir(root.path())
 		.env("TRINE_COMPLETE", "bash")
@@ -276,8 +274,9 @@ fn bash_line_transport_reassembles_equals_and_colons_without_evaluation() {
 fn evidence_only_records_and_inaccessible_workspace_do_not_change_state() {
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
+	init_workspace(root.path());
 	let state = root.path().join(".workyard");
-	create(root.path(), &api, "fix/one", &state);
+	create(root.path(), &api, "fix/one");
 	let filename = workyard_state::task_filename("fix/one");
 	fs::rename(
 		state.join("tasks").join(&filename),
@@ -301,19 +300,21 @@ fn evidence_only_records_and_inaccessible_workspace_do_not_change_state() {
 
 #[cfg(unix)]
 #[test]
-fn native_state_paths_reach_discovery_without_lossy_conversion() {
+fn native_workspace_paths_reach_discovery_without_lossy_conversion() {
 	use std::os::unix::ffi::OsStringExt;
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
-	let state = root
+	let workspace = root
 		.path()
 		.join(std::ffi::OsString::from_vec(b"state-\xff".to_vec()));
+	init_workspace(&workspace);
+	let state = workspace.join(".workyard");
 	let created = Command::new(env!("CARGO_BIN_EXE_workyard"))
 		.current_dir(root.path())
 		.args(["create", "fix/one", "--repo"])
 		.arg(&api)
-		.args(["--from", "main", "--no-fetch", "--state-dir"])
-		.arg(&state)
+		.args(["--from", "main", "--no-fetch", "--workspace"])
+		.arg(&workspace)
 		.output()
 		.unwrap();
 	assert_ok(&created);
@@ -327,8 +328,8 @@ fn native_state_paths_reach_discovery_without_lossy_conversion() {
 				"workyard".as_ref(),
 				"amend".as_ref(),
 				"fix/".as_ref(),
-				"--state-dir".as_ref(),
-				state.as_os_str()
+				"--workspace".as_ref(),
+				workspace.as_os_str()
 			]
 		),
 		["fix/one"]
@@ -340,7 +341,7 @@ fn native_state_paths_reach_discovery_without_lossy_conversion() {
 fn bash_path_candidates_replace_only_the_word_after_equals() {
 	let root = tempfile::tempdir().unwrap();
 	fs::create_dir(root.path().join("state folder")).unwrap();
-	let line = "workyard info --state-dir=sta";
+	let line = "workyard info --workspace=sta";
 	let output = Command::new(env!("CARGO_BIN_EXE_workyard"))
 		.current_dir(root.path())
 		.env("TRINE_COMPLETE", "bash")
@@ -361,6 +362,7 @@ fn runtime_catalog_preserves_host_commands_aliases_and_flags() {
 	for shell in ["bash", "zsh", "fish", "powershell"] {
 		let commands = query(root.path(), shell, 1, &["workyard".as_ref(), "".as_ref()]);
 		for name in [
+			"init",
 			"amend",
 			"create",
 			"checkout",
@@ -381,7 +383,7 @@ fn runtime_catalog_preserves_host_commands_aliases_and_flags() {
 			&["workyard".as_ref(), "checkout".as_ref(), "--".as_ref()],
 		);
 		assert!(!flags.contains(&"--repo-name".to_owned()));
-		for name in ["--repo", "--state-dir", "--json"] {
+		for name in ["--repo", "--workspace", "--json"] {
 			assert!(flags.contains(&name.to_owned()), "{shell}: {flags:?}");
 		}
 	}
@@ -429,8 +431,9 @@ fn group_children_follow_completed_repo_anchors_in_every_shell() {
 fn zsh_metadata_names_task_groups_without_changing_values() {
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
+	init_workspace(root.path());
 	let state = root.path().join(".workyard");
-	create(root.path(), &api, "fix/one", &state);
+	create(root.path(), &api, "fix/one");
 	let before = files(&state);
 
 	for action in ["amend", "remove", "recover", "status"] {

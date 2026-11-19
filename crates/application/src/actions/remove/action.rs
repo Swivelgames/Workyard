@@ -21,9 +21,10 @@ async fn run(
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
-	let location = input.location().map_err(rejected)?;
-	let store = workyard_state::Store::open_existing(&location.state, location.root.as_deref())
-		.map_err(rejected)?;
+	let state =
+		crate::workspace::required(input.workspace.as_ref().map(trine::NativePath::as_path))
+			.map_err(rejected)?;
+	let store = workyard_state::Store::open_existing(&state, None).map_err(rejected)?;
 	let runner = workyard_git::Runner::default();
 	let observer = RemovalEvents::new(context, "remove", input.task.clone());
 	let options = RemovalOptions {

@@ -98,8 +98,8 @@ fn successful_rename_survives_later_failure_and_same_request_can_retry() {
 			"api",
 		],
 	));
-	assert!(root.join("feat/task/legacy/.git").is_file());
-	assert!(root.join("feat/task/api/.git").is_file());
+	assert!(root.join("tasks/feat/task/legacy/.git").is_file());
+	assert!(root.join("tasks/feat/task/api/.git").is_file());
 }
 
 struct CancelCreation;
@@ -142,7 +142,7 @@ fn cancellation_before_first_effect_preserves_all_task_bytes() {
 		workyard_core::OperationOutcome::Cancelled
 	);
 	assert_eq!(before, state_bytes(&root));
-	assert!(!root.join("feat/task/web").exists());
+	assert!(!root.join("tasks/feat/task/web").exists());
 }
 
 #[test]
@@ -212,14 +212,18 @@ fn recovery_checks_earlier_membership_after_later_amendments() {
 
 	git(
 		&web,
-		&["worktree", "remove", text(&root.join("feat/task/web"))],
+		&[
+			"worktree",
+			"remove",
+			text(&root.join("tasks/feat/task/web")),
+		],
 	);
 	let before = state_bytes(&root);
 	let recovered = workyard(&root, &["recover", "feat/task"]);
 	assert!(!recovered.status.success());
 	assert!(!String::from_utf8_lossy(&recovered.stdout).contains("Nothing to recover"));
 	assert_eq!(before, state_bytes(&root));
-	assert!(!root.join("feat/task/web").exists());
+	assert!(!root.join("tasks/feat/task/web").exists());
 }
 
 #[test]
@@ -233,8 +237,8 @@ fn dependent_existing_renames_preserve_identity_and_files_in_reverse_input_order
 		&root,
 		&["amend", "feat/task", "--from", "main", "--repo", text(&web)],
 	));
-	std::fs::write(root.join("feat/task/api/authored"), "api work").unwrap();
-	std::fs::write(root.join("feat/task/web/authored"), "web work").unwrap();
+	std::fs::write(root.join("tasks/feat/task/api/authored"), "api work").unwrap();
+	std::fs::write(root.join("tasks/feat/task/web/authored"), "web work").unwrap();
 	let before = crate::support::record(&root.join(".workyard"));
 
 	assert_ok(&workyard(
@@ -264,11 +268,11 @@ fn dependent_existing_renames_preserve_identity_and_files_in_reverse_input_order
 		);
 	}
 	assert_eq!(
-		std::fs::read_to_string(root.join("feat/task/web/authored")).unwrap(),
+		std::fs::read_to_string(root.join("tasks/feat/task/web/authored")).unwrap(),
 		"api work"
 	);
 	assert_eq!(
-		std::fs::read_to_string(root.join("feat/task/legacy-web/authored")).unwrap(),
+		std::fs::read_to_string(root.join("tasks/feat/task/legacy-web/authored")).unwrap(),
 		"web work"
 	);
 }

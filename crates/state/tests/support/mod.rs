@@ -31,9 +31,10 @@ pub struct Workspace {
 impl Workspace {
 	pub fn new() -> Self {
 		let temporary = tempfile::tempdir().unwrap();
-		let root = temporary.path().join("root");
-		let state = root.join(".workyard");
-		let store = Store::open(&root, &state).unwrap();
+		let workspace = temporary.path().join("workspace");
+		let root = workyard_state::initialize_workspace(&workspace, None).unwrap();
+		let state = workspace.join(".workyard");
+		let store = Store::open_existing(&state, Some(&root)).unwrap();
 		Self {
 			store,
 			root,

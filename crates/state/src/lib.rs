@@ -11,6 +11,7 @@ mod records;
 mod relocation;
 mod revision;
 mod store;
+mod workspace;
 
 pub use discovery::{discover_state, find_state};
 pub use paths::{canonical_future, exists};
@@ -20,4 +21,5 @@ pub use relocation::{
 	Relocation, RelocationStatus, SnapshotStatus, relocation_status, snapshot_status,
 };
 pub use store::{Store, TaskGuard};
+pub use workspace::initialize_workspace;
 pub use workyard_system::{Lock, LockMode};

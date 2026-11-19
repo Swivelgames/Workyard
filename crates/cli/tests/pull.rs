@@ -36,7 +36,7 @@ fn create_and_amend_rpc_report_all_optional_failures_without_persisting_them() {
 		let api = repo(fixture.path(), "api");
 		let web = repo(fixture.path(), "web");
 		let root = fixture.path().join("workspace");
-		fs::create_dir(&root).unwrap();
+		init_workspace(&root);
 		if action == "amend" {
 			let original = repo(fixture.path(), "original");
 			assert_ok(&workyard(
@@ -116,7 +116,7 @@ fn pull_conflict_is_current_git_damage_not_incomplete_membership() {
 		&["config", "branch.feat/task.merge", "refs/heads/main"],
 	);
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 
 	let output = workyard(
 		&root,
@@ -139,7 +139,7 @@ fn pull_conflict_is_current_git_damage_not_incomplete_membership() {
 	assert!(rendered.contains("conflicted"), "{rendered}");
 	assert!(!rendered.contains("healthy"));
 
-	git(&root.join("feat/task/api"), &["merge", "--abort"]);
+	git(&root.join("tasks/feat/task/api"), &["merge", "--abort"]);
 	let status = workyard(&root, &["status"]);
 	assert_ok(&status);
 	assert!(String::from_utf8_lossy(&status.stdout).contains("healthy"));
@@ -169,11 +169,11 @@ fn interrupted_addition(root: &Path, source: &Path, action: &str) {
 	let runner = workyard_git::Runner::default();
 	let control = workyard_core::Control::default();
 	if action == "create" {
-		let store = workyard_state::Store::open(root, &root.join(".workyard")).unwrap();
+		let store = workyard_state::Store::open_existing(&root.join(".workyard"), None).unwrap();
 		let request = workyard_core::CreateRequest {
 			task: "feat/task".into(),
 			repositories,
-			tasks_root: root.into(),
+			tasks_root: root.join("tasks"),
 			state_dir: root.join(".workyard"),
 			checkout: false,
 			no_fetch: false,
@@ -228,7 +228,7 @@ fn both_recovery_routes_report_optional_pull_failures_through_cli_and_rpc() {
 			let fixture = tempfile::tempdir().unwrap();
 			let api = repo(fixture.path(), "api");
 			let root = fixture.path().join("workspace");
-			fs::create_dir(&root).unwrap();
+			init_workspace(&root);
 			if action == "amend" {
 				let original = repo(fixture.path(), "original");
 				assert_ok(&workyard(
@@ -252,7 +252,7 @@ fn both_recovery_routes_report_optional_pull_failures_through_cli_and_rpc() {
 				.find(|p| p["name"] == "api")
 				.unwrap();
 			assert_eq!(participant["phase"], "worktree_created");
-			assert!(root.join("feat/task/api/.git").is_file());
+			assert!(root.join("tasks/feat/task/api/.git").is_file());
 
 			if interface == "cli" {
 				let output = workyard(&root, &["recover", "feat/task"]);

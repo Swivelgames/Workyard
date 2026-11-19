@@ -29,6 +29,7 @@ pub enum ProblemCode {
 	StaleIdentity,
 	SupervisionFailed,
 	TaskExists,
+	WorkspaceNotFound,
 	WorkspaceBindingConflict,
 	IoError,
 }
@@ -65,6 +66,7 @@ impl ProblemCode {
 			Self::StaleIdentity => "stale_identity",
 			Self::SupervisionFailed => "supervision_failed",
 			Self::TaskExists => "task_exists",
+			Self::WorkspaceNotFound => "workspace_not_found",
 			Self::WorkspaceBindingConflict => "workspace_binding_conflict",
 			Self::IoError => "io_error",
 		}
@@ -111,6 +113,7 @@ impl std::str::FromStr for ProblemCode {
 			"stale_identity" => Ok(Self::StaleIdentity),
 			"supervision_failed" => Ok(Self::SupervisionFailed),
 			"task_exists" => Ok(Self::TaskExists),
+			"workspace_not_found" => Ok(Self::WorkspaceNotFound),
 			"workspace_binding_conflict" => Ok(Self::WorkspaceBindingConflict),
 			"io_error" => Ok(Self::IoError),
 			_ => Err(()),

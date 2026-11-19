@@ -35,7 +35,7 @@ impl Fixture {
 		let base = dir.path();
 		let root = base.join("workspace");
 		let bin = base.join("bin");
-		fs::create_dir(&root).unwrap();
+		support::init_workspace(&root);
 		fs::create_dir(&bin).unwrap();
 		let repository = repo(base, "api");
 		executable(&bin.join("git"), SUPERVISOR);
@@ -187,7 +187,7 @@ fn adopts_the_registered_tree_only_after_git_and_its_descendants_exit() {
 		}
 		fixture.wait("attempt/success");
 
-		let tree = fixture.root.join(TASK).join("api");
+		let tree = fixture.root.join("tasks").join(TASK).join("api");
 		fs::write(tree.join("notes"), "authored after crash").unwrap();
 		assert_ok(&fixture.recover());
 		assert_ok(&fixture.recover());
@@ -239,5 +239,5 @@ fn losing_the_supervisor_before_launch_leaves_the_effect_pending() {
 	assert_ok(&Command::new("kill").args(["-KILL", &pid]).output().unwrap());
 
 	fixture.assert_blocked();
-	assert!(!fixture.root.join(TASK).join("api").exists());
+	assert!(!fixture.root.join("tasks").join(TASK).join("api").exists());
 }

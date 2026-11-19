@@ -1,26 +1,34 @@
+use crate::{canonical_future, exists, workspace::checked_marker};
 use std::path::{Path, PathBuf};
 use workyard_core::{Problem, ProblemCode};
 
-pub fn discover_state(start: &Path, explicit: Option<&Path>) -> Result<PathBuf, Problem> {
-	if let Some(state) = explicit {
-		return crate::canonical_future(state);
-	}
-	find_state(start, explicit)?.ok_or_else(|| Problem::new(ProblemCode::DamagedState, "No ancestor .workyard state was found.")
-		.remedy("Supply --state-dir for the existing authoritative store, or run beneath its workspace. Recovery cannot initialize state."))
+pub fn discover_state(start: &Path, workspace: Option<&Path>) -> Result<PathBuf, Problem> {
+	find_state(start, workspace)?.ok_or_else(|| {
+		Problem::new(
+			ProblemCode::WorkspaceNotFound,
+			"No Workyard workspace found.",
+		)
+		.remedy("Run workyard init in the workspace directory to get started.")
+	})
 }
 
-/// Locate state without conflating absence with damaged or inaccessible data.
-pub fn find_state(start: &Path, explicit: Option<&Path>) -> Result<Option<PathBuf>, Problem> {
-	if let Some(state) = explicit {
-		let state = crate::canonical_future(state)?;
-		return Ok(crate::exists(&state)?.then_some(state));
+/// An explicit workspace selects its own marker. Otherwise the nearest ancestor wins.
+pub fn find_state(start: &Path, workspace: Option<&Path>) -> Result<Option<PathBuf>, Problem> {
+	if let Some(workspace) = workspace {
+		return marker_at(&canonical_future(workspace)?);
 	}
-	let start = crate::canonical_future(start)?;
-	for ancestor in start.ancestors() {
-		let candidate = ancestor.join(".workyard");
-		if crate::exists(&candidate)? {
-			return Ok(Some(candidate));
+	for ancestor in canonical_future(start)?.ancestors() {
+		if let Some(marker) = marker_at(ancestor)? {
+			return Ok(Some(marker));
 		}
 	}
 	Ok(None)
+}
+
+fn marker_at(workspace: &Path) -> Result<Option<PathBuf>, Problem> {
+	let marker = workspace.join(".workyard");
+	if !exists(&marker)? {
+		return Ok(None);
+	}
+	checked_marker(&marker).map(Some)
 }

@@ -25,8 +25,7 @@ async fn run(
 	control.check().map_err(rejected)?;
 
 	let prepared = input.prepare().map_err(rejected)?;
-	let store = workyard_state::Store::open_existing(&prepared.state, prepared.root.as_deref())
-		.map_err(rejected)?;
+	let store = workyard_state::Store::open_existing(&prepared.state, None).map_err(rejected)?;
 
 	let result = workyard_core::amend(
 		prepared.request,

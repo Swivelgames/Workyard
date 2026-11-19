@@ -5,6 +5,6 @@ use trine::NativePath;
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InfoInput {
-	pub tasks_root: Option<NativePath>,
-	pub state_dir: Option<NativePath>,
+	/// Explicit workspace directory containing .workyard.
+	pub workspace: Option<NativePath>,
 }

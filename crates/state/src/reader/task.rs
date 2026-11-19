@@ -16,9 +16,9 @@ impl Reader {
 			if !exists(&record)? && !exists(&intent)? && !exists(&revision)? && !exists(&effects)? {
 				return Err(Problem::new(
 					ProblemCode::TaskUnknown,
-					format!("Task {name:?} is unknown in this state directory."),
+					format!("Task {name:?} is unknown in this workspace."),
 				)
-				.remedy("Run workyard list with the same --state-dir to see known tasks."));
+				.remedy("Run workyard list in the same workspace to see known tasks."));
 			}
 			return Ok(vec![self.snapshot(&filename, Some(name))?]);
 		}

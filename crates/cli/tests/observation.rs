@@ -69,13 +69,13 @@ fn absent_state_is_empty_with_guidance_and_never_initialized() {
 	let fixture = tempfile::tempdir().unwrap();
 	for action in ["list", "status"] {
 		assert_ok(&workyard(fixture.path(), &[action]));
-		let result = rpc(fixture.path(), action, json!({"state_dir":"absent"}));
+		let result = rpc(fixture.path(), action, json!({"workspace":"absent"}));
 		assert_eq!(result["result"]["tasks"], json!([]));
 		assert!(
 			result["result"]["guidance"]
 				.as_str()
 				.unwrap()
-				.contains("workyard create")
+				.contains("workyard init")
 		);
 		assert_eq!(fs::read_dir(fixture.path()).unwrap().count(), 0);
 	}
@@ -86,10 +86,10 @@ fn list_status_report_saved_current_and_evidence_without_writes() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/z");
 	create(&root, &source, "feat/a");
-	fs::write(root.join("feat/a/api/file"), "edited").unwrap();
+	fs::write(root.join("tasks/feat/a/api/file"), "edited").unwrap();
 	let before = snapshot(fixture.path());
 	let listed = rpc(&root, "list", json!({}));
 	assert_eq!(listed["result"]["tasks"][0]["name"], "feat/a");
@@ -119,7 +119,7 @@ fn record_damage_and_pending_writers_do_not_hide_healthy_tasks() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/good");
 	create(&root, &source, "feat/bad");
 	let state = root.join(".workyard");
@@ -155,53 +155,28 @@ fn record_damage_and_pending_writers_do_not_hide_healthy_tasks() {
 }
 
 #[test]
-fn unknown_task_external_state_and_binding_errors_are_distinct() {
+fn explicit_workspace_selects_tasks_and_reports_unknown_task_without_writes() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
-	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
-	let state = fixture.path().join("external");
-	assert_ok(&workyard(
-		&root,
-		&[
-			"create",
-			"--no-fetch",
-			"--from",
-			"main",
-			"--state-dir",
-			text(&state),
-			"--repo",
-			text(&source),
-			"feat/task",
-		],
-	));
+	let workspace = fixture.path().join("workspace");
+	init_workspace(&workspace);
+	create(&workspace, &source, "feat/task");
+
 	let before = snapshot(fixture.path());
-	let result = rpc(fixture.path(), "status", json!({"state_dir":state}));
-	assert_eq!(result["result"]["tasks_root"], json!(root));
+	let status = rpc(fixture.path(), "status", json!({"workspace":workspace}));
+	assert_eq!(
+		status["result"]["tasks_root"],
+		json!(workspace.join("tasks"))
+	);
+
 	let unknown = rpc(
 		fixture.path(),
 		"status",
-		json!({"state_dir":state,"task":"feat/unknown"}),
+		json!({"workspace":workspace, "task":"feat/unknown"}),
 	);
 	assert_eq!(
 		unknown["error"]["data"]["problem"]["code"], "task_unknown",
 		"{unknown}"
-	);
-	let binding = workyard(
-		fixture.path(),
-		&[
-			"list",
-			"--state-dir",
-			text(&state),
-			"--tasks-root",
-			text(fixture.path()),
-		],
-	);
-	assert!(!binding.status.success());
-	assert!(
-		String::from_utf8(binding.stdout)
-			.unwrap()
-			.contains("workspace_binding_conflict")
 	);
 	assert_eq!(before, snapshot(fixture.path()));
 }
@@ -211,7 +186,7 @@ fn repaired_moves_and_renamed_branch_report_actual_identity_location() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
 	let moved = fixture.path().join("moved");
 	git(
@@ -219,7 +194,7 @@ fn repaired_moves_and_renamed_branch_report_actual_identity_location() {
 		&[
 			"worktree",
 			"move",
-			text(&root.join("feat/task/api")),
+			text(&root.join("tasks/feat/task/api")),
 			text(&moved),
 		],
 	);
@@ -242,7 +217,7 @@ fn malformed_diagnostics_missing_records_and_unrelated_registrations_remain_obse
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/good");
 	create(&root, &source, "feat/bad");
 	let state = root.join(".workyard");
@@ -305,9 +280,9 @@ fn main_clone_repair_conflicts_and_missing_worktrees_are_reported_without_effect
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
-	let tree = root.join("feat/task/api");
+	let tree = root.join("tasks/feat/task/api");
 	let moved_source = fixture.path().join("moved-api");
 	fs::rename(&source, &moved_source).unwrap();
 	git(&moved_source, &["worktree", "repair"]);
@@ -350,11 +325,11 @@ fn main_clone_repair_conflicts_and_missing_worktrees_are_reported_without_effect
 }
 
 #[test]
-fn explicit_state_precedes_ancestor_state_and_invalid_existing_state_is_not_empty() {
+fn explicit_workspace_precedes_ancestor_state_and_invalid_existing_state_is_not_empty() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
 	let nested = root.join("nested");
 	fs::create_dir(&nested).unwrap();
@@ -364,7 +339,7 @@ fn explicit_state_precedes_ancestor_state_and_invalid_existing_state_is_not_empt
 		"feat/task"
 	);
 	assert_eq!(
-		rpc(&nested, "list", json!({"state_dir":"missing"}))["result"]["tasks"],
+		rpc(&nested, "list", json!({"workspace":"missing"}))["result"]["tasks"],
 		json!([])
 	);
 	assert_eq!(before, snapshot(fixture.path()));
@@ -380,7 +355,7 @@ fn nul_paths_in_text_and_native_encoding_are_task_damage_without_panics() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/good");
 	create(&root, &source, "feat/bad");
 	let state = root.join(".workyard");
@@ -424,9 +399,9 @@ fn actual_unmerged_index_is_conflicted_in_cli_and_rpc_without_writes() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/conflict");
-	let tree = root.join("feat/conflict/api");
+	let tree = root.join("tasks/feat/conflict/api");
 	fs::write(tree.join("file"), "task change\n").unwrap();
 	git(&tree, &["commit", "-am", "task change"]);
 	fs::write(source.join("file"), "main change\n").unwrap();
@@ -478,7 +453,7 @@ fn legacy_documents_observe_without_writes_and_recover_with_mixed_versions() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/legacy");
 	let state = root.join(".workyard");
 	let name = workyard_state::task_filename("feat/legacy");
@@ -530,9 +505,9 @@ fn clean_worktrees_do_not_hide_coordination_uncertainty_and_modified_is_healthy(
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
-	fs::write(root.join("feat/task/api/file"), "modified").unwrap();
+	fs::write(root.join("tasks/feat/task/api/file"), "modified").unwrap();
 	let observed = rpc(&root, "status", json!({}));
 	assert_eq!(observed["result"]["tasks"][0]["condition"], "healthy");
 	assert_eq!(
@@ -570,9 +545,9 @@ fn missing_member_is_distinct_from_unavailable_identity_and_remains_managed() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "infra");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
-	let tree = root.join("feat/task/infra");
+	let tree = root.join("tasks/feat/task/infra");
 	fs::remove_dir_all(&tree).unwrap();
 	let before = snapshot(fixture.path());
 	let result = rpc(&root, "status", json!({}));
@@ -597,7 +572,7 @@ fn successful_record_does_not_hide_conflicting_effects_or_condemn_intent_fallbac
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
 	let path = root
 		.join(".workyard/evidence")
@@ -637,7 +612,7 @@ fn mismatched_record_filename_is_identified_without_cluttering_healthy_tasks() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
 	let healthy = workyard(&root, &["status"]);
 	assert!(
@@ -665,14 +640,14 @@ fn command_roles_keep_inventory_compact_status_active_and_info_read_only() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	for index in 0..6 {
 		let name = format!("closed/{index}");
 		create(&root, &source, &name);
 		assert_ok(&workyard(&root, &["remove", &name, "--yes"]));
 	}
 	create(&root, &source, "feat/active");
-	fs::write(root.join("feat/active/api/file"), "modified").unwrap();
+	fs::write(root.join("tasks/feat/active/api/file"), "modified").unwrap();
 	let before = snapshot(fixture.path());
 
 	let listed = rpc(&root, "list", json!({}));
@@ -706,12 +681,15 @@ fn command_roles_keep_inventory_compact_status_active_and_info_read_only() {
 	assert_eq!(info["result"]["discovery"], "ancestor");
 	assert_eq!(info["result"]["active_tasks"], 1);
 	assert_eq!(info["result"]["retired_tasks"], 6);
-	assert_eq!(info["result"]["tasks_root"], json!(root));
-	let info = rpc(&root, "info", json!({"state_dir":root.join(".workyard")}));
+	assert_eq!(info["result"]["workspace"], json!(root));
+	assert_eq!(info["result"]["tasks_root"], json!(root.join("tasks")));
+	let info = rpc(&root, "info", json!({"workspace":root}));
 	assert_eq!(info["result"]["discovery"], "explicit");
 	let info = workyard(&root, &["info"]);
 	assert_ok(&info);
-	assert!(String::from_utf8_lossy(&info.stdout).contains("State: .workyard"));
+	let details = String::from_utf8_lossy(&info.stdout);
+	assert!(details.contains("State:     .workyard"), "{details}");
+	assert!(details.contains("Tasks dir: tasks"), "{details}");
 	assert_eq!(before, snapshot(fixture.path()));
 }
 
@@ -720,9 +698,9 @@ fn rpc_remove_reports_task_scoped_discard_decision_without_changes() {
 	let fixture = tempfile::tempdir().unwrap();
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
-	fs::write(root.join("feat/task/api/file"), "modified").unwrap();
+	fs::write(root.join("tasks/feat/task/api/file"), "modified").unwrap();
 	let before = snapshot(fixture.path());
 	let response = rpc(&root, "remove", json!({"task":"feat/task", "yes":true}));
 	let outcome = &response["error"]["data"];
@@ -740,19 +718,19 @@ fn rpc_remove_reports_task_scoped_discard_decision_without_changes() {
 fn info_preserves_absent_and_damaged_state_while_list_keeps_diagnostics_compact() {
 	let fixture = tempfile::tempdir().unwrap();
 	let before = snapshot(fixture.path());
-	let absent = rpc(fixture.path(), "info", json!({"state_dir":"absent"}));
+	let absent = rpc(fixture.path(), "info", json!({"workspace":"absent"}));
 	assert!(absent["result"]["discovery"].is_null());
 	assert!(
 		absent["result"]["guidance"]
 			.as_str()
 			.unwrap()
-			.contains("--state-dir=absent")
+			.contains("workyard init -- absent")
 	);
 	assert_eq!(before, snapshot(fixture.path()));
 
 	let source = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
+	init_workspace(&root);
 	create(&root, &source, "feat/task");
 	let state = root.join(".workyard");
 	let path = state

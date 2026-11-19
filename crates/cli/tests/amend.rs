@@ -3,7 +3,7 @@ use std::{fs, path::Path};
 use support::{assert_ok, git, record, repo, text, workyard};
 
 fn create(root: &Path, source: &Path) {
-	fs::create_dir(root).unwrap();
+	support::init_workspace(root);
 	assert_ok(&workyard(
 		root,
 		&[
@@ -54,7 +54,7 @@ fn adds_then_repeats_without_changing_membership_or_options() {
 			text(&web),
 		],
 	));
-	assert!(root.join("feat/task/web/.git").is_file());
+	assert!(root.join("tasks/feat/task/web/.git").is_file());
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"]
 			.as_array()
@@ -88,8 +88,8 @@ fn renames_dirty_detached_participant_and_reuses_freed_name() {
 	let replacement = repo(fixture.path(), "replacement");
 	let root = fixture.path().join("workspace");
 	create(&root, &api);
-	git(&root.join("feat/task/api"), &["checkout", "--detach"]);
-	fs::write(root.join("feat/task/api/authored"), "keep me").unwrap();
+	git(&root.join("tasks/feat/task/api"), &["checkout", "--detach"]);
+	fs::write(root.join("tasks/feat/task/api/authored"), "keep me").unwrap();
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -109,17 +109,17 @@ fn renames_dirty_detached_participant_and_reuses_freed_name() {
 		],
 	));
 	assert_eq!(
-		fs::read_to_string(root.join("feat/task/legacy-api/authored")).unwrap(),
+		fs::read_to_string(root.join("tasks/feat/task/legacy-api/authored")).unwrap(),
 		"keep me"
 	);
 	assert_eq!(
 		git(
-			&root.join("feat/task/legacy-api"),
+			&root.join("tasks/feat/task/legacy-api"),
 			&["rev-parse", "--abbrev-ref", "HEAD"]
 		),
 		"HEAD"
 	);
-	assert!(root.join("feat/task/api/.git").is_file());
+	assert!(root.join("tasks/feat/task/api/.git").is_file());
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -161,7 +161,7 @@ fn supplied_moved_clone_repairs_links_without_manual_git_commands() {
 	));
 	assert_eq!(
 		git(
-			&root.join("feat/task/api"),
+			&root.join("tasks/feat/task/api"),
 			&["rev-parse", "--path-format=absolute", "--git-common-dir"]
 		),
 		text(&moved.join(".git"))
@@ -180,7 +180,7 @@ fn whole_request_failure_preserves_records_and_dirty_unrelated_tree() {
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
 	create(&root, &api);
-	fs::write(root.join("feat/task/api/authored"), "keep").unwrap();
+	fs::write(root.join("tasks/feat/task/api/authored"), "keep").unwrap();
 	git(&web, &["branch", "feat/task"]);
 	let before = state_bytes(&root);
 	let failure = workyard(
@@ -200,7 +200,7 @@ fn whole_request_failure_preserves_records_and_dirty_unrelated_tree() {
 	);
 	assert!(!failure.status.success());
 	assert_eq!(before, state_bytes(&root));
-	assert!(root.join("feat/task/api/authored").is_file());
+	assert!(root.join("tasks/feat/task/api/authored").is_file());
 	assert_ok(&workyard(
 		&root,
 		&[
@@ -286,7 +286,7 @@ fn remote_addition_fetches_tracks_and_pulls_with_its_own_options() {
 	assert_eq!(saved["participants"][1]["creation"]["pull"], true);
 	assert_eq!(
 		git(
-			&root.join("feat/task/web"),
+			&root.join("tasks/feat/task/web"),
 			&["rev-parse", "--abbrev-ref", "@{upstream}"]
 		),
 		"origin/feat/task"
@@ -314,7 +314,7 @@ fn missing_published_record_is_rebuilt_from_revision_without_recreating_trees() 
 		.unwrap()
 		.path();
 	fs::remove_file(path).unwrap();
-	fs::write(root.join("feat/task/web/authored"), "preserved").unwrap();
+	fs::write(root.join("tasks/feat/task/web/authored"), "preserved").unwrap();
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"]
@@ -324,7 +324,7 @@ fn missing_published_record_is_rebuilt_from_revision_without_recreating_trees() 
 		2
 	);
 	assert_eq!(
-		fs::read_to_string(root.join("feat/task/web/authored")).unwrap(),
+		fs::read_to_string(root.join("tasks/feat/task/web/authored")).unwrap(),
 		"preserved"
 	);
 }

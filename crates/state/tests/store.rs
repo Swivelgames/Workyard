@@ -23,10 +23,11 @@ fn address_uses_exact_name_full_hash_and_bounded_readable_slug() {
 #[test]
 fn shared_workspace_and_prefix_locks_allow_independent_tasks_only() {
 	let fixture = tempfile::tempdir().unwrap();
-	let root = fixture.path().join("root");
-	let state = root.join(".workyard");
-	let first = Store::open(&root, &state).unwrap();
-	let second = Store::open(&root, &state).unwrap();
+	let workspace = fixture.path().join("workspace");
+	let root = workyard_state::initialize_workspace(&workspace, None).unwrap();
+	let state = workspace.join(".workyard");
+	let first = Store::open_existing(&state, Some(&root)).unwrap();
+	let second = Store::open_existing(&state, Some(&root)).unwrap();
 	let _one = first.admit("feat/one").unwrap();
 	let _two = second.admit("feat/two").unwrap();
 	assert_eq!(
@@ -71,12 +72,13 @@ fn waiting_lock_is_cancellable_and_lockfile_survives_release() {
 #[test]
 fn corrupt_and_newer_state_are_never_reset() {
 	let fixture = tempfile::tempdir().unwrap();
-	let root = fixture.path().join("root");
-	let state = root.join(".workyard");
-	drop(Store::open(&root, &state).unwrap());
+	let workspace = fixture.path().join("workspace");
+	let root = workyard_state::initialize_workspace(&workspace, None).unwrap();
+	let state = workspace.join(".workyard");
+	drop(Store::open_existing(&state, Some(&root)).unwrap());
 	for content in ["{bad", "{\"version\":999}"] {
 		fs::write(state.join("workspace.json"), content).unwrap();
-		assert!(Store::open(&root, &state).is_err());
+		assert!(Store::open_existing(&state, Some(&root)).is_err());
 		assert_eq!(
 			fs::read_to_string(state.join("workspace.json")).unwrap(),
 			content
@@ -88,9 +90,10 @@ fn corrupt_and_newer_state_are_never_reset() {
 #[test]
 fn replacing_named_gate_invalidates_old_admission() {
 	let fixture = tempfile::tempdir().unwrap();
-	let root = fixture.path().join("root");
-	let state = root.join(".workyard");
-	let store = Store::open(&root, &state).unwrap();
+	let workspace = fixture.path().join("workspace");
+	let root = workyard_state::initialize_workspace(&workspace, None).unwrap();
+	let state = workspace.join(".workyard");
+	let store = Store::open_existing(&state, Some(&root)).unwrap();
 	fs::rename(state.join("workspace.lock"), state.join("old.lock")).unwrap();
 	fs::write(state.join("workspace.lock"), b"").unwrap();
 	assert_eq!(
@@ -170,9 +173,10 @@ fn independent_processes_observe_the_same_os_lock() {
 #[test]
 fn case_aliases_and_unicode_resource_names_cannot_bypass_prefix_exclusion() {
 	let fixture = tempfile::tempdir().unwrap();
-	let root = fixture.path().join("root");
-	let state = root.join(".workyard");
-	let store = Store::open(&root, &state).unwrap();
+	let workspace = fixture.path().join("workspace");
+	let root = workyard_state::initialize_workspace(&workspace, None).unwrap();
+	let state = workspace.join(".workyard");
+	let store = Store::open_existing(&state, Some(&root)).unwrap();
 	let guard = store.admit("Feat/Payments").unwrap();
 	assert_eq!(
 		store.admit("feat/payments/child").err().unwrap().code,

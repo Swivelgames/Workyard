@@ -87,6 +87,27 @@ impl Lock {
 		Ok(lock)
 	}
 
+	/// Initializers can race to open the same freshly published gate. Wait for
+	/// the winner to finish before comparing its layout with the requested one.
+	pub fn wait_existing(path: &Path, mode: LockMode) -> Result<Self, Problem> {
+		let file = OpenOptions::new()
+			.read(true)
+			.write(mode == LockMode::Exclusive)
+			.open(path)
+			.map_err(|error| Problem::io(format!("Open workspace gate {path:?}"), error))?;
+		match mode {
+			LockMode::Shared => file.lock_shared(),
+			LockMode::Exclusive => file.lock(),
+		}
+		.map_err(|error| Problem::io(format!("Lock workspace gate {path:?}"), error))?;
+		let guard = Self {
+			file,
+			path: path.into(),
+		};
+		guard.verify()?;
+		Ok(guard)
+	}
+
 	pub async fn wait(path: &Path, control: &Control) -> Result<Self, Problem> {
 		loop {
 			control.check()?;

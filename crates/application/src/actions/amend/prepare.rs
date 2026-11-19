@@ -4,7 +4,6 @@ use workyard_core::{AmendRequest, CreationOptions, Problem};
 
 pub(super) struct PreparedAmendment {
 	pub request: AmendRequest,
-	pub root: Option<std::path::PathBuf>,
 	pub state: std::path::PathBuf,
 }
 
@@ -17,10 +16,7 @@ impl AmendInput {
 				"Supply at least one --repo; --no-fetch and --pull are mutually exclusive.",
 			));
 		}
-		let location = crate::workspace::placement::existing(
-			self.tasks_root.as_ref().map(NativePath::as_path),
-			self.state_dir.as_ref().map(NativePath::as_path),
-		)?;
+		let state = crate::workspace::required(self.workspace.as_ref().map(NativePath::as_path))?;
 
 		let repositories = self
 			.repositories
@@ -50,8 +46,7 @@ impl AmendInput {
 				remote: self.remote,
 				from: self.from,
 			},
-			root: location.root,
-			state: location.state,
+			state,
 		})
 	}
 }

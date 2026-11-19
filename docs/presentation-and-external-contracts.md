@@ -145,14 +145,14 @@ Escape untrusted terminal control characters without corrupting the actual argum
 Prefer a concise condition followed by its next action:
 
 ```text
-No Workyard state found.
-Get started: workyard create --repo /path/to/repo feat/example
+No Workyard workspace found.
+Get started: workyard init
 ```
 
 For a known task and store, a status hint can be concrete:
 
 ```text
-Inspect: workyard status --state-dir='.workyard state' -- feat/payments
+Inspect: workyard status --workspace='../team workspace' -- feat/payments
 ```
 
 Do not replace a required repair or explicit consent with a generic retry command.

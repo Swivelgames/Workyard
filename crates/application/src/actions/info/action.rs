@@ -21,30 +21,23 @@ fn read(input: InfoInput, context: InvocationContext<Progress>) -> Result<InfoOu
 	control.check()?;
 	let cwd =
 		std::env::current_dir().map_err(|error| Problem::io("Read current directory", error))?;
-	let root = input.tasks_root.as_ref().map(NativePath::as_path);
-	let explicit = input.state_dir.as_ref().map(NativePath::as_path);
-	let Some(state) = workyard_state::find_state(root.unwrap_or(&cwd), explicit)? else {
+	let workspace = input.workspace.as_ref().map(NativePath::as_path);
+	let Some(reader) = crate::workspace::reader(&cwd, workspace)? else {
 		return Ok(InfoOutcome {
-			guidance: Some(crate::guidance::workspace::missing_state(root, explicit)),
+			guidance: Some(crate::guidance::workspace::missing_state(workspace)),
 			..Default::default()
 		});
 	};
 
-	if let Some(placement) = crate::observation::placement::inspect(&state)? {
-		return Ok(InfoOutcome {
-			tasks_root: placement.tasks_root,
-			state_dir: placement.state_dir,
-			guidance: placement.guidance,
-			relocation: placement.relocation,
-			snapshot: placement.snapshot,
-			..Default::default()
-		});
-	}
-	let reader = workyard_state::Reader::open(&state, root)?;
+	let workspace_root = reader
+		.state()
+		.parent()
+		.expect("workspace marker has a parent");
 	let mut result = InfoOutcome {
+		workspace: Some(NativePath::new(workspace_root).expect("workspace path")),
 		tasks_root: Some(NativePath::new(reader.root()).expect("root path")),
 		state_dir: Some(NativePath::new(reader.state()).expect("state path")),
-		discovery: Some(if explicit.is_some() {
+		discovery: Some(if workspace.is_some() {
 			DiscoverySource::Explicit
 		} else {
 			DiscoverySource::Ancestor

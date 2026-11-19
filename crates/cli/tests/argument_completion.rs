@@ -437,7 +437,9 @@ fn unsettled_pull_names_come_from_selected_task_evidence_and_placement() {
 	let root = tempfile::tempdir().unwrap();
 	let api = repo(root.path(), "api");
 	let web = repo(root.path(), "web");
-	let state = root.path().join("external state");
+	let workspace = root.path().join("other workspace");
+	init_workspace(&workspace);
+	let state = workspace.join(".workyard");
 	assert_ok(&workyard(
 		root.path(),
 		&[
@@ -449,8 +451,8 @@ fn unsettled_pull_names_come_from_selected_task_evidence_and_placement() {
 			text(&web),
 			"--from=main",
 			"--no-fetch",
-			"--state-dir",
-			text(&state),
+			"--workspace",
+			text(&workspace),
 		],
 	));
 	let filename = workyard_state::task_filename("fix/one");
@@ -475,8 +477,8 @@ fn unsettled_pull_names_come_from_selected_task_evidence_and_placement() {
 					"--accept-pull",
 					"",
 					"fix/one",
-					"--state-dir",
-					text(&state)
+					"--workspace",
+					text(&workspace)
 				],
 				3
 			),
@@ -492,8 +494,8 @@ fn unsettled_pull_names_come_from_selected_task_evidence_and_placement() {
 					"fix/missing",
 					"--accept-pull",
 					"",
-					"--state-dir",
-					text(&state)
+					"--workspace",
+					text(&workspace)
 				],
 				4
 			)

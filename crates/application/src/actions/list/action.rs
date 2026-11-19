@@ -15,8 +15,7 @@ async fn run(
 ) -> Result<ListOutcome, ListOutcome> {
 	crate::observation::read(
 		None,
-		input.tasks_root,
-		input.state_dir,
+		input.workspace,
 		crate::observation::Selection::Inventory,
 		context,
 	)

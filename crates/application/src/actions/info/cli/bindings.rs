@@ -1,9 +1,6 @@
+use crate::presentation::cli::workspace_binding;
 use trine::cli::Bindings;
 
 pub(in super::super) fn bindings() -> Bindings {
-	Bindings::new()
-		.option("tasks_root", "tasks-root")
-		.native_path("tasks_root")
-		.option("state_dir", "state-dir")
-		.native_path("state_dir")
+	workspace_binding(Bindings::new())
 }

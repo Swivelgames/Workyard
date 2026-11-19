@@ -1,3 +1,4 @@
+use crate::presentation::cli::workspace_binding;
 use trine::cli::Bindings;
 
 const EXAMPLES: &str = concat!(
@@ -26,11 +27,7 @@ pub(in super::super) fn bindings() -> Bindings {
 		.option("pull", "pull");
 
 	// Global arguments
-	let bindings = bindings
-		.option("tasks_root", "tasks-root")
-		.native_path("tasks_root")
-		.option("state_dir", "state-dir")
-		.native_path("state_dir");
+	let bindings = workspace_binding(bindings);
 
 	// Common Selections
 	let bindings = bindings
