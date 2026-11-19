@@ -2,7 +2,7 @@
 use super::{Store, TaskGuard, evidence::effect_path};
 use crate::{
 	TaskRecord,
-	documents::{publish, read_supported, read_versioned},
+	documents::{publish, read_versioned},
 	evidence::EffectRecord,
 	exists, revision,
 };
@@ -16,7 +16,7 @@ impl Store {
 	) -> Result<bool, Problem> {
 		self.verify()?;
 		guard.verify()?;
-		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
+		let anchor = TaskRecord::read(&guard.evidence_path)?;
 		let mut changed = false;
 		if let Some(mut revised) =
 			revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?
@@ -39,7 +39,7 @@ impl Store {
 				}
 			}
 		}
-		let mut published: TaskRecord = read_supported(&guard.record_path, &[1, 2, 3, 4])?;
+		let mut published = TaskRecord::read(&guard.record_path)?;
 		if published.refresh_location(participant, &self.state)? {
 			publish(&guard.record_path, &published)?;
 			changed = true;

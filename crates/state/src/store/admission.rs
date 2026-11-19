@@ -1,5 +1,4 @@
 use super::Store;
-use crate::documents::read_supported;
 use crate::records::task_filename;
 use crate::{Lock, TaskRecord, canonical_future, exists};
 use std::{fs, path::PathBuf};
@@ -95,7 +94,7 @@ impl Store {
 					continue;
 				}
 
-				let record: TaskRecord = read_supported(&path, &[1, 2, 3, 4])?;
+				let record = TaskRecord::read(&path)?;
 				if path.file_name() != Some(std::ffi::OsStr::new(&task_filename(&record.task))) {
 					return Err(Problem::new(
 						workyard_core::ProblemCode::DamagedState,
@@ -107,7 +106,7 @@ impl Store {
 				// admission evidence. A missing or inconsistent current record does not.
 				let current_path = self.state.join("tasks").join(task_filename(&record.task));
 				if exists(&current_path)? {
-					let current: TaskRecord = read_supported(&current_path, &[1, 2, 3, 4])?;
+					let current = TaskRecord::read(&current_path)?;
 					crate::records::task::validate(
 						&current,
 						&record.task,
@@ -118,7 +117,7 @@ impl Store {
 						.state
 						.join("evidence")
 						.join(task_filename(&record.task));
-					let intent: TaskRecord = read_supported(&intent_path, &[1, 2, 3, 4])?;
+					let intent = TaskRecord::read(&intent_path)?;
 					if let Some(revision) =
 						crate::revision::read(&intent_path, &intent, &self.root, &self.state)?
 					{

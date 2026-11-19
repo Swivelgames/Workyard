@@ -150,6 +150,17 @@ impl ParticipantRecord {
 }
 
 impl TaskRecord {
+	const SUPPORTED_VERSIONS: &[u64] = &[1, 2, 3, 4];
+
+	pub(crate) fn read(path: &std::path::Path) -> Result<Self, Problem> {
+		Self::read_with_version(path).map(|(record, _)| record)
+	}
+
+	/// Legacy records normalize on decode. Recovery also needs their original on-disk version.
+	pub(crate) fn read_with_version(path: &std::path::Path) -> Result<(Self, u64), Problem> {
+		crate::documents::read_supported_with_version(path, Self::SUPPORTED_VERSIONS)
+	}
+
 	pub(crate) fn refresh_location(
 		&mut self,
 		participant: &workyard_core::Participant,

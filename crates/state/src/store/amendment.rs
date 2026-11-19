@@ -1,7 +1,7 @@
 use super::{Store, TaskGuard};
 use crate::{
 	TaskRecord,
-	documents::{publish, read_supported},
+	documents::publish,
 	evidence::EffectRecord,
 	revision::{self, Revision, WriterUpdate},
 };
@@ -56,7 +56,7 @@ impl AmendState for Store {
 	) -> Result<RevisionCheckpoint, Problem> {
 		self.verify()?;
 		guard.verify()?;
-		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
+		let anchor = TaskRecord::read(&guard.evidence_path)?;
 		let previous = revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?;
 		let removed = previous
 			.as_ref()
@@ -102,7 +102,7 @@ impl AmendState for Store {
 	fn removal_targets(&self, guard: &TaskGuard) -> Result<Vec<RemovalTarget>, Problem> {
 		self.verify()?;
 		guard.verify()?;
-		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
+		let anchor = TaskRecord::read(&guard.evidence_path)?;
 		let revision = revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?;
 		Ok(revision
 			.into_iter()
@@ -120,7 +120,7 @@ impl AmendState for Store {
 	) -> Result<(), Problem> {
 		self.verify()?;
 		guard.verify()?;
-		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
+		let anchor = TaskRecord::read(&guard.evidence_path)?;
 		let mut revision = revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?
 			.ok_or_else(|| {
 				crate::damage::damaged("Missing membership revision for participant removal.")
@@ -132,7 +132,7 @@ impl AmendState for Store {
 	fn amend_request(&self, guard: &TaskGuard) -> Result<Option<AmendRequest>, Problem> {
 		self.verify()?;
 		guard.verify()?;
-		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
+		let anchor = TaskRecord::read(&guard.evidence_path)?;
 		revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?
 			.and_then(|revision| revision.request)
 			.map(|request| request.decode(&self.state))
@@ -147,7 +147,7 @@ impl Store {
 		task: &Task,
 		writers: WriterUpdate,
 	) -> Result<bool, Problem> {
-		let anchor: TaskRecord = read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
+		let anchor = TaskRecord::read(&guard.evidence_path)?;
 		let Some(mut revision) =
 			revision::read(&guard.evidence_path, &anchor, &self.root, &self.state)?
 		else {

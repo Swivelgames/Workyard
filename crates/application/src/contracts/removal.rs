@@ -1,7 +1,8 @@
 use serde::Serialize;
 use trine::NativePath;
 
-use super::Condition;
+use super::{Condition, ParticipantOutcome};
+use workyard_core::{Participant, Removal, RemovalPhase};
 
 #[derive(Clone, Serialize)]
 pub struct Disclosure {
@@ -48,4 +49,31 @@ pub(crate) fn condition(result: &workyard_core::RemovalResult) -> Condition {
 	}
 
 	Condition::Unknown
+}
+
+pub(crate) fn participants(
+	members: Vec<Participant>,
+	removal: Option<&Removal>,
+) -> Vec<ParticipantOutcome> {
+	let mut participants: Vec<_> = members.into_iter().map(ParticipantOutcome::from).collect();
+	if let Some(removal) = removal {
+		for (participant, progress) in participants.iter_mut().zip(&removal.participants) {
+			participant.phase = match progress.phase {
+				RemovalPhase::Present => "present",
+				RemovalPhase::Removed => "removed",
+				RemovalPhase::Restoring | RemovalPhase::Recreated => "restoration_unconfirmed",
+				RemovalPhase::Restored => "restored",
+			}
+			.into();
+		}
+	}
+	participants
+}
+
+pub(crate) fn mark_present_after_inspection(participants: &mut [ParticipantOutcome]) {
+	for participant in participants {
+		if participant.phase == "completed" {
+			participant.phase = "present".into();
+		}
+	}
 }

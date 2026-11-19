@@ -35,7 +35,7 @@ pub(crate) fn validate(
 	root: &Path,
 	state: &Path,
 ) -> Result<(), Problem> {
-	if !matches!(record.version, 1..=4) {
+	if !TaskRecord::SUPPORTED_VERSIONS.contains(&u64::from(record.version)) {
 		return Err(Problem::new(
 			ProblemCode::IncompatibleState,
 			"Unsupported task version in recovery evidence.",

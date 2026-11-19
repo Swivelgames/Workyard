@@ -1,83 +1,110 @@
+//! Recover from a membership revision when present, or from the original admission and effect evidence.
 use super::evidence::effect_path;
 use super::{Store, TaskGuard};
-use crate::documents::read_versioned;
-use crate::records::task::{decode, match_intent, validate};
-use crate::{TaskRecord, exists};
-use crate::{damage::damaged, evidence::EffectRecord};
-use workyard_core::{Problem, RecoveryRecord, RecoveryState};
+use crate::{
+	TaskRecord,
+	damage::damaged,
+	documents::read_versioned,
+	evidence::EffectRecord,
+	exists,
+	records::task::{decode, match_intent, validate},
+	revision::{self, Revision},
+};
+use std::{collections::BTreeMap, path::PathBuf};
+use workyard_core::{Problem, ProblemCode, RecoveryRecord, RecoveryState};
 
 impl RecoveryState for Store {
 	fn load(&self, guard: &TaskGuard, name: &str) -> Result<RecoveryRecord, Problem> {
 		self.verify()?;
 		guard.verify()?;
-		if !exists(&guard.evidence_path)? {
-			return Err(
-				if !exists(&guard.record_path)?
-					&& !exists(&effect_path(guard))?
-					&& !exists(&crate::revision::path(&guard.evidence_path))?
-				{
-					Problem::new(
-						workyard_core::ProblemCode::TaskUnknown,
-						"Task is unknown in this state directory.",
-					)
-				} else {
-					damaged("No independent admission evidence exists for this task.")
-				},
-			);
-		}
-		let intent: TaskRecord =
-			crate::documents::read_supported(&guard.evidence_path, &[1, 2, 3, 4])?;
-		validate(&intent, name, &self.root, &self.state)?;
-		let workspace = self.state.parent().expect("workspace marker");
-		let mut relocated_project_roots = intent.relocated_project_roots(workspace)?;
 
-		if let Some(revision) =
-			crate::revision::read(&guard.evidence_path, &intent, &self.root, &self.state)?
-		{
-			let mut needs_publication = true;
-			let recorded = if exists(&guard.record_path)? {
-				let saved: TaskRecord =
-					crate::documents::read_supported(&guard.record_path, &[1, 2, 3, 4])?;
-				validate(&saved, name, &self.root, &self.state)?;
-				if saved.generation != intent.generation {
-					return Err(damaged("Published task belongs to another incarnation."));
-				}
-				needs_publication = serde_json::to_value(&saved).ok()
-					!= serde_json::to_value(&revision.current.task).ok();
-				Some(decode(saved, &self.root, &self.state)?)
-			} else {
-				None
-			};
-			relocated_project_roots
-				.extend(revision.current.task.relocated_project_roots(workspace)?);
-			if let Some(request) = revision.request {
-				relocated_project_roots.extend(request.relocated_project_roots(workspace)?);
-			}
-			return Ok(RecoveryRecord {
-				relocated_project_roots,
-				needs_publication,
-				recorded,
-				task: decode(revision.current.task, &self.root, &self.state)?,
-				pending: revision.current.pending,
-			});
+		let intent = self.read_admission(guard, name)?;
+		let workspace = self.state.parent().expect("workspace marker");
+		let roots = intent.relocated_project_roots(workspace)?;
+		match revision::read(&guard.evidence_path, &intent, &self.root, &self.state)? {
+			Some(revision) => self.load_revised_membership(guard, &intent, revision, roots),
+			None => self.load_original_membership(guard, &intent, roots),
 		}
-		let mut needs_publication = true;
-		let recorded = if exists(&guard.record_path)? {
-			let (record, version): (TaskRecord, _) =
-				crate::documents::read_supported_with_version(&guard.record_path, &[1, 2, 3, 4])?;
-			needs_publication = version < 3;
-			validate(&record, name, &self.root, &self.state)?;
-			match_intent(&intent, &record)?;
-			Some(record)
+	}
+}
+
+impl Store {
+	fn read_admission(&self, guard: &TaskGuard, name: &str) -> Result<TaskRecord, Problem> {
+		if exists(&guard.evidence_path)? {
+			let intent = TaskRecord::read(&guard.evidence_path)?;
+			validate(&intent, name, &self.root, &self.state)?;
+			return Ok(intent);
+		}
+
+		if exists(&guard.record_path)?
+			|| exists(&effect_path(guard))?
+			|| exists(&revision::path(&guard.evidence_path))?
+		{
+			return Err(damaged(
+				"No independent admission evidence exists for this task.",
+			));
+		}
+		Err(Problem::new(
+			ProblemCode::TaskUnknown,
+			"Task is unknown in this state directory.",
+		))
+	}
+
+	fn load_revised_membership(
+		&self,
+		guard: &TaskGuard,
+		intent: &TaskRecord,
+		revision: Revision,
+		mut relocated_project_roots: BTreeMap<PathBuf, PathBuf>,
+	) -> Result<RecoveryRecord, Problem> {
+		let (recorded, needs_publication) = if exists(&guard.record_path)? {
+			let saved = TaskRecord::read(&guard.record_path)?;
+			validate(&saved, &intent.task, &self.root, &self.state)?;
+			if saved.generation != intent.generation {
+				return Err(damaged("Published task belongs to another incarnation."));
+			}
+			let stale = serde_json::to_value(&saved).ok()
+				!= serde_json::to_value(&revision.current.task).ok();
+			(Some(decode(saved, &self.root, &self.state)?), stale)
 		} else {
-			None
+			(None, true)
+		};
+
+		let workspace = self.state.parent().expect("workspace marker");
+		relocated_project_roots.extend(revision.current.task.relocated_project_roots(workspace)?);
+		if let Some(request) = revision.request {
+			relocated_project_roots.extend(request.relocated_project_roots(workspace)?);
+		}
+
+		Ok(RecoveryRecord {
+			relocated_project_roots,
+			needs_publication,
+			recorded,
+			task: decode(revision.current.task, &self.root, &self.state)?,
+			pending: revision.current.pending,
+		})
+	}
+
+	fn load_original_membership(
+		&self,
+		guard: &TaskGuard,
+		intent: &TaskRecord,
+		relocated_project_roots: BTreeMap<PathBuf, PathBuf>,
+	) -> Result<RecoveryRecord, Problem> {
+		let (recorded, needs_publication) = if exists(&guard.record_path)? {
+			let (record, version) = TaskRecord::read_with_version(&guard.record_path)?;
+			validate(&record, &intent.task, &self.root, &self.state)?;
+			match_intent(intent, &record)?;
+			(Some(record), version < 3)
+		} else {
+			(None, true)
 		};
 
 		let effects = effect_path(guard);
 		let (record, pending) = if exists(&effects)? {
 			let effect: EffectRecord = read_versioned(&effects)?;
-			validate(&effect.task, name, &self.root, &self.state)?;
-			match_intent(&intent, &effect.task)?;
+			validate(&effect.task, &intent.task, &self.root, &self.state)?;
+			match_intent(intent, &effect.task)?;
 			if effect
 				.pending
 				.is_some_and(|index| index >= effect.task.participants.len())
@@ -86,7 +113,11 @@ impl RecoveryState for Store {
 			}
 			(effect.task, effect.pending)
 		} else {
-			let record = recorded.clone().ok_or_else(|| damaged("Missing task metadata has no independent effect evidence. Restore a verified record; do not recreate worktrees."))?;
+			let Some(record) = recorded.as_ref() else {
+				return Err(damaged(
+					"Missing task metadata has no independent effect evidence. Restore a verified record; do not recreate worktrees.",
+				));
+			};
 			if record
 				.participants
 				.iter()
@@ -96,7 +127,7 @@ impl RecoveryState for Store {
 					"Legacy incomplete effects have no writer settlement evidence. Inspect Git and restore verified operation evidence.",
 				));
 			}
-			(record, None)
+			(record.clone(), None)
 		};
 		Ok(RecoveryRecord {
 			relocated_project_roots,

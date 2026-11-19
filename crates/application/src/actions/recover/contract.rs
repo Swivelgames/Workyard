@@ -1,9 +1,9 @@
 use serde::Serialize;
 use trine::NativePath;
-use workyard_core::{Operation, OperationKind, OperationOutcome, Problem, Task};
+use workyard_core::{OperationKind, Problem, Task};
 
-use crate::contracts::ProblemOutcome;
 pub use crate::contracts::{OperationReport, ParticipantOutcome};
+use crate::contracts::{ProblemOutcome, removal};
 
 #[derive(Serialize)]
 pub struct RecoverOutcome {
@@ -18,7 +18,7 @@ pub struct RecoverOutcome {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub mutation_started: Option<bool>,
 	#[serde(flatten)]
-	pub removal: crate::contracts::removal::RemovalReport,
+	pub removal: removal::RemovalReport,
 	pub operation: OperationReport,
 	/// None when this invocation could not establish task membership.
 	pub lifecycle: Option<&'static str>,
@@ -35,7 +35,7 @@ pub struct RecoverOutcome {
 
 impl RecoverOutcome {
 	pub fn from_removal(result: workyard_core::RemovalResult) -> Self {
-		let condition = crate::contracts::removal::condition(&result);
+		let condition = removal::condition(&result);
 		let nothing_to_recover = result.nothing_to_recover;
 		let mut outcome = Self::from_task(result.task, result.record);
 		outcome.nothing_to_recover = nothing_to_recover;
@@ -45,22 +45,13 @@ impl RecoverOutcome {
 		outcome.mutation_started = Some(result.mutation_started);
 
 		if !result.mutation_started && result.inspected {
-			for participant in &mut outcome.participants {
-				if participant.phase == "completed" {
-					participant.phase = "present".into();
-				}
-			}
+			removal::mark_present_after_inspection(&mut outcome.participants);
 		}
 
 		outcome
 	}
 
 	pub fn rejected(task: String, problem: Problem) -> Self {
-		let outcome = if problem.code == workyard_core::ProblemCode::Cancelled {
-			OperationOutcome::Cancelled
-		} else {
-			OperationOutcome::Failed
-		};
 		Self {
 			changes: Vec::new(),
 			registration_problem: None,
@@ -69,12 +60,7 @@ impl RecoverOutcome {
 			condition: None,
 			mutation_started: None,
 			removal: Default::default(),
-			operation: Operation {
-				kind: Some(OperationKind::Recover),
-				continues: None,
-				outcome,
-			}
-			.into(),
+			operation: OperationReport::rejected(OperationKind::Recover, &problem),
 			lifecycle: None,
 			task,
 			tasks_root: None,
@@ -86,24 +72,8 @@ impl RecoverOutcome {
 	}
 
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
-		let mut participants: Vec<ParticipantOutcome> = task
-			.participants
-			.clone()
-			.into_iter()
-			.map(Into::into)
-			.collect();
-		if let Some(removal) = &task.removal {
-			for (participant, progress) in participants.iter_mut().zip(&removal.participants) {
-				participant.phase = match progress.phase {
-					workyard_core::RemovalPhase::Present => "present",
-					workyard_core::RemovalPhase::Removed => "removed",
-					workyard_core::RemovalPhase::Restoring
-					| workyard_core::RemovalPhase::Recreated => "restoration_unconfirmed",
-					workyard_core::RemovalPhase::Restored => "restored",
-				}
-				.into();
-			}
-		}
+		let participants = removal::participants(task.participants, task.removal.as_ref());
+
 		Self {
 			changes: Vec::new(),
 			registration_problem: None,

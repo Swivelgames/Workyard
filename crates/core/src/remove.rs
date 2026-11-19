@@ -1,13 +1,17 @@
 //! Retire membership only after every managed worktree has been removed safely.
+mod completion;
 pub(crate) mod consent;
 mod restoration;
+mod retirement;
 mod verification;
 
 use crate::{
 	Control, EffectState, Operation, OperationKind, OperationOutcome, Problem, ProblemCode,
 	RecoveryState, Removal, RemovalDirection, RemovalGit, RemovalObserver, RemovalOptions,
-	RemovalParticipant, RemovalPhase, RemovalResult, Task, TaskLifecycle,
+	RemovalResult, Task, TaskLifecycle,
 };
+
+use completion::PriorState;
 
 struct RemovalRun<'a, G, S: RecoveryState, O> {
 	git: &'a G,
@@ -59,29 +63,7 @@ async fn run(
 		return Err(record.writer_problem(index));
 	}
 
-	let record_available = record.recorded.is_some();
-	let original = record
-		.recorded
-		.clone()
-		.unwrap_or_else(|| record.task.clone());
-	let needs_attention = !record_available
-		|| original.problem.is_some()
-		|| original.operation.outcome != OperationOutcome::Succeeded
-		|| record
-			.task
-			.participants
-			.iter()
-			.any(|participant| participant.phase != crate::Phase::Completed)
-		|| record.task.removal.as_ref().is_some_and(|removal| {
-			removal.direction == RemovalDirection::Remove
-				|| removal.participants.iter().any(|participant| {
-					matches!(
-						participant.phase,
-						RemovalPhase::Removed | RemovalPhase::Restoring | RemovalPhase::Recreated
-					)
-				})
-		});
-
+	let prior = PriorState::from_record(&record);
 	let mut task = record.task.clone();
 	restoration::retain_recorded_identity(&record, &mut task);
 	let path = store.record_path(&guard);
@@ -91,20 +73,9 @@ async fn run(
 	{
 		control.check()?;
 		store.verify()?;
-		let mut operation = original.operation.recovery();
-		operation.outcome = OperationOutcome::Succeeded;
-		return Ok(RemovalResult {
-			nothing_to_recover: true,
-			task: original,
-			record: path,
-			operation,
-			problem: None,
-			mutation_started: false,
-			inspected: true,
-			record_available,
-			needs_attention: false,
-		});
+		return Ok(prior.nothing_to_recover(path));
 	}
+
 	if task.lifecycle == TaskLifecycle::Retired {
 		if options.undo {
 			return Err(Problem::new(
@@ -129,8 +100,8 @@ async fn run(
 			record: path,
 			mutation_started: recovering,
 			inspected: false,
-			record_available,
-			needs_attention,
+			record_available: prior.record_available,
+			needs_attention: prior.needs_attention,
 		});
 	}
 
@@ -142,15 +113,11 @@ async fn run(
 	}
 
 	if !recovering
-		&& task.removal.as_ref().is_some_and(|removal| {
-			removal.direction == RemovalDirection::Restore
-				&& removal.participants.iter().all(|participant| {
-					matches!(
-						participant.phase,
-						RemovalPhase::Present | RemovalPhase::Restored
-					)
-				})
-		}) {
+		&& task
+			.removal
+			.as_ref()
+			.is_some_and(Removal::restoration_complete)
+	{
 		task.removal = None;
 	}
 
@@ -176,53 +143,7 @@ async fn run(
 		inspected: false,
 	};
 	let result = run.execute(&mut task).await;
-	task.operation.outcome = match &result {
-		Ok(()) => OperationOutcome::Succeeded,
-		Err(problem) if problem.code == ProblemCode::Cancelled => OperationOutcome::Cancelled,
-		Err(_) => OperationOutcome::Failed,
-	};
-	task.problem = result.err();
-	let inspected = run.inspected
-		&& task.problem.as_ref().is_none_or(|problem| {
-			matches!(
-				problem.code,
-				ProblemCode::Cancelled | ProblemCode::DecisionRequired
-			)
-		});
-
-	let operation = task.operation;
-	let problem = task.problem.clone();
-	if !run.publication_attempted {
-		return Ok(RemovalResult {
-			nothing_to_recover: false,
-			task: original,
-			record: path,
-			operation,
-			problem,
-			mutation_started: false,
-			inspected,
-			record_available,
-			needs_attention,
-		});
-	}
-
-	// Once publication was attempted, preserve uncertainty and partial effects.
-	// Never replace pending writer evidence with a settled final-result snapshot.
-	if let Err(problem) = store.save(&guard, &task) {
-		task.operation.outcome = OperationOutcome::Failed;
-		task.problem = Some(problem);
-	}
-	Ok(RemovalResult {
-		nothing_to_recover: false,
-		operation: task.operation,
-		problem: task.problem.clone(),
-		task,
-		record: path,
-		mutation_started: true,
-		inspected,
-		record_available: true,
-		needs_attention,
-	})
+	Ok(run.finish(task, result, prior, path))
 }
 
 impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O> {
@@ -236,120 +157,7 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 			return self.restore(task).await;
 		}
 
-		let mut observations = Vec::new();
-		for (index, participant) in task.participants.iter().enumerate() {
-			self.control.check()?;
-			if task
-				.removal
-				.as_ref()
-				.is_some_and(|r| r.participants[index].phase == RemovalPhase::Removed)
-			{
-				observations.push(None);
-				continue;
-			}
-			let observation = self.git.inspect_removal(participant, self.control).await?;
-			self.observer
-				.disclose(&participant.name, &observation)
-				.await?;
-			observations.push(Some(observation));
-		}
-
-		self.inspected = true;
-		consent::authorize(
-			self.observer,
-			self.options,
-			&task.name,
-			&[],
-			observations
-				.iter()
-				.flatten()
-				.any(|fact| !fact.dirty_paths.is_empty()),
-		)
-		.await?;
-
-		if task.removal.is_none() {
-			task.removal = Some(Removal {
-				direction: RemovalDirection::Remove,
-				retired_at: None,
-				participants: observations
-					.iter()
-					.map(|observation| {
-						let observation = observation
-							.as_ref()
-							.expect("initial participant inspection");
-						RemovalParticipant {
-							branch: observation.branch.clone(),
-							dirty_at_start: !observation.dirty_paths.is_empty(),
-							phase: RemovalPhase::Present,
-						}
-					})
-					.collect(),
-			});
-		}
-
-		for (index, observation) in observations.into_iter().enumerate() {
-			let Some(observation) = observation else {
-				continue;
-			};
-			self.control.check()?;
-			self.store.verify()?;
-			let mut disclosed = observation;
-			let participant = task.participants[index].clone();
-			let result = consent::unlink(
-				self.git,
-				self.observer,
-				self.control,
-				&participant,
-				&mut disclosed,
-				|current| {
-					self.control.check()?;
-					task.participants[index].destination =
-						current.destination.clone().expect("verified destination");
-					let entry =
-						&mut task.removal.as_mut().expect("removal intent").participants[index];
-					entry.branch.clone_from(&current.branch);
-					entry.dirty_at_start |= !current.dirty_paths.is_empty();
-					self.publication_attempted = true;
-					self.store
-						.record_effect(self.guard, task, index, EffectState::Pending)
-				},
-			)
-			.await;
-			match result {
-				Ok(()) => {
-					task.removal.as_mut().expect("removal intent").participants[index].phase =
-						RemovalPhase::Removed;
-					self.publish(task, index)?;
-				}
-				Err(crate::UnlinkFailure::BeforeLaunch(problem)) => return Err(problem),
-				Err(crate::UnlinkFailure::Command(problem)) => {
-					if problem.code != ProblemCode::SupervisionFailed {
-						self.publish(task, index)?;
-					}
-					return Err(problem);
-				}
-			}
-			self.observer
-				.phase(&task.name, &task.participants[index].name, "removed")
-				.await?;
-		}
-
-		task.lifecycle = TaskLifecycle::Retired;
-		task.operation.outcome = OperationOutcome::Succeeded;
-		task.removal.as_mut().expect("removal intent").retired_at = Some(
-			std::time::SystemTime::now()
-				.duration_since(std::time::UNIX_EPOCH)
-				.map_err(|_| {
-					Problem::new(ProblemCode::IoError, "System clock precedes Unix epoch.")
-				})?
-				.as_millis()
-				.try_into()
-				.map_err(|_| {
-					Problem::new(ProblemCode::IoError, "Retirement timestamp overflow.")
-				})?,
-		);
-		self.publish(task, 0)?;
-		self.store.cleanup_retired(self.guard, task)
+		self.retire(task).await
 	}
 
 	fn publish(&mut self, task: &Task, index: usize) -> Result<(), Problem> {

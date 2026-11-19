@@ -1,5 +1,5 @@
 use super::{
-	contract::{Inventory, ListInput, Project, Root},
+	contract::{Inventory, ListInput},
 	view::ListView,
 };
 use crate::{
@@ -47,38 +47,7 @@ async fn list(
 			});
 		};
 		let discovery = crate::projects::discover(&reader, &control).await?;
-		let roots = discovery
-			.coverage
-			.into_iter()
-			.map(|root| {
-				let status = if root.missing {
-					"missing"
-				} else if root.issues.is_empty() {
-					"available"
-				} else {
-					"incomplete"
-				};
-				Root {
-					path: NativePath::new(root.root).expect("root path"),
-					status,
-					issues: root.issues.into_iter().map(Into::into).collect(),
-				}
-			})
-			.collect();
-		let mut projects: Vec<_> = discovery
-			.catalog
-			.projects()
-			.map(|project| Project {
-				reference: NativePath::new(&project.reference).expect("project reference"),
-				path: NativePath::new(&project.path).expect("project path"),
-			})
-			.collect();
-		projects.sort_by(|a, b| a.reference.as_path().cmp(b.reference.as_path()));
-		Ok(Inventory {
-			roots,
-			projects,
-			guidance: None,
-		})
+		Ok(Inventory::from(discovery))
 	})
 	.await
 }

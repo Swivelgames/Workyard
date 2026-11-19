@@ -2,6 +2,7 @@
 mod dirty;
 mod index;
 mod protected;
+mod restoration;
 mod validation;
 
 use crate::{Repository, Runner, process::args};
@@ -11,56 +12,6 @@ use workyard_core::{
 };
 
 impl RemovalGit for Runner {
-	async fn reconcile_recreation(
-		&self,
-		participant: &Participant,
-		branch: &str,
-		control: &Control,
-	) -> Result<workyard_core::RecoveryObservation, Problem> {
-		let mut participant = participant.clone();
-		participant.phase = workyard_core::Phase::WorktreeCreated;
-		let observed =
-			workyard_core::RecoveryGit::reconcile(self, &participant, branch, control).await?;
-		if observed.destination.is_none() || observed.operation_in_progress {
-			return Err(blocked(
-				"Successfully recreated worktree is missing or has unfinished Git work; inspect and repair it before recovery.",
-			));
-		}
-		Ok(observed)
-	}
-
-	async fn reconcile_restored(
-		&self,
-		participant: &Participant,
-		control: &Control,
-	) -> Result<workyard_core::RecoveryObservation, Problem> {
-		let facts = self.observe(participant, control).await?;
-		if let Some(problem) = facts.problem {
-			return Err(problem);
-		}
-		let destination = facts.path.ok_or_else(|| {
-			blocked("Restored worktree is missing; preserve state and inspect Git.")
-		})?;
-		let source = if participant
-			.source
-			.try_exists()
-			.map_err(|error| Problem::io("Inspect restored backing location", error))?
-		{
-			&participant.source
-		} else {
-			&destination
-		};
-		let repository = Repository::local(self, source, control).await?;
-		if repository.identity != participant.backing_identity {
-			return Err(blocked("Restored worktree backing identity changed."));
-		}
-		Ok(workyard_core::RecoveryObservation {
-			repository: repository.into(),
-			destination: Some(destination),
-			operation_in_progress: facts.operation_in_progress || facts.conflicted,
-		})
-	}
-
 	async fn inspect_removal(
 		&self,
 		participant: &Participant,
@@ -136,6 +87,7 @@ impl RemovalGit for Runner {
 			.destination
 			.as_ref()
 			.ok_or_else(|| blocked("Removal has no verified worktree destination."))?;
+
 		let _gate =
 			crate::relationships::relationship_lock(&observation.repository, control).await?;
 		let admin = self
@@ -143,12 +95,14 @@ impl RemovalGit for Runner {
 			.await?;
 		self.validate_disclosure(observation, destination, &admin, control)
 			.await?;
+
 		let mut arguments = args(&["worktree", "remove"]);
 		if discard {
 			arguments.push("--force".into());
 		}
 		arguments.push("--".into());
 		arguments.push(destination.into());
+
 		before_unlink()?;
 		self.effect(&observation.repository.common_dir, &arguments, control)
 			.await
@@ -161,74 +115,67 @@ impl RemovalGit for Runner {
 		branch: &str,
 		control: &Control,
 	) -> Result<workyard_core::Repository, Problem> {
-		if participant
-			.destination
-			.try_exists()
-			.map_err(|e| Problem::io("Inspect restoration destination", e))?
-		{
-			return Err(blocked(
-				"Restoration destination already exists; preserve it and choose a manual repair.",
-			));
-		}
-		let mut repository = None;
-		for path in [&participant.source, &participant.common_dir] {
-			if !path
-				.try_exists()
-				.map_err(|e| Problem::io("Inspect backing repository", e))?
-			{
-				continue;
-			}
-			let found = Repository::local(self, path, control).await?;
-			if found.identity != participant.backing_identity {
-				return Err(blocked("Backing repository identity changed."));
-			}
-			repository = Some(found);
-			break;
-		}
-		let repository = repository.ok_or_else(|| blocked("Backing repository is unreachable."))?;
-		if crate::operations::operations_present(&repository.common_dir, &repository.common_dir)?
-			|| repository
-				.common_dir
-				.join("refs/heads")
-				.join(format!("{branch}.lock"))
-				.try_exists()
-				.map_err(|e| Problem::io("Inspect retained branch lock", e))?
-		{
-			return Err(blocked(
-				"Backing repository has an unfinished Git operation.",
-			));
-		}
-		self.checked(
-			&repository.source,
-			&args(&["show-ref", "--verify", &format!("refs/heads/{branch}")]),
+		restoration::require_vacant_destination(&participant.destination)?;
+		let repository = restoration::backing_repository(self, participant, control).await?;
+		restoration::verify_registration(
+			self,
+			&repository,
+			branch,
+			&participant.destination,
 			control,
 		)
 		.await?;
-		let listing = self
-			.checked(
-				&repository.source,
-				&args(&["worktree", "list", "--porcelain", "-z"]),
-				control,
-			)
-			.await?;
-		let expected = format!("branch refs/heads/{branch}");
-		for field in listing.split(|byte| *byte == 0) {
-			if field == expected.as_bytes() {
-				return Err(blocked(
-					"Retained branch is already used by another worktree.",
-				));
-			}
-			if let Some(path) = field.strip_prefix(b"worktree ") {
-				let registered = crate::output::path_field(path)
-					.map_err(|_| blocked("Invalid registration path."))?;
-				if registered == participant.destination {
-					return Err(blocked(
-						"Restoration destination still has a Git registration; repair it first.",
-					));
-				}
-			}
-		}
 		Ok(repository.into())
+	}
+
+	async fn reconcile_recreation(
+		&self,
+		participant: &Participant,
+		branch: &str,
+		control: &Control,
+	) -> Result<workyard_core::RecoveryObservation, Problem> {
+		let mut participant = participant.clone();
+		participant.phase = workyard_core::Phase::WorktreeCreated;
+		let observed =
+			workyard_core::RecoveryGit::reconcile(self, &participant, branch, control).await?;
+		if observed.destination.is_none() || observed.operation_in_progress {
+			return Err(blocked(
+				"Successfully recreated worktree is missing or has unfinished Git work; inspect and repair it before recovery.",
+			));
+		}
+		Ok(observed)
+	}
+
+	async fn reconcile_restored(
+		&self,
+		participant: &Participant,
+		control: &Control,
+	) -> Result<workyard_core::RecoveryObservation, Problem> {
+		let facts = self.observe(participant, control).await?;
+		if let Some(problem) = facts.problem {
+			return Err(problem);
+		}
+		let destination = facts.path.ok_or_else(|| {
+			blocked("Restored worktree is missing; preserve state and inspect Git.")
+		})?;
+		let source = if participant
+			.source
+			.try_exists()
+			.map_err(|error| Problem::io("Inspect restored backing location", error))?
+		{
+			&participant.source
+		} else {
+			&destination
+		};
+		let repository = Repository::local(self, source, control).await?;
+		if repository.identity != participant.backing_identity {
+			return Err(blocked("Restored worktree backing identity changed."));
+		}
+		Ok(workyard_core::RecoveryObservation {
+			repository: repository.into(),
+			destination: Some(destination),
+			operation_in_progress: facts.operation_in_progress || facts.conflicted,
+		})
 	}
 }
 

@@ -1,7 +1,6 @@
 //! Verify retained worktree facts for restoration and unchanged recovery.
 use crate::{
-	Control, Problem, ProblemCode, RecoveryRecord, RemovalDirection, RemovalGit, RemovalPhase,
-	Task, TaskLifecycle,
+	Control, Problem, ProblemCode, RecoveryRecord, RemovalGit, RemovalPhase, Task, TaskLifecycle,
 };
 
 pub(super) async fn unchanged(
@@ -20,13 +19,7 @@ pub(super) async fn unchanged(
 			.all(|participant| participant.phase == RemovalPhase::Removed)
 			&& record.matches_published(task));
 	}
-	if removal.direction != RemovalDirection::Restore
-		|| removal.participants.iter().any(|participant| {
-			!matches!(
-				participant.phase,
-				RemovalPhase::Present | RemovalPhase::Restored
-			)
-		}) {
+	if !removal.restoration_complete() {
 		return Ok(false);
 	}
 

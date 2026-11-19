@@ -1,7 +1,7 @@
 use crate::contracts::{OperationReport, ParticipantChange, ParticipantOutcome, ProblemOutcome};
 use serde::Serialize;
 use trine::NativePath;
-use workyard_core::{AmendResult, Operation, OperationKind, OperationOutcome, Problem};
+use workyard_core::{AmendResult, OperationKind, Problem};
 
 #[derive(Serialize)]
 pub struct AmendOutcome {
@@ -23,21 +23,11 @@ pub struct AmendOutcome {
 
 impl AmendOutcome {
 	pub fn rejected(task: String, problem: Problem) -> Self {
-		let outcome = if problem.code == workyard_core::ProblemCode::Cancelled {
-			OperationOutcome::Cancelled
-		} else {
-			OperationOutcome::Failed
-		};
 		Self {
 			removal: Default::default(),
 			registration_problem: None,
 			pull_failures: Vec::new(),
-			operation: Operation {
-				kind: Some(OperationKind::Amend),
-				continues: None,
-				outcome,
-			}
-			.into(),
+			operation: OperationReport::rejected(OperationKind::Amend, &problem),
 			task,
 			lifecycle: None,
 			state_dir: None,

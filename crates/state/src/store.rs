@@ -108,8 +108,7 @@ impl workyard_core::State for Store {
 		if !exists(&admission.record_path)? {
 			return Ok(1);
 		}
-		let previous: TaskRecord =
-			crate::documents::read_supported(&admission.record_path, &[1, 2, 3, 4])?;
+		let previous = TaskRecord::read(&admission.record_path)?;
 		previous
 			.generation
 			.checked_add(1)

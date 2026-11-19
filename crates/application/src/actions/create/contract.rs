@@ -1,6 +1,6 @@
 use serde::Serialize;
 use trine::NativePath;
-use workyard_core::{Operation, OperationKind, OperationOutcome, Problem, Task};
+use workyard_core::{OperationKind, Problem, Task};
 
 use crate::contracts::ProblemOutcome;
 pub use crate::contracts::{OperationReport, ParticipantOutcome};
@@ -25,20 +25,10 @@ pub struct CreateOutcome {
 
 impl CreateOutcome {
 	pub fn rejected(task: String, problem: Problem) -> Self {
-		let outcome = if problem.code == workyard_core::ProblemCode::Cancelled {
-			OperationOutcome::Cancelled
-		} else {
-			OperationOutcome::Failed
-		};
 		Self {
 			registration_problem: None,
 			pull_failures: Vec::new(),
-			operation: Operation {
-				kind: Some(OperationKind::Create),
-				continues: None,
-				outcome,
-			}
-			.into(),
+			operation: OperationReport::rejected(OperationKind::Create, &problem),
 			lifecycle: None,
 			task,
 			tasks_root: None,

@@ -1,5 +1,5 @@
 use serde::{Serialize, Serializer};
-use workyard_core::{Operation, OperationKind, OperationOutcome};
+use workyard_core::{Operation, OperationKind, OperationOutcome, Problem, ProblemCode};
 
 #[derive(Serialize)]
 pub struct OperationReport {
@@ -7,6 +7,22 @@ pub struct OperationReport {
 	pub continues: Option<&'static str>,
 	#[serde(serialize_with = "serialize_outcome")]
 	pub outcome: OperationOutcome,
+}
+
+impl OperationReport {
+	pub(crate) fn rejected(kind: OperationKind, problem: &Problem) -> Self {
+		let outcome = match problem.code {
+			ProblemCode::Cancelled => OperationOutcome::Cancelled,
+			_ => OperationOutcome::Failed,
+		};
+
+		Operation {
+			kind: Some(kind),
+			continues: None,
+			outcome,
+		}
+		.into()
+	}
 }
 
 impl From<Operation> for OperationReport {
