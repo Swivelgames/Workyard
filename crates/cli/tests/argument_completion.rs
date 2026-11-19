@@ -2,7 +2,7 @@
 mod support;
 use std::{
 	collections::BTreeMap,
-	ffi::{OsStr, OsString},
+	ffi::OsStr,
 	fs,
 	path::{Path, PathBuf},
 	process::Command,
@@ -397,16 +397,25 @@ fn ambiguous_remote_selection_and_incomplete_or_literal_groups_yield_nothing() {
 		),
 		["local/api"]
 	);
+	// A repository path after the literal --from value is a valid positional project.
+	assert_eq!(
+		complete(
+			root.path(),
+			"zsh",
+			&[
+				"workyard",
+				"create",
+				"task",
+				"--remote",
+				"",
+				"--from=--repo",
+				text(&api)
+			],
+			4
+		),
+		["api", "other"]
+	);
 	for args in [
-		vec![
-			"workyard",
-			"create",
-			"task",
-			"--remote",
-			"",
-			"--from=--repo",
-			text(&api),
-		],
 		vec![
 			"workyard",
 			"create",
@@ -509,7 +518,7 @@ fn unsettled_pull_names_come_from_selected_task_evidence_and_placement() {
 #[cfg(unix)]
 #[test]
 fn repository_completion_preserves_non_unicode_paths() {
-	use std::os::unix::ffi::OsStringExt;
+	use std::{ffi::OsString, os::unix::ffi::OsStringExt};
 	let root = tempfile::tempdir().unwrap();
 	let api = metadata(root.path(), "api", "api");
 	let native = root.path().join(OsString::from_vec(b"repo-\xff".to_vec()));

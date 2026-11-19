@@ -14,6 +14,8 @@ pub(super) struct Change {
 	pub participant: Participant,
 	pub existing: Option<usize>,
 	pub name: String,
+	pub fixed_name: bool,
+	pub name_source: std::path::PathBuf,
 	pub repair: bool,
 	pub addition: bool,
 }
@@ -32,7 +34,13 @@ pub(super) async fn plan(
 		control.check()?;
 		let change = Change::prepare(request, task, input, recovering, git, control).await?;
 		if let Some(index) = identities.get(&change.repository.identity) {
-			validate_alias(&changes[*index], &change)?;
+			let previous: &mut Change = &mut changes[*index];
+			validate_alias(previous, &change)?;
+			previous.fixed_name |= change.fixed_name;
+			previous
+				.participant
+				.registration_roots
+				.extend(input.registration_roots.iter().cloned());
 			continue;
 		}
 
@@ -48,6 +56,8 @@ pub(super) async fn plan(
 				continue;
 			}
 			let input = crate::RepositoryInput {
+				registration_roots: Vec::new(),
+				expected_identity: None,
 				path: super::admission::locate(participant, git, control).await?,
 				name: Some(participant.name.clone()),
 				remote: participant.remote.clone(),
@@ -64,6 +74,7 @@ pub(super) async fn plan(
 		}
 	}
 
+	layout::allocate_names(task, &mut changes)?;
 	validate_layout(task, &changes, state)?;
 	order_moves(task, changes)
 }

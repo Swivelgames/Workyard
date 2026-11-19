@@ -5,6 +5,7 @@ mod observation;
 mod operations;
 mod output;
 mod process;
+pub mod projects;
 mod recovery;
 mod relationships;
 mod removal;

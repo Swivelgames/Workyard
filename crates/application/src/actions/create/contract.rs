@@ -9,6 +9,8 @@ pub use crate::contracts::{OperationReport, ParticipantOutcome};
 pub struct CreateOutcome {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub pull_failures: Vec<crate::contracts::PullFailure>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub registration_problem: Option<ProblemOutcome>,
 	pub operation: OperationReport,
 	/// None when this invocation could not establish task membership.
 	pub lifecycle: Option<&'static str>,
@@ -29,6 +31,7 @@ impl CreateOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			registration_problem: None,
 			pull_failures: Vec::new(),
 			operation: Operation {
 				kind: Some(OperationKind::Create),
@@ -48,6 +51,7 @@ impl CreateOutcome {
 
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
 		Self {
+			registration_problem: None,
 			pull_failures: Vec::new(),
 			operation: task.operation.into(),
 			lifecycle: Some(task.lifecycle.as_str()),

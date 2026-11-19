@@ -7,6 +7,8 @@ pub use crate::contracts::{OperationReport, ParticipantOutcome};
 
 #[derive(Serialize)]
 pub struct RecoverOutcome {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub registration_problem: Option<ProblemOutcome>,
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub pull_failures: Vec<crate::contracts::PullFailure>,
 	/// Verified no-op; task/evidence history was preserved.
@@ -60,6 +62,7 @@ impl RecoverOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			registration_problem: None,
 			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
@@ -102,6 +105,7 @@ impl RecoverOutcome {
 			}
 		}
 		Self {
+			registration_problem: None,
 			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,

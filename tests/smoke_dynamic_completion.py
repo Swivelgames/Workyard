@@ -72,6 +72,10 @@ def main():
 			["update-ref", "refs/remotes/origin/suggest/remote", "HEAD"],
 		]:
 			subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+		for name in ["client-ui", "infra-db"]:
+			destination = workspace / "projects" / name
+			subprocess.run(["git", "clone", "--local", str(repo), str(destination)],
+				check=True, capture_output=True)
 		before = snapshot(workspace / ".workyard")
 
 		for shell in ["bash", "zsh"]:
@@ -128,6 +132,9 @@ def main():
 			output = capture(shell, inspect, "workyard status fix/o\t\n")
 			assert "ARGS:<status><fix/one>" in output, output
 			print(shell, "unique task remains exact")
+			output = capture(shell, inspect, "workyard create fix/new cli\tinf\t\n")
+			assert "ARGS:<create><fix/new><client-ui><infra-db>" in output, output
+			print(shell, "successive project references inserted as distinct arguments")
 			for quote in ["", "'", '\"']:
 				typed = f"workyard info --workspace {quote}so\tc\t"
 				# Zsh leaves the user's original quote open for directory continuation.

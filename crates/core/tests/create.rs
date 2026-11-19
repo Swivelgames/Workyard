@@ -179,6 +179,8 @@ fn request() -> CreateRequest {
 		repositories: ["api", "web"]
 			.into_iter()
 			.map(|name| RepositoryInput {
+				registration_roots: Vec::new(),
+				expected_identity: None,
 				path: PathBuf::from("repos").join(name),
 				name: None,
 				remote: None,
@@ -193,6 +195,24 @@ fn request() -> CreateRequest {
 		remote: None,
 		from: None,
 	}
+}
+
+#[test]
+fn changed_project_identity_stops_before_task_admission_and_git_effects() {
+	let fixture = Fixture::new(false, false);
+	let mut input = request();
+	input.repositories[1].expected_identity = Some("replaced".into());
+
+	let result = smol::block_on(create(
+		input,
+		&fixture,
+		&Control::default(),
+		&Quiet,
+		&fixture,
+	));
+	assert_eq!(result.err().unwrap().code, ProblemCode::RepositoryChanged);
+	assert!(fixture.saved.lock().unwrap().is_empty());
+	assert!(fixture.added.lock().unwrap().is_empty());
 }
 
 #[test]

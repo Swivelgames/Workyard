@@ -8,32 +8,25 @@ pub(super) struct PreparedAmendment {
 }
 
 impl AmendInput {
-	pub(super) fn prepare(self) -> Result<PreparedAmendment, Problem> {
+	pub(super) async fn prepare(
+		self,
+		control: &workyard_core::Control,
+	) -> Result<PreparedAmendment, Problem> {
 		workyard_core::validate_task(&self.task)?;
-		if self.repositories.is_empty() || (self.no_fetch && self.pull) {
+		if (self.repositories.is_empty() && self.projects.is_empty())
+			|| (self.no_fetch && self.pull)
+		{
 			return Err(Problem::new(
 				workyard_core::ProblemCode::InvalidInput,
-				"Supply at least one --repo; --no-fetch and --pull are mutually exclusive.",
+				"Select at least one project or supply --repo; --no-fetch and --pull are mutually exclusive.",
 			));
 		}
 		let state = crate::workspace::required(self.workspace.as_ref().map(NativePath::as_path))?;
 
-		let repositories = self
-			.repositories
-			.into_iter()
-			.map(|repo| {
-				Ok(workyard_core::RepositoryInput {
-					path: repo
-						.path
-						.as_path()
-						.canonicalize()
-						.map_err(|error| Problem::io("Resolve supplied repository", error))?,
-					name: repo.name,
-					remote: repo.remote,
-					from: repo.from,
-				})
-			})
-			.collect::<Result<_, Problem>>()?;
+		let reader = workyard_state::Reader::open(&state, None)?;
+		let repositories =
+			crate::projects::repositories(&reader, self.projects, self.repositories, control)
+				.await?;
 		Ok(PreparedAmendment {
 			request: AmendRequest {
 				task: self.task,

@@ -6,6 +6,7 @@ mod execution;
 mod guidance;
 pub mod observation;
 mod presentation;
+mod projects;
 mod workspace;
 
 // Deliberate compatibility exports: disk ownership does not change supported imports.

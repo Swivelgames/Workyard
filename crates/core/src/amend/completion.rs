@@ -28,6 +28,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 			},
 		};
 		let mut problem = result.err();
+		let admitted_roots = task.admitted_roots(Some(&original));
 		if !self.changed && !self.uncertain {
 			if let Some(checkpoint) = self.checkpoint.take() {
 				self.store.unchanged_amend(self.guard, checkpoint)?;
@@ -62,6 +63,7 @@ impl<G: AmendGit, S: AmendState, O: Observer> Amendment<'_, G, S, O> {
 		};
 		let operation = crate::optional_pull::invocation_operation(operation, &self.pull_failures);
 		Ok(AmendResult {
+			admitted_roots,
 			pull_failures: self.pull_failures,
 			mutation_started: self.changed || self.uncertain,
 			task,

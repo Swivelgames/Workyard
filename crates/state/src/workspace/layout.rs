@@ -2,6 +2,7 @@ use super::{MARKER, PENDING, check_entry};
 use crate::{canonical_future, damage::damaged, documents, exists, path::StoredPath};
 use serde::{Deserialize, Serialize};
 use std::{
+	collections::BTreeSet,
 	fs::FileType,
 	path::{Component, Path, PathBuf},
 };
@@ -38,6 +39,30 @@ impl Layout {
 			return Err(damaged("The recorded workspace location must be absolute."));
 		}
 		Ok(layout)
+	}
+
+	pub fn project_roots(&self) -> Result<BTreeSet<PathBuf>, Problem> {
+		self.project_roots
+			.iter()
+			.map(|stored| {
+				let path = stored.decode()?;
+				if path.as_os_str().is_empty()
+					|| path.as_os_str().as_encoded_bytes().contains(&0)
+					|| path.components().any(|c| c == Component::ParentDir)
+					|| (!path.is_absolute()
+						&& path
+							.components()
+							.any(|c| matches!(c, Component::RootDir | Component::Prefix(_))))
+				{
+					return Err(damaged("Invalid project root in workspace.json."));
+				}
+				Ok(path)
+			})
+			.collect()
+	}
+
+	pub fn set_project_roots(&mut self, roots: &BTreeSet<PathBuf>) {
+		self.project_roots = roots.iter().map(|root| root.as_path().into()).collect();
 	}
 
 	pub fn tasks_root(&self, state: &Path) -> Result<PathBuf, Problem> {

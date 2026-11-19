@@ -2,23 +2,43 @@ use super::Change;
 use crate::{AmendState, Problem, ProblemCode, Task};
 use std::collections::HashSet;
 
+pub(super) fn allocate_names(task: &Task, changes: &mut [Change]) -> Result<(), Problem> {
+	use crate::projects::names::{self, NameRequest};
+	let selected: HashSet<_> = changes
+		.iter()
+		.filter_map(|change| change.existing)
+		.collect();
+	let reserved = task
+		.participants
+		.iter()
+		.enumerate()
+		.filter(|(index, _)| !selected.contains(index))
+		.map(|(_, p)| (p.name.as_str(), p.source.as_path()));
+	let requested: Vec<_> = changes
+		.iter()
+		.map(|change| NameRequest {
+			path: &change.name_source,
+			name: &change.name,
+			fixed: change.fixed_name,
+		})
+		.collect();
+	let names = names::allocate(&requested, reserved)?;
+	for (change, name) in changes.iter_mut().zip(names) {
+		if change.addition {
+			change.participant.name = name.clone();
+			change.participant.destination = task.root.join(&task.name).join(&name);
+		}
+		change.name = name;
+	}
+	Ok(())
+}
+
 pub(super) fn validate_layout(
 	task: &Task,
 	changes: &[Change],
 	state: &impl AmendState,
 ) -> Result<(), Problem> {
-	let mut names = HashSet::new();
-	for (index, participant) in task.participants.iter().enumerate() {
-		let name = changes
-			.iter()
-			.find(|change| change.existing == Some(index))
-			.map_or(participant.name.as_str(), |change| &change.name);
-		insert_name(&mut names, name)?;
-	}
 	for change in changes {
-		if change.existing.is_none() {
-			insert_name(&mut names, &change.name)?;
-		}
 		let destination = task.root.join(&task.name).join(&change.name);
 		if !change.addition && change.name == change.participant.name {
 			continue;
@@ -34,20 +54,6 @@ pub(super) fn validate_layout(
 		if !vacated {
 			state.validate_destination(&destination)?;
 		}
-	}
-	Ok(())
-}
-
-fn insert_name(names: &mut HashSet<String>, name: &str) -> Result<(), Problem> {
-	#[cfg(any(windows, target_os = "macos"))]
-	let key = name.to_uppercase().to_lowercase();
-	#[cfg(not(any(windows, target_os = "macos")))]
-	let key = name.to_owned();
-	if !names.insert(key) {
-		return Err(Problem::new(
-			ProblemCode::ParticipantNameConflict,
-			format!("Participant name {name:?} is not unique in the amended task."),
-		));
 	}
 	Ok(())
 }

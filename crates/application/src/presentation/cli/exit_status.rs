@@ -9,7 +9,7 @@ pub(crate) fn operation<T>(
 	let outcome = match result {
 		Ok(outcome) | Err(outcome) => outcome,
 	};
-	u8::from(report(outcome).outcome != OperationOutcome::Succeeded)
+	u8::from(result.is_err() || report(outcome).outcome != OperationOutcome::Succeeded)
 }
 
 pub(crate) fn result<O, E>(result: &Result<O, E>) -> u8 {

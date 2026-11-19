@@ -161,6 +161,8 @@ impl workyard_core::Observer for StopBeforePull {
 
 fn interrupted_addition(root: &Path, source: &Path, action: &str) {
 	let repositories = vec![workyard_core::RepositoryInput {
+		registration_roots: Vec::new(),
+		expected_identity: None,
 		path: source.into(),
 		name: None,
 		remote: None,

@@ -9,15 +9,16 @@ stdio RPC host run the same actions. MCP and the persistent TUI are planned.
 mkdir my-workspace
 cd my-workspace
 workyard init
-workyard create feat/payments --repo /repos/api --repo /repos/web
+workyard projects track /repos/api /repos/web
+workyard create feat/payments api web
 workyard status feat/payments
 ```
 
 Bare `workyard init` targets the current directory. It creates the fixed state
 directory `.workyard/` and the default worktree directory `tasks/`. The example
 above puts participants in `tasks/feat/payments/api/` and `tasks/feat/payments/web/`.
-The workspace records `projects/` as its default project root. Supply each backing
-repository with `--repo` in this increment.
+The workspace already tracks `projects/`. If your clones live there, you can
+skip the track command.
 
 For a workspace with a nested tasks directory, run the following command.
 
@@ -30,6 +31,39 @@ workspace preserves its state. An explicit conflicting tasks path returns an err
 Task commands find the nearest ancestor workspace or accept `--workspace <directory>`.
 Only init creates workspace state. For example, `workyard list --workspace my-other-workspace`
 shows tasks in that workspace from outside its directory.
+
+## Selecting projects
+
+`workyard projects list` shows the available references and their registered roots.
+Track a single repository or a container of clones. A missing root may be populated
+later. Workyard stops at the first Git repository in each subtree, recognizes bare
+repositories and linked worktrees, and counts each backing repository once.
+Untracking a root preserves task membership and projects reached through another root.
+
+Use the shortest unambiguous suffix, such as `web` or `billing/api`. If two
+projects match `api`, the diagnostic and shell completion offer qualified choices.
+An explicit path such as `./api` or `/repos/api` selects a filesystem location.
+An admitted explicit repository becomes available to future tasks by reference.
+When a bare selector also names a directory in the current directory, positionals
+use the catalog and `--repo` retains its local directory meaning. Use `./api` to
+make a filesystem choice explicit.
+
+```sh
+workyard create fix/migration payments/api billing/api
+workyard amend fix/migration web --repo infra --repo-from release
+workyard projects untrack /repos/web
+```
+
+The first command creates flat participant directories named `payments_api` and
+`billing_api`. Selecting just one of those projects in a new task gives it the name
+`api`. Existing task-local names stay stable. Use `--repo <selector> --repo-name <name>`
+to resolve a literal name collision or to choose a descriptive name.
+
+Over stdio RPC, invoke `["projects", "track"]` or `["projects", "untrack"]` with a
+`paths` array. Invoke `["projects", "list"]` for roots, coverage and available projects.
+Task actions accept a `projects` array of selectors and a `repositories` array of
+groups with per-project overrides. For example, `{"task":"feat/payments","projects":["api","web"]}`
+is the input for the CLI example above.
 
 ## Creating and checking out tasks
 

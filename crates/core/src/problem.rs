@@ -1,8 +1,17 @@
+use std::path::PathBuf;
+
+#[derive(Clone, Debug)]
+pub enum ProjectRemedy {
+	Choose(Vec<PathBuf>),
+	Rename { source: PathBuf, name: String },
+}
+
 #[derive(Clone, Debug)]
 pub struct Problem {
 	pub code: crate::ProblemCode,
 	pub message: String,
 	pub remedy: String,
+	pub project_remedy: Option<Box<ProjectRemedy>>,
 }
 
 impl Problem {
@@ -11,6 +20,7 @@ impl Problem {
 			code,
 			message: message.into(),
 			remedy: String::new(),
+			project_remedy: None,
 		}
 	}
 

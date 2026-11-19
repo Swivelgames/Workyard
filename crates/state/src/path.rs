@@ -33,6 +33,16 @@ impl From<&std::path::Path> for StoredPath {
 }
 
 impl StoredPath {
+	pub(crate) fn registration(&self) -> Result<PathBuf, workyard_core::Problem> {
+		let path = self.decode()?;
+		if !path.is_absolute() || path.as_os_str().as_encoded_bytes().contains(&0) {
+			return Err(crate::damage::damaged(
+				"Invalid absolute project registration in task evidence.",
+			));
+		}
+		Ok(path)
+	}
+
 	pub fn decode(&self) -> Result<PathBuf, workyard_core::Problem> {
 		match self {
 			Self::Text(text) => Ok(text.into()),

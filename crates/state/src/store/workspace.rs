@@ -4,6 +4,10 @@ use std::path::Path;
 use workyard_core::Problem;
 
 impl Store {
+	pub(crate) fn state_dir(&self) -> &Path {
+		&self.state
+	}
+
 	/// Open existing workspace state without creating or repairing any files.
 	pub fn open_existing(state: &Path, requested_root: Option<&Path>) -> Result<Self, Problem> {
 		let workspace = Workspace::open(state, requested_root)?;

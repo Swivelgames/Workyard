@@ -24,7 +24,7 @@ async fn run(
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
-	let prepared = input.prepare().map_err(rejected)?;
+	let prepared = input.prepare(&control).await.map_err(rejected)?;
 	let store = workyard_state::Store::open_existing(&prepared.state, None).map_err(rejected)?;
 
 	let result = workyard_core::amend(
@@ -38,8 +38,13 @@ async fn run(
 
 	match result {
 		Ok(result) => {
-			let outcome = AmendOutcome::from_result(result);
-			if outcome.operation.outcome == OperationOutcome::Failed {
+			let registration =
+				crate::projects::register(&store, &result.admitted_roots, &control).await;
+			let mut outcome = AmendOutcome::from_result(result);
+			outcome.registration_problem = registration.map(Into::into);
+			if outcome.registration_problem.is_some()
+				|| outcome.operation.outcome == OperationOutcome::Failed
+			{
 				Err(outcome)
 			} else {
 				Ok(outcome)

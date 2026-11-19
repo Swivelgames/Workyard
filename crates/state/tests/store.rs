@@ -117,6 +117,7 @@ fn independent_intent_survives_failed_task_publication_and_blocks_recreation() {
 		source: root.join("source"),
 		common_dir: root.join("source/.git"),
 		backing_identity: "fixture-backing".into(),
+		registration_roots: Vec::new(),
 		worktree_identity: None,
 		destination: root.join("feat/test/api"),
 		remote: None,

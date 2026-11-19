@@ -28,12 +28,17 @@ pub(super) async fn run(
 	match result {
 		Ok(result) => {
 			let nothing = !result.mutation_started;
+			let registration =
+				crate::projects::register(store, &result.admitted_roots, control).await;
 			let mut outcome = RecoverOutcome::from_task(result.task, result.record);
+			outcome.registration_problem = registration.map(Into::into);
 			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
 			outcome.problem = result.problem.map(Into::into);
 			outcome.operation = result.operation.into();
 			outcome.nothing_to_recover = nothing && outcome.problem.is_none();
-			if outcome.operation.outcome == OperationOutcome::Failed {
+			if outcome.registration_problem.is_some()
+				|| outcome.operation.outcome == OperationOutcome::Failed
+			{
 				Err(outcome)
 			} else {
 				Ok(outcome)

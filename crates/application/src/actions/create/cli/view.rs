@@ -67,6 +67,9 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 			},
 		);
 		terminal.pull_failures(&outcome.pull_failures);
+		if let Some(problem) = &outcome.registration_problem {
+			terminal.problem(problem);
+		}
 		if let Some(problem) = &outcome.problem {
 			terminal.problem(problem);
 			if problem.remedy.trim().is_empty() {

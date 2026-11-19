@@ -387,12 +387,16 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 			task: "feat/task".into(),
 			repositories: vec![
 				workyard_core::RepositoryInput {
+					registration_roots: Vec::new(),
+					expected_identity: None,
 					path: api,
 					name: None,
 					remote: None,
 					from: None,
 				},
 				workyard_core::RepositoryInput {
+					registration_roots: Vec::new(),
+					expected_identity: None,
 					path: web.clone(),
 					name: None,
 					remote: None,

@@ -22,6 +22,9 @@ pub async fn create(
 	let record_path = store.record_path(&guard);
 	let destination = request.tasks_root.join(&request.task);
 	store.validate_destination(&destination)?;
+	for participant in &task.participants {
+		store.validate_destination(&participant.destination)?;
+	}
 	validate_plans(&task, &repositories, runner, control).await?;
 
 	store.begin(&guard, &task)?;

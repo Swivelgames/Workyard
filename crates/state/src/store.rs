@@ -55,6 +55,17 @@ impl workyard_core::State for Store {
 
 	fn validate_destination(&self, path: &Path) -> Result<(), Problem> {
 		self.verify()?;
+		// A missing parent can hide an overlong leaf from stat. Ask the actual
+		// destination filesystem about the name before reserving the task.
+		if let Some(parent) = path.parent()
+			&& !parent.is_dir()
+			&& let Some(existing) = parent.ancestors().find(|dir| dir.is_dir())
+			&& let Some(name) = path.file_name()
+		{
+			exists(&existing.join(name)).map_err(|problem| {
+				problem.remedy("Choose a shorter task or participant name with --repo-name.")
+			})?;
+		}
 		if canonical_future(path)? != path {
 			return Err(Problem::new(
 				workyard_core::ProblemCode::PathOverlap,

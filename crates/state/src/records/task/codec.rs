@@ -15,6 +15,7 @@ pub(crate) fn match_intent(intent: &TaskRecord, current: &TaskRecord) -> Result<
 			.zip(&current.participants)
 			.all(|(a, b)| {
 				a.name == b.name
+					&& a.registration_roots == b.registration_roots
 					&& a.backing_identity == b.backing_identity
 					&& a.from == b.from
 					&& a.remote == b.remote
@@ -134,6 +135,11 @@ impl TryFrom<super::ParticipantRecord> for Participant {
 			source: record.source.decode()?,
 			common_dir: record.common_dir.decode()?,
 			backing_identity: record.backing_identity,
+			registration_roots: record
+				.registration_roots
+				.iter()
+				.map(crate::path::StoredPath::registration)
+				.collect::<Result<_, _>>()?,
 			worktree_identity: record.worktree_identity,
 			destination: record.destination.decode()?,
 			remote: record.remote,
@@ -160,9 +166,5 @@ fn decode_problem(record: crate::records::ProblemRecord) -> Result<Problem, Prob
 		.code
 		.parse()
 		.map_err(|()| damaged(format!("Unknown stored problem code {:?}.", record.code)))?;
-	Ok(Problem {
-		code,
-		message: record.message,
-		remedy: record.remedy,
-	})
+	Ok(Problem::new(code, record.message).remedy(record.remedy))
 }

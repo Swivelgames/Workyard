@@ -21,5 +21,5 @@ pub use relocation::{
 	Relocation, RelocationStatus, SnapshotStatus, relocation_status, snapshot_status,
 };
 pub use store::{Store, TaskGuard};
-pub use workspace::initialize_workspace;
+pub use workspace::{RootEdit, initialize_workspace};
 pub use workyard_system::{Lock, LockMode};

@@ -13,6 +13,8 @@ pub struct ParticipantChange {
 pub struct AmendOutcome {
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub pull_failures: Vec<crate::contracts::PullFailure>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub registration_problem: Option<ProblemOutcome>,
 	pub operation: OperationReport,
 	pub task: String,
 	pub lifecycle: Option<&'static str>,
@@ -31,6 +33,7 @@ impl AmendOutcome {
 			OperationOutcome::Failed
 		};
 		Self {
+			registration_problem: None,
 			pull_failures: Vec::new(),
 			operation: Operation {
 				kind: Some(OperationKind::Amend),
@@ -49,6 +52,7 @@ impl AmendOutcome {
 
 	pub fn from_result(result: AmendResult) -> Self {
 		Self {
+			registration_problem: None,
 			pull_failures: result.pull_failures.into_iter().map(Into::into).collect(),
 			operation: result.operation.into(),
 			task: result.task.name,

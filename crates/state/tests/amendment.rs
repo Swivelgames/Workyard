@@ -15,6 +15,7 @@ fn established(workspace: &support::Workspace) -> workyard_core::Task {
 		source: workspace.root.join("source"),
 		common_dir: workspace.root.join("source/.git"),
 		backing_identity: "backing".into(),
+		registration_roots: Vec::new(),
 		worktree_identity: Some("worktree".into()),
 		destination: workspace.root.join("feat/task/api"),
 		remote: None,
@@ -28,6 +29,8 @@ fn request(task: &workyard_core::Task) -> AmendRequest {
 	AmendRequest {
 		task: task.name.clone(),
 		repositories: vec![RepositoryInput {
+			registration_roots: Vec::new(),
+			expected_identity: None,
 			path: task.participants[0].source.clone(),
 			name: Some("legacy".into()),
 			remote: None,

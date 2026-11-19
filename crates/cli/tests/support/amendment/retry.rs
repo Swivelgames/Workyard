@@ -36,6 +36,8 @@ fn request(repositories: Vec<workyard_core::RepositoryInput>) -> workyard_core::
 
 fn repository(path: &Path, name: Option<&str>) -> workyard_core::RepositoryInput {
 	workyard_core::RepositoryInput {
+		registration_roots: Vec::new(),
+		expected_identity: None,
 		path: path.into(),
 		name: name.map(str::to_owned),
 		remote: None,

@@ -20,12 +20,22 @@ impl Change {
 				control,
 			)
 			.await?;
+		input.verify_identity(&repository)?;
 		let existing = task
 			.participants
 			.iter()
 			.position(|participant| participant.backing_identity == repository.identity);
 		let prior = existing.map(|index| &task.participants[index]);
-		let name = participant_name(input, prior)?;
+		let fixed_name = input.name.is_some() || prior.is_some();
+		let name = match input
+			.name
+			.as_deref()
+			.or_else(|| prior.map(|p| p.name.as_str()))
+		{
+			Some(name) => name,
+			None => crate::projects::names::basename(&input.path)?,
+		}
+		.to_owned();
 		let from = input.from.clone().or(request.from.clone());
 		let options = if recovering {
 			existing.map_or(request.options, |index| task.creation_options(index))
@@ -58,11 +68,18 @@ impl Change {
 				participant: relation.participant,
 				existing,
 				name,
+				fixed_name,
+				name_source: input.path.clone(),
 				repair: relation.needs_repair,
 				addition: false,
 			});
 		}
 
+		participant
+			.registration_roots
+			.extend(input.registration_roots.iter().cloned());
+		participant.registration_roots.sort();
+		participant.registration_roots.dedup();
 		participant.creation = Some(options);
 		participant.from = if recovering {
 			prior.map_or(from, |participant| participant.from.clone())
@@ -94,40 +111,12 @@ impl Change {
 			participant,
 			existing,
 			name,
+			fixed_name,
+			name_source: input.path.clone(),
 			repair: false,
 			addition: true,
 		})
 	}
-}
-
-fn participant_name(
-	input: &RepositoryInput,
-	existing: Option<&Participant>,
-) -> Result<String, Problem> {
-	let name = input
-		.name
-		.clone()
-		.or_else(|| existing.map(|participant| participant.name.clone()))
-		.or_else(|| {
-			input
-				.path
-				.file_name()
-				.and_then(|name| name.to_str())
-				.map(str::to_owned)
-		})
-		.ok_or_else(|| {
-			Problem::new(
-				ProblemCode::ParticipantNameRequired,
-				"Supply --repo-name for a repository without a Unicode basename.",
-			)
-		})?;
-	if !crate::safe_component(&name) {
-		return Err(Problem::new(
-			ProblemCode::InvalidParticipantName,
-			format!("Unsafe participant name {name:?}."),
-		));
-	}
-	Ok(name)
 }
 
 fn new_participant(
@@ -143,6 +132,7 @@ fn new_participant(
 		source: repository.source.clone(),
 		common_dir: repository.common_dir.clone(),
 		backing_identity: repository.identity.clone(),
+		registration_roots: Vec::new(),
 		worktree_identity: None,
 		destination: task.root.join(&task.name).join(name),
 		remote: repository.remote.clone(),

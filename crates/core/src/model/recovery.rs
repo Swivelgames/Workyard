@@ -20,6 +20,7 @@ pub struct RecoveryObservation {
 
 /// The invocation result is separate from preserved task operation history.
 pub struct RecoveryResult {
+	pub admitted_roots: Vec<PathBuf>,
 	pub operation: crate::Operation,
 	pub problem: Option<crate::Problem>,
 	pub pull_failures: Vec<crate::PullFailure>,

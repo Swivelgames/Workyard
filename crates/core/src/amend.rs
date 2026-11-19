@@ -81,6 +81,8 @@ async fn run(
 		repositories: changes
 			.iter()
 			.map(|change| crate::RepositoryInput {
+				registration_roots: change.participant.registration_roots.clone(),
+				expected_identity: Some(change.repository.identity.clone()),
 				path: change.repository.source.clone(),
 				name: Some(change.name.clone()),
 				remote: change.repository.remote.clone(),

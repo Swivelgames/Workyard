@@ -1,3 +1,4 @@
+use crate::projects::names::{self, NameRequest};
 use crate::{
 	Control, CreateRequest, Git, Participant, Phase, Problem, Repository, Task, overlaps,
 	safe_component,
@@ -21,29 +22,18 @@ pub(crate) async fn preflight(
 	}
 
 	let mut identities = HashMap::<std::path::PathBuf, usize>::new();
-	let mut names = HashMap::new();
+	let mut naming = Vec::<(&std::path::Path, bool)>::new();
 	let mut participants: Vec<Participant> = Vec::new();
 	let mut repositories = Vec::new();
 	for input in &request.repositories {
 		control.check()?;
 		let remote = input.remote.as_deref().or(request.remote.as_deref());
 		let repository = runner.inspect(&input.path, remote, control).await?;
-		let name = input
-			.name
-			.clone()
-			.or_else(|| {
-				input
-					.path
-					.file_name()
-					.and_then(|name| name.to_str())
-					.map(str::to_owned)
-			})
-			.ok_or_else(|| {
-				Problem::new(
-					crate::ProblemCode::ParticipantNameRequired,
-					"Supply --repo-name for a repository without a Unicode basename.",
-				)
-			})?;
+		input.verify_identity(&repository)?;
+		let name = match &input.name {
+			Some(name) => name.clone(),
+			None => names::basename(&input.path)?.to_owned(),
+		};
 		if !safe_component(&name) {
 			return Err(Problem::new(
 				crate::ProblemCode::InvalidParticipantName,
@@ -53,7 +43,7 @@ pub(crate) async fn preflight(
 
 		let from = input.from.clone().or(request.from.clone());
 		if let Some(index) = identities.get(&repository.common_dir) {
-			let previous = &participants[*index];
+			let previous = &mut participants[*index];
 			if previous.name != name
 				|| previous.remote != repository.remote
 				|| previous.from != from
@@ -63,18 +53,11 @@ pub(crate) async fn preflight(
 					"Repeated backing repository has conflicting names or options.",
 				));
 			}
+			previous
+				.registration_roots
+				.extend(input.registration_roots.iter().cloned());
+			naming[*index].1 |= input.name.is_some();
 			continue;
-		}
-
-		#[cfg(any(windows, target_os = "macos"))]
-		let name_key = name.to_uppercase().to_lowercase();
-		#[cfg(not(any(windows, target_os = "macos")))]
-		let name_key = name.clone();
-		if names.insert(name_key, ()).is_some() {
-			return Err(Problem::new(
-				crate::ProblemCode::ParticipantNameConflict,
-				format!("Participant name {name:?} is not unique. Supply --repo-name."),
-			));
 		}
 
 		if overlaps(&task_path, &repository.source) || overlaps(&task_path, &repository.common_dir)
@@ -89,8 +72,10 @@ pub(crate) async fn preflight(
 		}
 
 		identities.insert(repository.common_dir.clone(), participants.len());
+		naming.push((&input.path, input.name.is_some()));
 		participants.push(Participant {
 			creation: None,
+			registration_roots: input.registration_roots.clone(),
 			worktree_identity: None,
 			name: name.clone(),
 			source: repository.source.clone(),
@@ -102,6 +87,21 @@ pub(crate) async fn preflight(
 			phase: Phase::NotStarted,
 		});
 		repositories.push(repository);
+	}
+
+	let requested = participants
+		.iter()
+		.zip(naming)
+		.map(|(p, (path, fixed))| NameRequest {
+			path,
+			name: &p.name,
+			fixed,
+		})
+		.collect::<Vec<_>>();
+	let names = names::allocate(&requested, std::iter::empty())?;
+	for (participant, name) in participants.iter_mut().zip(names) {
+		participant.destination = task_path.join(&name);
+		participant.name = name;
 	}
 
 	let task = Task {

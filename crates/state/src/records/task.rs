@@ -42,6 +42,8 @@ impl From<CreationRecord> for workyard_core::CreationOptions {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ParticipantRecord {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub registration_roots: Vec<StoredPath>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub creation: Option<CreationRecord>,
 	pub name: String,
@@ -129,6 +131,11 @@ impl From<&workyard_core::Participant> for ParticipantRecord {
 			source: participant.source.as_path().into(),
 			common_dir: participant.common_dir.as_path().into(),
 			backing_identity: participant.backing_identity.clone(),
+			registration_roots: participant
+				.registration_roots
+				.iter()
+				.map(|p| p.as_path().into())
+				.collect(),
 			worktree_identity: participant.worktree_identity.clone(),
 			destination: participant.destination.as_path().into(),
 			remote: participant.remote.clone(),

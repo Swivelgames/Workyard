@@ -4,11 +4,18 @@ use workyard_core::{CreateRequest, Problem, validate_task};
 
 impl CreateInput {
 	pub fn normalize(self) -> Result<CreateRequest, Problem> {
+		smol::block_on(self.prepare(&workyard_core::Control::default()))
+	}
+
+	pub(super) async fn prepare(
+		self,
+		control: &workyard_core::Control,
+	) -> Result<CreateRequest, Problem> {
 		validate_task(&self.task)?;
-		if self.repositories.is_empty() {
+		if self.repositories.is_empty() && self.projects.is_empty() {
 			return Err(Problem::new(
 				workyard_core::ProblemCode::InvalidInput,
-				"Supply at least one --repo.",
+				"Select at least one project or supply --repo.",
 			));
 		}
 
@@ -21,18 +28,12 @@ impl CreateInput {
 
 		let state = crate::workspace::required(self.workspace.as_ref().map(NativePath::as_path))?;
 		let reader = workyard_state::Reader::open(&state, None)?;
+		let repositories =
+			crate::projects::repositories(&reader, self.projects, self.repositories, control)
+				.await?;
 		Ok(CreateRequest {
 			task: self.task,
-			repositories: self
-				.repositories
-				.into_iter()
-				.map(|repo| workyard_core::RepositoryInput {
-					path: repo.path.into_path_buf(),
-					name: repo.name,
-					remote: repo.remote,
-					from: repo.from,
-				})
-				.collect(),
+			repositories,
 			tasks_root: reader.root().to_path_buf(),
 			state_dir: state,
 			checkout: self.checkout,

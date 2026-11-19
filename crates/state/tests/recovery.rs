@@ -12,6 +12,7 @@ fn completed_task(workspace: &support::Workspace) -> Task {
 		source: workspace.root.join("source"),
 		common_dir: workspace.root.join("source/.git"),
 		backing_identity: "backing".into(),
+		registration_roots: Vec::new(),
 		worktree_identity: Some("worktree".into()),
 		destination: workspace.root.join("feat/task/api"),
 		remote: None,

@@ -5,6 +5,10 @@ use workyard_core::{AmendRequest, CreationOptions, Problem, RepositoryInput};
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RepositoryRecord {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	registration_roots: Vec<StoredPath>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	expected_identity: Option<String>,
 	path: StoredPath,
 	name: Option<String>,
 	remote: Option<String>,
@@ -31,6 +35,12 @@ impl From<&AmendRequest> for RequestRecord {
 				.repositories
 				.iter()
 				.map(|repo| RepositoryRecord {
+					registration_roots: repo
+						.registration_roots
+						.iter()
+						.map(|p| p.as_path().into())
+						.collect(),
+					expected_identity: repo.expected_identity.clone(),
 					path: repo.path.as_path().into(),
 					name: repo.name.clone(),
 					remote: repo.remote.clone(),
@@ -55,6 +65,12 @@ impl RequestRecord {
 				.iter()
 				.map(|repo| {
 					Ok(RepositoryInput {
+						registration_roots: repo
+							.registration_roots
+							.iter()
+							.map(StoredPath::registration)
+							.collect::<Result<_, _>>()?,
+						expected_identity: repo.expected_identity.clone(),
 						path: repo.path.decode()?,
 						name: repo.name.clone(),
 						remote: repo.remote.clone(),

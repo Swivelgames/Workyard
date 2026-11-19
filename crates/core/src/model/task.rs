@@ -26,6 +26,7 @@ impl Phase {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Participant {
+	pub registration_roots: Vec<PathBuf>,
 	pub creation: Option<super::creation::CreationOptions>,
 	pub name: String,
 	pub source: PathBuf,
@@ -70,6 +71,22 @@ pub struct Task {
 }
 
 impl Task {
+	/// Only a newly established worktree can publish its original discovery roots.
+	/// A later no-op recovery must respect an intervening explicit untrack.
+	pub fn admitted_roots(&self, previous: Option<&Self>) -> Vec<PathBuf> {
+		let established: std::collections::HashSet<_> = previous
+			.into_iter()
+			.flat_map(|task| &task.participants)
+			.filter(|p| p.worktree_identity.is_some())
+			.map(|p| &p.backing_identity)
+			.collect();
+		self.participants
+			.iter()
+			.filter(|p| p.worktree_identity.is_some() && !established.contains(&p.backing_identity))
+			.flat_map(|p| p.registration_roots.iter().cloned())
+			.collect()
+	}
+
 	pub fn creation_options(&self, index: usize) -> super::creation::CreationOptions {
 		self.participants[index]
 			.creation

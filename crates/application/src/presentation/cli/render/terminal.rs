@@ -120,6 +120,10 @@ impl Terminal {
 		for line in problem.message.lines().skip(1) {
 			self.note_at(scope, line);
 		}
+		for candidate in &problem.candidates {
+			let label = paths::display(candidate.as_path());
+			writeln!(self.output, "{}    {label}", scope.indent()).expect("string output");
+		}
 		for line in problem.remedy.lines() {
 			self.hint_at(scope, line);
 		}

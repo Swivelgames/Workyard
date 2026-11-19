@@ -4,6 +4,7 @@ use workyard_application::{CreateInput, CreateOutcome, Progress, RepositoryInput
 fn invalid_request() -> CreateInput {
 	CreateInput {
 		task: "../invalid".into(),
+		projects: vec![],
 		repositories: vec![RepositoryInput {
 			path: NativePath::new(std::path::PathBuf::from("unused-repository")).unwrap(),
 			name: None,
@@ -51,6 +52,7 @@ fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields()
 			source: "source".into(),
 			common_dir: "source/.git".into(),
 			backing_identity: "identity".into(),
+			registration_roots: Vec::new(),
 			worktree_identity: Some("tree".into()),
 			destination: "workspace/api".into(),
 			remote: None,

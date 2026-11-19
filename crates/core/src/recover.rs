@@ -72,6 +72,7 @@ pub async fn recover(
 		control.check()?;
 		store.verify()?;
 		return Ok(crate::RecoveryResult {
+			admitted_roots: Vec::new(),
 			operation: record
 				.recorded
 				.as_ref()
@@ -96,6 +97,7 @@ pub async fn recover(
 			OperationOutcome::Failed
 		};
 		return Ok(crate::RecoveryResult {
+			admitted_roots: Vec::new(),
 			operation,
 			problem: Some(problem),
 			pull_failures: Vec::new(),
@@ -123,6 +125,7 @@ pub async fn recover(
 	}
 	let pull_failures = recovery.pull_failures.into_inner().expect("pull failures");
 	Ok(crate::RecoveryResult {
+		admitted_roots: task.admitted_roots(Some(&record.task)),
 		operation: crate::optional_pull::invocation_operation(invocation, &pull_failures),
 		pull_failures,
 		problem: invocation_problem,

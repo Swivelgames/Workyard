@@ -1,6 +1,8 @@
 //! Fixed workspace marker, relative task placement and read-only admission.
 mod initialize;
 mod layout;
+mod projects;
+pub use projects::RootEdit;
 
 pub use initialize::initialize_workspace;
 use layout::Layout;

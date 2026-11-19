@@ -7,6 +7,10 @@ use trine::NativePath;
 #[serde(deny_unknown_fields)]
 pub struct AmendInput {
 	pub task: String,
+	/// Tracked project references or explicit repository paths.
+	#[serde(default)]
+	pub projects: Vec<NativePath>,
+	#[serde(default)]
 	pub repositories: Vec<RepositoryInput>,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,

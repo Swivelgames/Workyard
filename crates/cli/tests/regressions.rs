@@ -318,6 +318,8 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 		let request = CreateRequest {
 			task: "feat/revalidate".into(),
 			repositories: vec![RepositoryInput {
+				registration_roots: Vec::new(),
+				expected_identity: None,
 				path: api.clone(),
 				name: None,
 				remote: None,

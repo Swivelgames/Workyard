@@ -1,5 +1,6 @@
 //! Advisory argument values selected from binding-derived context and local metadata.
 mod participants;
+pub(crate) mod projects;
 mod repositories;
 pub(crate) mod tasks;
 

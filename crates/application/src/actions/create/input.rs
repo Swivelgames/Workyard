@@ -8,6 +8,10 @@ use crate::contracts::RepositoryInput;
 #[serde(deny_unknown_fields)]
 pub struct CreateInput {
 	pub task: String,
+	/// Tracked project references or explicit repository paths.
+	#[serde(default)]
+	pub projects: Vec<NativePath>,
+	#[serde(default)]
 	pub repositories: Vec<RepositoryInput>,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,

@@ -23,12 +23,12 @@ async fn run(
 ) -> Result<CreateOutcome, CreateOutcome> {
 	let name = input.task.clone();
 	let rejected = |problem| CreateOutcome::rejected(name.clone(), problem);
-	let request = input.normalize().map_err(rejected)?;
 
 	let cancellation = context.cancellation().clone();
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
+	let request = input.prepare(&control).await.map_err(rejected)?;
 	let store =
 		Store::open_existing(&request.state_dir, Some(&request.tasks_root)).map_err(rejected)?;
 	let runner = Runner::default();
@@ -43,11 +43,17 @@ async fn run(
 	.await;
 	match result {
 		Ok(result) => {
+			let registration =
+				crate::projects::register(&store, &result.task.admitted_roots(None), &control)
+					.await;
 			let mut outcome = CreateOutcome::from_task(result.task, result.record);
 			outcome.operation = result.operation.into();
 			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
 			outcome.problem = result.problem.map(Into::into);
-			if outcome.operation.outcome == OperationOutcome::Failed {
+			outcome.registration_problem = registration.map(Into::into);
+			if outcome.registration_problem.is_some()
+				|| outcome.operation.outcome == OperationOutcome::Failed
+			{
 				Err(outcome)
 			} else {
 				Ok(outcome)
@@ -108,6 +114,7 @@ mod tests {
 
 		let input = crate::create::CreateInput {
 			task: "feat/responsive".into(),
+			projects: vec![],
 			repositories: vec![crate::contracts::RepositoryInput {
 				path: trine::NativePath::new(repo).unwrap(),
 				name: None,

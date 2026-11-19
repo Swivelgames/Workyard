@@ -56,6 +56,9 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 			);
 		}
 		terminal.pull_failures(&outcome.pull_failures);
+		if let Some(problem) = &outcome.registration_problem {
+			terminal.problem(problem);
+		}
 		if let Some(problem) = &outcome.problem {
 			terminal.problem_at(MessageScope::Workspace, problem);
 		}

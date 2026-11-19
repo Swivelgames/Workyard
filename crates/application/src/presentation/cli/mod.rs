@@ -1,3 +1,5 @@
+mod project_bindings;
+pub(crate) use project_bindings::project_bindings;
 pub(crate) mod completion;
 pub(crate) mod exit_status;
 pub(crate) mod render;
