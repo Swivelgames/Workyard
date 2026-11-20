@@ -29,7 +29,10 @@ pub(super) fn untrack_entry() -> Result<RootsEntry, RegistrationError> {
 fn build_entry(edit: RootEdit) -> Result<RootsEntry, RegistrationError> {
 	let (name, description) = match edit {
 		RootEdit::Track => ("track", "Register project discovery roots"),
-		RootEdit::Untrack => ("untrack", "Remove project discovery roots"),
+		RootEdit::Untrack => (
+			"untrack",
+			"Unregister discovery roots and keep existing tasks and repositories",
+		),
 	};
 	let action = Action::new(name, description, move |input, context| {
 		update(edit, input, context)
@@ -44,6 +47,8 @@ fn build_entry(edit: RootEdit) -> Result<RootsEntry, RegistrationError> {
 	}
 	let cli = CliBinding::new(bindings);
 	let rpc = StructuredBinding::serde();
+	let mcp = StructuredBinding::serde();
+
 	Ok(Entry::new(action)
 		.namespace(["projects"])
 		.cli(
@@ -51,7 +56,8 @@ fn build_entry(edit: RootEdit) -> Result<RootsEntry, RegistrationError> {
 			move |output| Ok(RootsView { output, edit }),
 			exit_status::result,
 		)
-		.rpc(rpc))
+		.rpc(rpc)
+		.mcp(mcp))
 }
 
 async fn update(

@@ -85,33 +85,6 @@ fn failed_registry_write_preserves_admitted_work_and_tracking_can_retry_independ
 }
 
 #[test]
-fn optional_pull_failure_still_registers_the_admitted_participant() {
-	let fixture = tempfile::tempdir().unwrap();
-	let workspace = fixture.path().join("workspace");
-	init_workspace(&workspace);
-	let web = repo(fixture.path(), "web");
-
-	let create = workyard(
-		&workspace,
-		&[
-			"create",
-			"topic",
-			text(&web),
-			"--pull",
-			"--from",
-			"main",
-			"--json",
-		],
-	);
-	assert!(!create.status.success());
-	let result = cli_result(&create);
-	assert_eq!(result["pull_failures"][0]["participant"], "web");
-	assert_eq!(result["lifecycle"], "active");
-	assert!(workspace.join("tasks/topic/web/.git").is_file());
-	assert_eq!(references(&inventory(&workspace)), ["web"]);
-}
-
-#[test]
 fn registrations_anchor_internal_paths_to_the_workspace_and_keep_external_roots_absolute() {
 	let fixture = tempfile::tempdir().unwrap();
 	let workspace = fixture.path().join("workspace");

@@ -17,13 +17,7 @@ impl AmendInput {
 		if !adding && self.remove.is_empty() {
 			return Err(Problem::new(
 				workyard_core::ProblemCode::InvalidInput,
-				"Select a project, supply --repo, or name a participant with --remove.",
-			));
-		}
-		if self.no_fetch && self.pull {
-			return Err(Problem::new(
-				workyard_core::ProblemCode::InvalidInput,
-				"--no-fetch and --pull are mutually exclusive.",
+				"Select a project or repository to include, or name a participant to remove.",
 			));
 		}
 		let state = crate::workspace::required(self.workspace.as_ref().map(NativePath::as_path))?;
@@ -48,7 +42,6 @@ impl AmendInput {
 				options: CreationOptions {
 					checkout: self.checkout,
 					no_fetch: self.no_fetch,
-					pull: self.pull,
 				},
 				remote: self.remote,
 				from: self.from,

@@ -329,7 +329,6 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 			state_dir: state,
 			checkout: false,
 			no_fetch: true,
-			pull: false,
 			remote: None,
 			from: Some("main".into()),
 		};

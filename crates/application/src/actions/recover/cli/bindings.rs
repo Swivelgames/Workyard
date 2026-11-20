@@ -20,12 +20,6 @@ pub(in super::super) fn bindings() -> Bindings {
 
 	// Side-effects
 	let bindings = bindings
-		.option("accept_pull", "accept-pull")
-		.complete_group(
-			"accept_pull",
-			"Participants",
-			crate::presentation::cli::completion::unsettled_pull,
-		)
 		.option("activate_here", "activate-here")
 		.option("undo", "undo")
 		.option("yes", "yes")

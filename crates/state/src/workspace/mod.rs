@@ -4,7 +4,7 @@ mod layout;
 mod projects;
 pub use projects::RootEdit;
 
-pub use initialize::initialize_workspace;
+pub use initialize::{initialize_workspace, initialize_workspace_with_control};
 use layout::Layout;
 
 use crate::{Lock, canonical_future, damage::damaged};

@@ -90,19 +90,6 @@ impl Git for Runner {
 			.add(self, task, destination, plan, control)
 			.await
 	}
-
-	async fn pull(
-		&self,
-		repository: &workyard_core::Repository,
-		destination: &Path,
-		control: &Control,
-	) -> Result<(), Problem> {
-		let _lock = fetch_lock(repository, control).await?;
-		self.revalidate(repository, control).await?;
-		Repository::from(repository)
-			.pull(self, destination, control)
-			.await
-	}
 }
 
 async fn fetch_lock(

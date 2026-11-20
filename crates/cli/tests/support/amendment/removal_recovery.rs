@@ -20,7 +20,6 @@ fn amend_selected(
 		options: CreationOptions {
 			checkout: false,
 			no_fetch: true,
-			pull: false,
 		},
 		remove: names.iter().map(|name| (*name).to_owned()).collect(),
 		removal_options: RemovalOptions {

@@ -42,7 +42,6 @@ fn request(task: &workyard_core::Task) -> AmendRequest {
 		options: CreationOptions {
 			checkout: false,
 			no_fetch: true,
-			pull: false,
 		},
 		remote: None,
 		from: None,
@@ -108,6 +107,47 @@ fn failed_task_publication_retains_revision_and_pending_writers() {
 	assert_eq!(loaded.pending, Some(0));
 	assert_eq!(loaded.task.participants[0].name, "api");
 	assert!(loaded.recorded.is_none());
+}
+
+#[test]
+fn legacy_amendment_options_do_not_clear_an_unsettled_writer() {
+	let workspace = support::Workspace::new();
+	let store = &workspace.store;
+	let guard = store.admit("feat/task").unwrap();
+	let task = established(&workspace);
+	store.begin(&guard, &task).unwrap();
+	store
+		.begin_amend(&guard, &task, &request(&task), &[])
+		.unwrap();
+
+	let path = guard.evidence_path.with_extension("revision");
+	let mut revision: serde_json::Value =
+		serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+	revision["request"]["pull"] = true.into();
+	revision["request"]["no_fetch"] = false.into();
+	let participant = &mut revision["current"]["task"]["participants"][0];
+	participant["creation"] =
+		serde_json::json!({"checkout": true, "no_fetch": false, "pull": true});
+	participant["phase"] = "pulling".into();
+	revision["current"]["pending"] = 0.into();
+	let bytes = serde_json::to_vec(&revision).unwrap();
+	fs::write(&path, &bytes).unwrap();
+
+	let restored = store.load(&guard, &task.name).unwrap();
+	assert_eq!(restored.pending, Some(0));
+	assert_eq!(restored.task.participants[0].phase, Phase::WorktreeCreated);
+	let canonical = serde_json::to_value(workyard_state::TaskRecord::from(&restored.task)).unwrap();
+	assert_eq!(canonical["participants"][0]["creation"]["pull"], false);
+	assert!(restored.task.creation_options(0).checkout);
+	assert!(
+		!store
+			.amend_request(&guard)
+			.unwrap()
+			.unwrap()
+			.options
+			.no_fetch
+	);
+	assert_eq!(fs::read(path).unwrap(), bytes);
 }
 
 #[test]

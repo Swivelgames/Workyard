@@ -32,7 +32,8 @@ pub(crate) struct RequestRecord {
 	repositories: Vec<RepositoryRecord>,
 	checkout: bool,
 	no_fetch: bool,
-	pull: bool,
+	#[serde(rename = "pull")]
+	legacy_pull: bool,
 	remote: Option<String>,
 	from: Option<String>,
 }
@@ -65,7 +66,7 @@ impl RequestRecord {
 				.collect(),
 			checkout: request.options.checkout,
 			no_fetch: request.options.no_fetch,
-			pull: request.options.pull,
+			legacy_pull: false,
 			remote: request.remote.clone(),
 			from: request.from.clone(),
 		}
@@ -75,7 +76,7 @@ impl RequestRecord {
 		let decoded = self.decode(state)?;
 		if self.task != task
 			|| (decoded.repositories.is_empty() && decoded.remove.is_empty())
-			|| (decoded.options.no_fetch && decoded.options.pull)
+			|| (self.no_fetch && self.legacy_pull)
 			|| decoded.repositories.iter().any(|repo| {
 				!repo.path.is_absolute() || repo.path.as_os_str().as_encoded_bytes().contains(&0)
 			}) {
@@ -125,7 +126,6 @@ impl RequestRecord {
 			options: CreationOptions {
 				checkout: self.checkout,
 				no_fetch: self.no_fetch,
-				pull: self.pull,
 			},
 			remote: self.remote.clone(),
 			from: self.from.clone(),

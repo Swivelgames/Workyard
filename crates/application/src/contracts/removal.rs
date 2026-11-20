@@ -13,6 +13,9 @@ pub struct Disclosure {
 
 #[derive(Clone, Serialize)]
 pub struct DecisionRequirement {
+	/// Opaque approval for the current disclosure.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub token: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub task: Option<String>,
 	pub kind: String,
@@ -20,6 +23,29 @@ pub struct DecisionRequirement {
 	pub participants: Vec<String>,
 	pub participant: String,
 	pub message: String,
+}
+
+impl From<workyard_core::Decision> for DecisionRequirement {
+	fn from(decision: workyard_core::Decision) -> Self {
+		use workyard_core::DecisionKind;
+		let kind = match decision.kind {
+			DecisionKind::RemoveParticipants => "remove_participants",
+			DecisionKind::DiscardParticipants => "discard_participants",
+			DecisionKind::RemoveTask => "remove_task",
+			DecisionKind::DiscardTask => "discard_task",
+			DecisionKind::DiscardFiles => "discard_files",
+			DecisionKind::RetainedHistory => "retained_history",
+			DecisionKind::LostChanges => "lost_changes",
+		};
+		Self {
+			token: None,
+			kind: kind.into(),
+			task: decision.task,
+			participant: decision.participant,
+			participants: decision.participants,
+			message: decision.message,
+		}
+	}
 }
 
 #[derive(Default, Serialize)]

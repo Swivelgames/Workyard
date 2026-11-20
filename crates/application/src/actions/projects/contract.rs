@@ -13,7 +13,8 @@ pub(super) struct ListInput {
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(super) struct RootsInput {
-	/// Repositories or directories of repositories.
+	/// One or more repository or discovery root paths, relative to the process working directory or absolute.
+	#[schemars(length(min = 1))]
 	pub paths: Vec<NativePath>,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,

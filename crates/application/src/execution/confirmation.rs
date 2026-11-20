@@ -23,6 +23,7 @@ mod tests {
 	#[test]
 	fn confirmation_preserves_wording_and_escapes_untrusted_fields_once() {
 		let mut question = DecisionRequirement {
+			token: None,
 			task: Some("feat/界\n".into()),
 			kind: "remove_task".into(),
 			participants: Vec::new(),

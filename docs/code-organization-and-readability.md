@@ -169,8 +169,7 @@ fn arguments() -> Bindings {
 	// Execution options.
 	let bindings = bindings
 		.option("checkout")
-		.option("no-fetch")
-		.option("pull");
+		.option("no-fetch");
 
 	// Workspace placement.
 	let bindings = bindings.path_option("workspace");

@@ -1,15 +1,26 @@
 use crate::file_identity;
 use std::{
-	fs::{File, OpenOptions},
+	fs::{File, OpenOptions, TryLockError},
 	path::{Path, PathBuf},
 	time::Duration,
 };
 use workyard_core::{Control, Problem};
 
+const RETRY_INTERVAL: Duration = Duration::from_millis(20);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LockMode {
 	Shared,
 	Exclusive,
+}
+
+impl LockMode {
+	fn try_lock(self, file: &File) -> Result<(), TryLockError> {
+		match self {
+			Self::Shared => file.try_lock_shared(),
+			Self::Exclusive => file.try_lock(),
+		}
+	}
 }
 
 /// Locks a stable coordination inode, never a replaceable JSON document.
@@ -38,20 +49,15 @@ impl Lock {
 			.open(path)
 			.map_err(|e| Problem::io(format!("Open lock {path:?}"), e))?;
 
-		let attempt = match mode {
-			LockMode::Shared => file.try_lock_shared(),
-			LockMode::Exclusive => file.try_lock(),
-		};
-
-		attempt.map_err(|error| match error {
-			std::fs::TryLockError::WouldBlock => Problem::new(
+		mode.try_lock(&file).map_err(|error| match error {
+			TryLockError::WouldBlock => Problem::new(
 				workyard_core::ProblemCode::ResourceBusy,
 				format!("Resource is busy: {path:?}"),
 			)
 			.remedy(
 				"Wait for the active Workyard operation to finish, then retry. Do not delete lockfiles.",
 			),
-			std::fs::TryLockError::Error(error) => Problem::io(format!("Lock {path:?}"), error),
+			TryLockError::Error(error) => Problem::io(format!("Lock {path:?}"), error),
 		})?;
 
 		let lock = Self {
@@ -70,11 +76,11 @@ impl Lock {
 			File::open(path).map_err(|e| Problem::io(format!("Open existing gate {path:?}"), e))?;
 
 		file.try_lock_shared().map_err(|error| match error {
-			std::fs::TryLockError::WouldBlock => Problem::new(
+			TryLockError::WouldBlock => Problem::new(
 				workyard_core::ProblemCode::ResourceBusy,
 				format!("Resource is busy: {path:?}"),
 			),
-			std::fs::TryLockError::Error(e) => Problem::io("Read-lock existing gate", e),
+			TryLockError::Error(e) => Problem::io("Read-lock existing gate", e),
 		})?;
 
 		let lock = Self {
@@ -90,16 +96,36 @@ impl Lock {
 	/// Initializers can race to open the same freshly published gate. Wait for
 	/// the winner to finish before comparing its layout with the requested one.
 	pub fn wait_existing(path: &Path, mode: LockMode) -> Result<Self, Problem> {
+		smol::block_on(Self::wait_existing_with_control(
+			path,
+			mode,
+			&Control::default(),
+		))
+	}
+
+	pub async fn wait_existing_with_control(
+		path: &Path,
+		mode: LockMode,
+		control: &Control,
+	) -> Result<Self, Problem> {
 		let file = OpenOptions::new()
 			.read(true)
 			.write(mode == LockMode::Exclusive)
 			.open(path)
 			.map_err(|error| Problem::io(format!("Open workspace gate {path:?}"), error))?;
-		match mode {
-			LockMode::Shared => file.lock_shared(),
-			LockMode::Exclusive => file.lock(),
+
+		loop {
+			control.check()?;
+			match mode.try_lock(&file) {
+				Ok(()) => break,
+				Err(TryLockError::WouldBlock) => {}
+				Err(TryLockError::Error(error)) => {
+					return Err(Problem::io(format!("Lock workspace gate {path:?}"), error));
+				}
+			}
+			smol::Timer::after(RETRY_INTERVAL).await;
 		}
-		.map_err(|error| Problem::io(format!("Lock workspace gate {path:?}"), error))?;
+
 		let guard = Self {
 			file,
 			path: path.into(),
@@ -118,7 +144,7 @@ impl Lock {
 				Err(error) => return Err(error),
 			}
 
-			smol::Timer::after(Duration::from_millis(20)).await;
+			smol::Timer::after(RETRY_INTERVAL).await;
 		}
 	}
 

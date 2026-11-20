@@ -29,9 +29,6 @@ pub struct AmendInput {
 	/// Skip fetching from remotes.
 	#[serde(default)]
 	pub no_fetch: bool,
-	/// Run git pull in each new worktree.
-	#[serde(default)]
-	pub pull: bool,
 	/// Default remote for the supplied repositories.
 	pub remote: Option<String>,
 	/// Starting reference for new branches.

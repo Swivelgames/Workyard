@@ -1,35 +1,23 @@
 use super::super::RecoverOutcome;
 use crate::contracts::Progress;
 use trine::InvocationContext;
-use workyard_core::{Control, OperationOutcome, ProblemCode};
+use workyard_core::{Control, OperationOutcome, RemovalOptions};
 use workyard_git::Runner;
 use workyard_state::Store;
 
-use super::super::RecoverInput;
-
 pub(super) async fn run(
-	name: String,
-	input: RecoverInput,
-	context: InvocationContext<Progress>,
+	name: &str,
+	options: RemovalOptions,
 	runner: &Runner,
 	control: &Control,
+	context: InvocationContext<Progress>,
 	store: &Store,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
-	let rejected = |problem| RecoverOutcome::rejected(name.clone(), problem);
-	if !input.accept_pull.is_empty() {
-		return Err(rejected(workyard_core::Problem::new(
-			ProblemCode::InvalidInput,
-			"--accept-pull does not apply to removal.",
-		)));
-	}
-	let observer = crate::execution::removal::RemovalEvents::new(context, "recover", name.clone());
-	let options = workyard_core::RemovalOptions {
-		undo: input.undo,
-		yes: input.yes,
-		force: input.force,
-	};
+	let rejected = |problem| RecoverOutcome::rejected(name.to_owned(), problem);
+	let observer =
+		crate::execution::removal::RemovalEvents::new(context, "recover", name.to_owned());
 	let result =
-		workyard_core::recover_removal(&name, options, runner, control, &observer, store).await;
+		workyard_core::recover_removal(name, options, runner, control, &observer, store).await;
 
 	let mut outcome = match result {
 		Ok(result) => RecoverOutcome::from_removal(result),

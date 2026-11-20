@@ -25,10 +25,14 @@ pub(super) fn build_entry() -> Result<ListEntry, RegistrationError> {
 	)?;
 	let cli = CliBinding::new(workspace_binding(Bindings::new()));
 	let rpc = StructuredBinding::serde();
+	let mcp = StructuredBinding::serde();
+
 	Ok(Entry::new(action)
 		.namespace(["projects"])
 		.cli(cli, |output| Ok(ListView(output)), exit_status::result)
-		.rpc(rpc))
+		.rpc(rpc)
+		.mcp(mcp)
+		.mcp_observation())
 }
 
 async fn list(

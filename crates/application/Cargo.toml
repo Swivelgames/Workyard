@@ -12,6 +12,7 @@ trine = { workspace = true, features = ["cli-confirmation"] }
 serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
+sha2.workspace = true
 smol.workspace = true
 unicode-width.workspace = true
 

@@ -7,8 +7,6 @@ pub use crate::contracts::{OperationReport, ParticipantOutcome};
 
 #[derive(Serialize)]
 pub struct CreateOutcome {
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub pull_failures: Vec<crate::contracts::PullFailure>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub registration_problem: Option<ProblemOutcome>,
 	pub operation: OperationReport,
@@ -27,7 +25,6 @@ impl CreateOutcome {
 	pub fn rejected(task: String, problem: Problem) -> Self {
 		Self {
 			registration_problem: None,
-			pull_failures: Vec::new(),
 			operation: OperationReport::rejected(OperationKind::Create, &problem),
 			lifecycle: None,
 			task,
@@ -42,7 +39,6 @@ impl CreateOutcome {
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
 		Self {
 			registration_problem: None,
-			pull_failures: Vec::new(),
 			operation: task.operation.into(),
 			lifecycle: Some(task.lifecycle.as_str()),
 			task: task.name,

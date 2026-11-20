@@ -25,7 +25,10 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 			.create_participant(task, index, &change.repository, &change.name)
 			.await;
 		let observed_worktree = task.participants[index].worktree_identity.is_some()
-			|| task.participants[index].phase == Phase::WorktreeCreated;
+			|| matches!(
+				task.participants[index].phase,
+				Phase::WorktreeCreated | Phase::Completed
+			);
 		if result.is_ok() || observed_worktree || self.uncertain {
 			return result;
 		}
@@ -109,68 +112,7 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 		}
 		crate::settle_add::settle_add(result, task, index, self.git, self.store, self.guard)
 			.await?;
-		self.publish(task, index)?;
-		self.report_named(task, name, Kind::Added).await?;
-		self.finish_addition(task, index, repository, name).await
-	}
-
-	pub(super) async fn finish_addition(
-		&mut self,
-		task: &mut Task,
-		index: usize,
-		repository: &crate::Repository,
-		name: &str,
-	) -> Result<(), Problem> {
-		if task.participants[index].phase == Phase::Pulling
-			&& self.accept_pull.contains(&task.participants[index].name)
-		{
-			self.begin(task)?;
-			task.participants[index].phase = Phase::Completed;
-			self.changed = true;
-			self.publish(task, index)?;
-			return self.report(task, index, Kind::Updated).await;
-		}
-
-		if task.participants[index].phase == Phase::Pulling {
-			return Err(Problem::new(
-				ProblemCode::GitFailed,
-				"The participant has an unsettled pull outcome.",
-			)
-			.remedy("Inspect git status, complete or abort the pull, then use recover --accept-pull for this participant. Amend never replays an uncertain pull."));
-		}
-
-		if task.creation_options(index).pull {
-			self.begin(task)?;
-			self.observer.phase(&task.name, name, "pulling").await?;
-			self.control.check()?;
-			task.participants[index].phase = Phase::Pulling;
-			self.store
-				.record_effect(self.guard, task, index, EffectState::Pending)?;
-			let result = self
-				.git
-				.pull(
-					repository,
-					&task.participants[index].destination,
-					self.control,
-				)
-				.await;
-			if result
-				.as_ref()
-				.is_err_and(|error| error.code == ProblemCode::SupervisionFailed)
-			{
-				self.uncertain = true;
-				return result;
-			}
-			if let Some(mut failure) =
-				crate::optional_pull::settle_pull(result, task, index, self.store, self.guard)?
-			{
-				failure.participant = name.to_owned();
-				self.pull_failures.push(failure);
-			}
-		}
-		self.begin(task)?;
-		task.participants[index].phase = Phase::Completed;
-		self.changed = true;
-		self.publish(task, index)
+		self.store.save(self.guard, task)?;
+		self.report_named(task, name, Kind::Added).await
 	}
 }

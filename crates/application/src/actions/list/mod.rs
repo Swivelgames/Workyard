@@ -21,6 +21,7 @@ pub(crate) fn build_entry() -> Result<ListEntry, RegistrationError> {
 	let handler = Action::new("list", "List tasks and their repositories", action::list)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();
+	let mcp = StructuredBinding::serde();
 
 	Ok(Entry::new(handler)
 		.cli(
@@ -28,5 +29,7 @@ pub(crate) fn build_entry() -> Result<ListEntry, RegistrationError> {
 			|output| Ok(cli::ListView { output }),
 			exit_status::result,
 		)
-		.rpc(rpc))
+		.rpc(rpc)
+		.mcp(mcp)
+		.mcp_observation())
 }

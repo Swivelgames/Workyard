@@ -44,16 +44,4 @@ impl Repository {
 		runner.effect(&self.source, &arguments, control).await?;
 		Ok(())
 	}
-
-	pub async fn pull(
-		&self,
-		runner: &Runner,
-		destination: &Path,
-		control: &Control,
-	) -> Result<(), Problem> {
-		runner
-			.effect(destination, &args(&["pull"]), control)
-			.await?;
-		Ok(())
-	}
 }

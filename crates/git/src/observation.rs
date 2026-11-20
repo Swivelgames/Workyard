@@ -253,10 +253,7 @@ fn missing_participant(participant: &Participant) -> Result<GitFacts, Problem> {
 			"Recorded destination exists but its participant identity is not registered.",
 		));
 	}
-	let problem = if matches!(
-		participant.phase,
-		Phase::WorktreeCreated | Phase::Pulling | Phase::Completed
-	) {
+	let problem = if matches!(participant.phase, Phase::WorktreeCreated | Phase::Completed) {
 		Some(changed(
 			"Previously created participant worktree is missing. Restore access or repair its Git registration before recovery.",
 		))

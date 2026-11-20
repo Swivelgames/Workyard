@@ -14,7 +14,6 @@ fn invalid_request() -> CreateInput {
 		workspace: None,
 		checkout: false,
 		no_fetch: true,
-		pull: false,
 		remote: None,
 		from: None,
 	}
@@ -62,7 +61,6 @@ fn action_outcomes_keep_distinct_types_and_explicit_lifecycle_operation_fields()
 		}],
 		checkout: false,
 		no_fetch: true,
-		pull: false,
 		lifecycle: workyard_core::TaskLifecycle::Active,
 		operation: workyard_core::Operation {
 			outcome: workyard_core::OperationOutcome::Succeeded,

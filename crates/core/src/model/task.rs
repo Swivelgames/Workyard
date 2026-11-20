@@ -7,7 +7,6 @@ pub enum Phase {
 	Fetching,
 	Creating,
 	WorktreeCreated,
-	Pulling,
 	Completed,
 }
 
@@ -18,7 +17,6 @@ impl Phase {
 			Self::Fetching => "fetching",
 			Self::Creating => "creating",
 			Self::WorktreeCreated => "worktree_created",
-			Self::Pulling => "pulling",
 			Self::Completed => "completed",
 		}
 	}
@@ -75,13 +73,29 @@ pub struct Task {
 	pub participants: Vec<Participant>,
 	pub checkout: bool,
 	pub no_fetch: bool,
-	pub pull: bool,
 	pub lifecycle: TaskLifecycle,
 	pub operation: super::operation::Operation,
 	pub problem: Option<Problem>,
 }
 
 impl Task {
+	/// A cancelled delivery can arrive after every participant was established.
+	pub(crate) fn preserve_settled_cancellation(&mut self) {
+		if self.operation.outcome == crate::OperationOutcome::Cancelled
+			&& self
+				.problem
+				.as_ref()
+				.is_some_and(|problem| problem.code == crate::ProblemCode::Cancelled)
+			&& self
+				.participants
+				.iter()
+				.all(|participant| participant.phase == Phase::Completed)
+		{
+			self.operation.outcome = crate::OperationOutcome::Succeeded;
+			self.problem = None;
+		}
+	}
+
 	/// Only a newly established worktree can publish its original discovery roots.
 	/// A later no-op recovery must respect an intervening explicit untrack.
 	pub fn admitted_roots(&self, previous: Option<&Self>) -> Vec<PathBuf> {
@@ -104,7 +118,6 @@ impl Task {
 			.unwrap_or(super::creation::CreationOptions {
 				checkout: self.checkout,
 				no_fetch: self.no_fetch,
-				pull: self.pull,
 			})
 	}
 }

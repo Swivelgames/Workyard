@@ -55,6 +55,15 @@ impl Operation {
 		}
 	}
 
+	/// A direct operation or a recovery explicitly continuing that operation.
+	pub fn is_continuing(self, kind: OperationKind) -> bool {
+		match (self.kind, self.continues) {
+			(Some(OperationKind::Recover), Some(previous)) => previous == kind,
+			(Some(current), None) => current == kind,
+			_ => false,
+		}
+	}
+
 	pub fn recovery(self) -> Self {
 		Self {
 			kind: Some(OperationKind::Recover),

@@ -1,22 +1,22 @@
 use super::super::RecoverOutcome;
 use crate::{contracts::Progress, execution::Events};
 use trine::InvocationContext;
-use workyard_core::{Control, OperationOutcome, ProblemCode};
+use workyard_core::{Control, OperationOutcome, ProblemCode, RecoveryScope};
 use workyard_git::Runner;
 use workyard_state::Store;
 
 pub(super) async fn run(
 	name: &str,
-	accepted: &[String],
+	scope: RecoveryScope,
 	runner: &Runner,
 	control: &Control,
 	context: InvocationContext<Progress>,
 	store: &Store,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
 	let rejected = |problem| RecoverOutcome::rejected(name.to_owned(), problem);
-	let result = workyard_core::recover(
+	let result = workyard_core::recover_with_scope(
 		name,
-		accepted,
+		scope,
 		runner,
 		control,
 		&Events(context, "recover"),
@@ -30,7 +30,6 @@ pub(super) async fn run(
 				crate::projects::register(store, &result.admitted_roots, control).await;
 			let mut outcome = RecoverOutcome::from_task(result.task, result.record);
 			outcome.registration_problem = registration.map(Into::into);
-			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
 			outcome.problem = result.problem.map(Into::into);
 			outcome.operation = result.operation.into();
 			outcome.nothing_to_recover = result.nothing_to_recover;

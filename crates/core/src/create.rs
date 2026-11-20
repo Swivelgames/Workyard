@@ -27,18 +27,17 @@ pub async fn create(
 	}
 	validate_plans(&task, &repositories, runner, control).await?;
 
+	control.check()?;
 	store.begin(&guard, &task)?;
 
-	let mut creation = Creation {
+	let creation = Creation {
 		runner,
 		control,
 		observer: context,
 		store,
 		guard: &guard,
-		pull_failures: Vec::new(),
 	};
 	let operation = creation.run(&mut task, &repositories).await;
-	let pull_failures = creation.pull_failures;
 
 	if let Err(mut problem) = operation {
 		task.operation.outcome = if problem.code == crate::ProblemCode::Cancelled {
@@ -57,7 +56,7 @@ pub async fn create(
 
 	let mut invocation = task.operation;
 	let mut invocation_problem = task.problem.clone();
-	crate::optional_pull::preserve_settled_cancellation(&mut task);
+	task.preserve_settled_cancellation();
 
 	if let Err(problem) = store.save(&guard, &task) {
 		task.operation.outcome = OperationOutcome::Failed;
@@ -67,10 +66,9 @@ pub async fn create(
 	}
 
 	Ok(crate::CreateResult {
-		operation: crate::optional_pull::invocation_operation(invocation, &pull_failures),
+		operation: invocation,
 		task,
 		record: record_path,
 		problem: invocation_problem,
-		pull_failures,
 	})
 }

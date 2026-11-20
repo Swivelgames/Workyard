@@ -114,58 +114,14 @@ fn checkout_reuses_local_branch_without_resetting_its_history() {
 }
 
 #[test]
-fn missing_default_requires_source_and_conflicting_flags_do_not_initialize_state() {
+fn missing_default_requires_an_explicit_source() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let root = fixture.path().join("workspace");
-	fs::create_dir(&root).unwrap();
-	let output = workyard(
-		&root,
-		&[
-			"create",
-			"feat/new",
-			"--repo",
-			text(&api),
-			"--no-fetch",
-			"--pull",
-		],
-	);
-	assert!(!output.status.success());
-	assert!(!root.join(".workyard").exists());
 	init_workspace(&root);
 	let output = workyard(&root, &["create", "feat/new", "--repo", text(&api)]);
 	assert!(!output.status.success());
 	assert!(String::from_utf8_lossy(&output.stdout).contains("default_branch_unknown"));
-}
-
-#[test]
-fn pull_failure_preserves_created_trees_and_continues_participants() {
-	let fixture = tempfile::tempdir().unwrap();
-	let api = repo(fixture.path(), "api");
-	let web = repo(fixture.path(), "web");
-	let root = fixture.path().join("workspace");
-	init_workspace(&root);
-	let output = workyard(
-		&root,
-		&[
-			"create",
-			"feat/pull",
-			"--repo",
-			text(&api),
-			"--repo",
-			text(&web),
-			"--from",
-			"main",
-			"--pull",
-		],
-	);
-	assert!(!output.status.success());
-	assert!(root.join("tasks/feat/pull/api/.git").is_file());
-	assert!(root.join("tasks/feat/pull/web/.git").exists());
-	let stored = record(&root.join(".workyard"));
-	assert_eq!(stored["operation"]["outcome"], "succeeded");
-	assert_eq!(stored["participants"][0]["phase"], "completed");
-	assert_eq!(stored["participants"][1]["phase"], "completed");
 }
 
 #[test]
@@ -478,17 +434,18 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 	assert!(!output.status.success());
 	let summary = String::from_utf8_lossy(&output.stdout);
 	assert!(summary.contains("publication_uncertain"), "{summary}");
-	assert!(summary.contains("created"), "{summary}");
+	assert!(summary.contains("creation recorded"), "{summary}");
 	assert!(root.join("tasks/feat/publication/api/.git").exists());
 	assert!(!root.join("tasks/feat/publication/web").exists());
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"][0]["phase"],
 		"creating"
 	);
-	assert_eq!(
-		fs::read_dir(root.join(".workyard/evidence"))
-			.unwrap()
-			.count(),
-		2
-	);
+	let effects = root
+		.join(".workyard/evidence")
+		.join(workyard_state::task_filename("feat/publication"))
+		.with_extension("effects");
+	let evidence: serde_json::Value = serde_json::from_slice(&fs::read(effects).unwrap()).unwrap();
+	assert_eq!(evidence["task"]["participants"][0]["phase"], "completed");
+	assert!(evidence["pending"].is_null());
 }

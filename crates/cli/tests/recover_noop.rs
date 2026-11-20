@@ -1,3 +1,5 @@
+#[path = "recover_noop/scope.rs"]
+mod scope;
 #[allow(dead_code)]
 mod support;
 use std::{
@@ -53,7 +55,7 @@ fn healthy_dirty_task_noop_preserves_history_evidence_and_rejects_invalid_flags(
 		);
 		assert_eq!(snapshot(&state), before);
 	}
-	let rejected = workyard(&root, &["recover", "feat/task", "--accept-pull", "api"]);
+	let rejected = workyard(&root, &["recover", "feat/task", "--force"]);
 	assert!(!rejected.status.success());
 	assert_eq!(snapshot(&state), before);
 }

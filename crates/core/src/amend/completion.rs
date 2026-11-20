@@ -1,8 +1,21 @@
 use super::Amendment;
 use crate::{
-	AmendGit, AmendResult, AmendState, Operation, OperationKind, OperationOutcome, Problem,
-	ProblemCode, RemovalObserver, Task,
+	AmendGit, AmendRequest, AmendResult, AmendState, Operation, OperationKind, OperationOutcome,
+	Problem, ProblemCode, RecoveryRecord, RemovalObserver, Task,
 };
+
+pub(super) fn needs_publication(record: &RecoveryRecord, request: &AmendRequest) -> bool {
+	if record.recorded.is_none() || record.needs_publication {
+		return true;
+	}
+	// Recovery still checks every requested change. A cancelled add/rename can
+	// leave an intact record even when its last progress message wasn't delivered.
+	match record.task.operation.outcome {
+		OperationOutcome::Succeeded => false,
+		OperationOutcome::Cancelled => record.task.problem.is_some() || !request.remove.is_empty(),
+		OperationOutcome::Pending | OperationOutcome::Failed => true,
+	}
+}
 
 impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 	pub(super) fn finish(
@@ -63,10 +76,8 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 		} else {
 			operation
 		};
-		let operation = crate::optional_pull::invocation_operation(operation, &self.pull_failures);
 		Ok(AmendResult {
 			admitted_roots,
-			pull_failures: self.pull_failures,
 			mutation_started: self.changed || self.uncertain,
 			task,
 			record: self.store.record_path(self.guard),

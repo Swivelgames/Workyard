@@ -24,6 +24,21 @@ struct RemovalRun<'a, G, S: RecoveryState, O> {
 	inspected: bool,
 }
 
+enum RemovalIntent {
+	Remove(RemovalOptions),
+	ForwardOnly,
+	Recover(RemovalOptions),
+}
+
+impl RemovalIntent {
+	fn options(&self) -> RemovalOptions {
+		match self {
+			Self::Remove(options) | Self::Recover(options) => *options,
+			Self::ForwardOnly => RemovalOptions::default(),
+		}
+	}
+}
+
 pub async fn remove(
 	name: &str,
 	options: RemovalOptions,
@@ -32,7 +47,34 @@ pub async fn remove(
 	observer: &impl RemovalObserver,
 	store: &impl RecoveryState,
 ) -> Result<RemovalResult, Problem> {
-	run(name, options, false, git, control, observer, store).await
+	run(
+		name,
+		RemovalIntent::Remove(options),
+		git,
+		control,
+		observer,
+		store,
+	)
+	.await
+}
+
+/// Retire membership without resuming a pending restoration.
+pub async fn retire(
+	name: &str,
+	git: &impl RemovalGit,
+	control: &Control,
+	observer: &impl RemovalObserver,
+	store: &impl RecoveryState,
+) -> Result<RemovalResult, Problem> {
+	run(
+		name,
+		RemovalIntent::ForwardOnly,
+		git,
+		control,
+		observer,
+		store,
+	)
+	.await
 }
 
 pub async fn recover_removal(
@@ -43,13 +85,20 @@ pub async fn recover_removal(
 	observer: &impl RemovalObserver,
 	store: &impl RecoveryState,
 ) -> Result<RemovalResult, Problem> {
-	run(name, options, true, git, control, observer, store).await
+	run(
+		name,
+		RemovalIntent::Recover(options),
+		git,
+		control,
+		observer,
+		store,
+	)
+	.await
 }
 
 async fn run(
 	name: &str,
-	options: RemovalOptions,
-	recovering: bool,
+	intent: RemovalIntent,
 	git: &impl RemovalGit,
 	control: &Control,
 	observer: &impl RemovalObserver,
@@ -61,6 +110,15 @@ async fn run(
 	let record = store.load(&guard, name)?;
 	if let Some(index) = record.pending {
 		return Err(record.writer_problem(index));
+	}
+
+	let options = intent.options();
+	let recovering = matches!(intent, RemovalIntent::Recover(_));
+	if recovering && record.task.removal.is_none() {
+		return Err(Problem::new(
+			ProblemCode::InvalidInput,
+			"This task has no whole-task removal to resume.",
+		));
 	}
 
 	let prior = PriorState::from_record(&record);
@@ -119,6 +177,19 @@ async fn run(
 			.is_some_and(Removal::restoration_complete)
 	{
 		task.removal = None;
+	}
+
+	if matches!(intent, RemovalIntent::ForwardOnly)
+		&& task
+			.removal
+			.as_ref()
+			.is_some_and(|r| r.direction == RemovalDirection::Restore)
+	{
+		return Err(Problem::new(
+			ProblemCode::InvalidInput,
+			"This task has a pending removal restoration.",
+		)
+		.remedy("Finish restoration through CLI or RPC recovery before removing the task."));
 	}
 
 	task.operation = Operation {

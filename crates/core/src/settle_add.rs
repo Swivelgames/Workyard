@@ -27,5 +27,6 @@ pub(crate) async fn settle_add<S: State>(
 			problem
 		})?;
 	task.participants[index].worktree_identity = identity;
+	task.participants[index].phase = Phase::Completed;
 	store.record_effect(guard, task, index, crate::EffectState::Settled)
 }

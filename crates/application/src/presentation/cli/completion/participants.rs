@@ -2,20 +2,7 @@
 use super::matching;
 use std::ffi::{OsStr, OsString};
 use trine::cli::completion::{Context, OptionValue};
-use workyard_core::{Phase, Task, TaskLifecycle};
-
-pub(crate) fn unsettled_pull(context: &Context, current: &OsStr) -> Vec<OsString> {
-	let names = active_task(context)
-		.filter(|task| task.removal.is_none())
-		.map(|task| {
-			task.participants
-				.into_iter()
-				.filter(|p| p.phase == Phase::Pulling)
-				.map(|p| p.name)
-				.collect()
-		});
-	matching(names, current)
-}
+use workyard_core::{Task, TaskLifecycle};
 
 pub(crate) fn task_members(context: &Context, current: &OsStr) -> Vec<OsString> {
 	let names = active_task(context)

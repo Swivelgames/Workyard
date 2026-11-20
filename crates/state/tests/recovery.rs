@@ -70,9 +70,11 @@ fn legacy_completed_records_load_but_uncertain_effects_remain_diagnostic() {
 		store.load(&guard, "feat/task").unwrap().task.participants[0].phase,
 		Phase::Completed
 	);
-	for phase in [Phase::Creating, Phase::Pulling] {
-		original.participants[0].phase = phase;
-		store.save(&guard, &original).unwrap();
+	for phase in ["creating", "pulling"] {
+		let mut document =
+			serde_json::to_value(workyard_state::TaskRecord::from(&original)).unwrap();
+		document["participants"][0]["phase"] = phase.into();
+		fs::write(&guard.record_path, serde_json::to_vec(&document).unwrap()).unwrap();
 		assert_eq!(
 			store.load(&guard, "feat/task").unwrap_err().code,
 			ProblemCode::DamagedState
@@ -152,6 +154,62 @@ fn loading_preserves_status_and_problem_before_recovery_prepares_attempt() {
 		ProblemCode::DamagedState
 	);
 	assert_eq!(fs::read(effect).unwrap(), bytes);
+}
+
+#[test]
+fn only_the_legacy_pull_failures_receive_current_recovery_guidance() {
+	let workspace = support::Workspace::new();
+	let store = &workspace.store;
+	let guard = store.admit("feat/task").unwrap();
+	let mut task = completed_task(&workspace);
+	task.operation.outcome = OperationOutcome::Failed;
+	store.begin(&guard, &task).unwrap();
+	fs::remove_file(guard.evidence_path.with_extension("effects")).unwrap();
+
+	let creation = r#"Pull outcome for "api" needs explicit acceptance after manual repair."#;
+	let creation_remedy = r#"Inspect git status and complete or abort the pull yourself. Then run workyard recover "feat/task" --accept-pull "api" from the workspace. No pull will be replayed."#;
+	let amendment = "The participant has an unsettled pull outcome.";
+	let amendment_remedy = "Inspect git status, complete or abort the pull, then use recover --accept-pull for this participant. Amend never replays an uncertain pull.";
+	for (code, message, remedy, retired) in [
+		(ProblemCode::GitFailed, creation, creation_remedy, true),
+		(ProblemCode::GitFailed, amendment, amendment_remedy, true),
+		(
+			ProblemCode::GitFailed,
+			creation,
+			"Inspect --accept-pull-log in the log.",
+			false,
+		),
+		(
+			ProblemCode::GitFailed,
+			"Git reported --accept-pull",
+			"Inspect the Git log.",
+			false,
+		),
+		(
+			ProblemCode::InvalidInput,
+			amendment,
+			amendment_remedy,
+			false,
+		),
+	] {
+		task.problem = Some(workyard_core::Problem::new(code, message).remedy(remedy));
+		store.save(&guard, &task).unwrap();
+		let before = fs::read(&guard.record_path).unwrap();
+
+		let saved = store.load(&guard, &task.name).unwrap().task;
+		let problem = saved.problem.unwrap();
+		assert_eq!(saved.operation.outcome, OperationOutcome::Failed);
+		assert_eq!(problem.code, code);
+		assert_eq!(problem.message, message);
+		if retired {
+			assert!(problem.remedy.contains("git status"));
+			assert!(problem.remedy.contains("workyard recover"));
+			assert!(!problem.remedy.contains("--accept-pull"));
+		} else {
+			assert_eq!(problem.remedy, remedy);
+		}
+		assert_eq!(fs::read(&guard.record_path).unwrap(), before);
+	}
 }
 
 #[test]

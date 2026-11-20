@@ -17,7 +17,8 @@ use workyard_core::{Problem, Task};
 pub struct CreationRecord {
 	pub checkout: bool,
 	pub no_fetch: bool,
-	pub pull: bool,
+	#[serde(rename = "pull")]
+	legacy_pull: bool,
 }
 
 impl From<workyard_core::CreationOptions> for CreationRecord {
@@ -25,7 +26,7 @@ impl From<workyard_core::CreationOptions> for CreationRecord {
 		Self {
 			checkout: value.checkout,
 			no_fetch: value.no_fetch,
-			pull: value.pull,
+			legacy_pull: false,
 		}
 	}
 }
@@ -35,7 +36,6 @@ impl From<CreationRecord> for workyard_core::CreationOptions {
 		Self {
 			checkout: value.checkout,
 			no_fetch: value.no_fetch,
-			pull: value.pull,
 		}
 	}
 }
@@ -88,7 +88,8 @@ pub struct TaskRecord {
 	pub state_dir: StoredPath,
 	pub checkout: bool,
 	pub no_fetch: bool,
-	pub pull: bool,
+	#[serde(rename = "pull")]
+	legacy_pull: bool,
 	pub lifecycle: String,
 	pub operation: OperationRecord,
 	pub participants: Vec<ParticipantRecord>,
@@ -113,7 +114,7 @@ impl From<&Task> for TaskRecord {
 			state_dir: task.state_dir.as_path().into(),
 			checkout: task.checkout,
 			no_fetch: task.no_fetch,
-			pull: task.pull,
+			legacy_pull: false,
 			lifecycle: task.lifecycle.as_str().into(),
 			operation: OperationRecord::from(task.operation),
 			problem: task.problem.as_ref().map(Into::into),

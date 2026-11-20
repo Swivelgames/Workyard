@@ -12,10 +12,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 	) -> Result<(), Problem> {
 		let options = task.creation_options(index);
 		let participant = &task.participants[index];
-		if matches!(
-			participant.phase,
-			Phase::WorktreeCreated | Phase::Pulling | Phase::Completed
-		) {
+		if matches!(participant.phase, Phase::WorktreeCreated | Phase::Completed) {
 			return Err(Problem::new(
 				ProblemCode::RepositoryChanged,
 				"Previously created worktree is missing; recovery will not recreate authored work.",

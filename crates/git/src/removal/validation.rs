@@ -2,7 +2,7 @@
 use super::{blocked, dirty};
 use crate::{Runner, process::args};
 use std::path::Path;
-use workyard_core::{Control, Problem, ProblemCode, RemovalObservation};
+use workyard_core::{Control, Problem, ProblemCode, RemovalObservation, RetainedHistory};
 
 impl Runner {
 	pub(super) async fn validate_disclosure(
@@ -12,7 +12,7 @@ impl Runner {
 		admin: &Path,
 		control: &Control,
 	) -> Result<(), Problem> {
-		require_idle(admin, &observation.repository.common_dir)?;
+		require_removable_admin(admin, &observation.repository.common_dir)?;
 		let branch = self
 			.checked(
 				destination,
@@ -23,16 +23,22 @@ impl Runner {
 		let branch = std::str::from_utf8(&branch)
 			.map_err(|_| blocked("Invalid Git branch output."))?
 			.trim_end_matches(['\r', '\n']);
-		match observation.branch.as_deref() {
-			Some(expected) if branch == expected => {}
-			None if branch == "HEAD" => self.require_retained_head(destination, control).await?,
+		let history = match observation.branch.as_deref() {
+			Some(expected) if branch == expected => {
+				self.retained_history(destination, branch, control).await?
+			}
+			None if branch == "HEAD" => {
+				self.require_retained_head(destination, control).await?;
+				RetainedHistory::Detached
+			}
 			_ => return Err(blocked("Worktree branch changed after disclosure.")),
-		}
-		let (paths, token) = dirty::inspect(self, destination, control).await?;
-		if !paths.is_empty() && token != observation.dirty_token {
+		};
+		let (_, token) =
+			dirty::inspect(self, destination, observation.worktree_entry, control).await?;
+		if token != observation.dirty_token || history != observation.history {
 			return Err(Problem::new(
 				ProblemCode::DecisionRequired,
-				"Worktree files changed before unlinking.",
+				"The worktree disclosure changed before unlinking.",
 			)
 			.remedy("Retry the removal to review the newly changed files."));
 		}
@@ -66,7 +72,24 @@ impl Runner {
 	}
 }
 
-pub(super) fn require_idle(admin: &Path, common: &Path) -> Result<(), Problem> {
+pub(super) fn require_removable_admin(admin: &Path, common: &Path) -> Result<(), Problem> {
+	// Git can retain submodule objects here after deinit. Forced removal also
+	// deletes this private directory, including commits absent from any remote.
+	let modules = admin.join("modules");
+	match std::fs::symlink_metadata(&modules) {
+		Ok(_) => {
+			return Err(Problem::new(
+				ProblemCode::PathOverlap,
+				format!("This worktree retains submodule storage at {modules:?}."),
+			)
+			.remedy(
+				"Deinitialize any checked-out submodules, then move the retained storage outside this worktree and its Git directory before retrying.",
+			));
+		}
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+		Err(error) => return Err(Problem::io("Inspect retained submodule storage", error)),
+	}
+
 	if crate::operations::operations_present(admin, common)?
 		|| crate::operations::locks_present(admin, common)?
 		|| admin

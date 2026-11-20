@@ -12,7 +12,6 @@ pub fn task(root: &Path, state: &Path, name: &str) -> Task {
 		participants: Vec::new(),
 		checkout: false,
 		no_fetch: true,
-		pull: false,
 		lifecycle: workyard_core::TaskLifecycle::Active,
 		operation: workyard_core::Operation::create(),
 		problem: None,

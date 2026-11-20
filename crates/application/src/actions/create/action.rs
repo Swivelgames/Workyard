@@ -48,7 +48,6 @@ async fn run(
 					.await;
 			let mut outcome = CreateOutcome::from_task(result.task, result.record);
 			outcome.operation = result.operation.into();
-			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
 			outcome.problem = result.problem.map(Into::into);
 			outcome.registration_problem = registration.map(Into::into);
 			if outcome.registration_problem.is_some()
@@ -124,7 +123,6 @@ mod tests {
 			workspace: Some(trine::NativePath::new(workspace.path()).unwrap()),
 			checkout: false,
 			no_fetch: true,
-			pull: false,
 			remote: None,
 			from: None,
 		};

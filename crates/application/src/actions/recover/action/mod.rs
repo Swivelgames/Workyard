@@ -1,115 +1,95 @@
-use trine::InvocationContext;
-use workyard_core::{AmendState, Control, ProblemCode, RecoveryState};
+use trine::{InvocationContext, NativePath};
+use workyard_core::{Control, Problem, ProblemCode, RemovalOptions};
 use workyard_git::Runner;
 use workyard_state::Store;
 
 use crate::{contracts::Progress, execution::blocking_action};
 
-use super::{RecoverInput, RecoverOutcome};
+use super::{RecoverInput, RecoverOutcome, RecoveryRequest};
 
 mod amendment;
 mod creation;
 mod removal;
+mod route;
 mod workspace;
 
+use route::{Authority, Route};
+
 pub async fn recover(
-	mut input: RecoverInput,
+	input: RecoverInput,
+	context: InvocationContext<Progress>,
+) -> Result<super::RecoveryOutcome, super::RecoveryOutcome> {
+	execute(input.into(), context).await
+}
+
+pub(super) async fn execute(
+	request: RecoveryRequest,
 	context: InvocationContext<Progress>,
 ) -> Result<super::RecoveryOutcome, super::RecoveryOutcome> {
 	use super::RecoveryOutcome::{Task, Workspace};
 	blocking_action(async move {
-		if let Some(name) = input.task.take() {
-			run(name, input, context)
-				.await
-				.map(|r| Task(Box::new(r)))
-				.map_err(|r| Task(Box::new(r)))
-		} else {
-			workspace::run(input, context)
-				.await
-				.map(Workspace)
-				.map_err(Workspace)
-		}
+		let (name, workspace, authority) = match request {
+			RecoveryRequest::General(mut input) => {
+				let Some(name) = input.task.take() else {
+					return workspace::run(input, context)
+						.await
+						.map(Workspace)
+						.map_err(Workspace);
+				};
+				if input.activate_here {
+					let problem = Problem::new(
+						ProblemCode::InvalidInput,
+						"--activate-here applies to workspace recovery. Omit the task name.",
+					);
+					return Err(Task(Box::new(RecoverOutcome::rejected(name, problem))));
+				}
+				let options = RemovalOptions {
+					undo: input.undo,
+					yes: input.yes,
+					force: input.force,
+				};
+				(name, input.workspace, Authority::General(options))
+			}
+			RecoveryRequest::Participants(named) => {
+				(named.task, named.workspace, Authority::Participants)
+			}
+		};
+		run(name, workspace, authority, context)
+			.await
+			.map(|r| Task(Box::new(r)))
+			.map_err(|r| Task(Box::new(r)))
 	})
 	.await
 }
 
 async fn run(
 	name: String,
-	input: RecoverInput,
+	workspace: Option<NativePath>,
+	authority: Authority,
 	context: InvocationContext<Progress>,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
 	let rejected = |problem| RecoverOutcome::rejected(name.clone(), problem);
-	if input.activate_here {
-		return Err(rejected(workyard_core::Problem::new(
-			ProblemCode::InvalidInput,
-			"--activate-here applies to workspace recovery. Omit the task name.",
-		)));
-	}
 	workyard_core::validate_task(&name).map_err(rejected)?;
 
 	let cancellation = context.cancellation().clone();
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
-	let state =
-		crate::workspace::required(input.workspace.as_ref().map(trine::NativePath::as_path))
-			.map_err(rejected)?;
+	let state = crate::workspace::required(workspace.as_ref().map(NativePath::as_path))
+		.map_err(rejected)?;
 	let store = Store::open_existing(&state, None).map_err(rejected)?;
 	let runner = Runner::default();
-	let guard = store.admit(&name).map_err(rejected)?;
-	let record = store.load(&guard, &name).map_err(rejected)?;
-	let removing = record.task.removal.is_some();
-	let amending = record.task.operation.kind == Some(workyard_core::OperationKind::Amend)
-		|| record.task.operation.continues == Some(workyard_core::OperationKind::Amend);
-	let amendment = if amending && !removing {
-		store.amend_request(&guard).map_err(rejected)?
-	} else {
-		None
-	};
-	drop(guard);
 
-	if removing {
-		return removal::run(name, input, context, &runner, &control, &store).await;
+	// Participant-only recovery is authorized again under the core mutation lock.
+	match Route::select(&name, authority, &store).map_err(rejected)? {
+		Route::Creation(scope) => {
+			creation::run(&name, scope, &runner, &control, context, &store).await
+		}
+		Route::Amendment(scope) => {
+			amendment::run(&name, scope, &runner, &control, context, &store).await
+		}
+		Route::Removal(options) => {
+			removal::run(&name, options, &runner, &control, context, &store).await
+		}
 	}
-
-	if input.undo {
-		return Err(rejected(workyard_core::Problem::new(
-			ProblemCode::InvalidInput,
-			"--undo applies only to whole-task removal recovery.",
-		)));
-	}
-
-	let resuming_removals = amendment
-		.as_ref()
-		.is_some_and(|request| !request.remove.is_empty());
-	if (input.force || input.yes) && !resuming_removals {
-		return Err(rejected(workyard_core::Problem::new(
-			ProblemCode::InvalidInput,
-			"--yes and --force require a pending removal.",
-		)));
-	}
-	if let Some(mut request) = amendment {
-		request.removal_options.yes = input.yes;
-		request.removal_options.force = input.force;
-		return amendment::run(
-			request,
-			&name,
-			&input.accept_pull,
-			&runner,
-			&control,
-			context,
-			&store,
-		)
-		.await;
-	}
-
-	creation::run(
-		&name,
-		&input.accept_pull,
-		&runner,
-		&control,
-		context,
-		&store,
-	)
-	.await
 }

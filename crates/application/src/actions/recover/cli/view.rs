@@ -54,9 +54,7 @@ impl RecoverView {
 	pub(crate) fn finish_outcome(&mut self, outcome: &RecoverOutcome) -> io::Result<()> {
 		let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		if !outcome.pull_failures.is_empty() && outcome.problem.is_none() {
-			terminal.completed_with_pull_failures("Recovery", &outcome.task);
-		} else if outcome.nothing_to_recover {
+		if outcome.nothing_to_recover {
 			terminal.heading(&format!("Nothing to recover: {}", text(&outcome.task)));
 		} else {
 			terminal.heading(&format!(
@@ -74,7 +72,6 @@ impl RecoverView {
 				recorded_progress(&mut terminal, outcome);
 			}
 		}
-		terminal.pull_failures(&outcome.pull_failures);
 		if let Some(problem) = &outcome.registration_problem {
 			terminal.problem(problem);
 		}
@@ -113,7 +110,6 @@ fn recorded_progress(terminal: &mut Terminal, outcome: &RecoverOutcome) {
 				"restored" => "restored",
 				"restoration_unconfirmed" => "restoration unconfirmed",
 				"worktree_created" => "worktree created",
-				"pulling" => "pull needs review",
 				"not_started" => "creation not started",
 				"fetching" => "fetch unconfirmed",
 				"creating" => "creation unconfirmed",

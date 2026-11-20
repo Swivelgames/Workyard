@@ -55,7 +55,7 @@ impl<'de> Deserialize<'de> for TaskRecord {
 				"Unsupported or mixed task document format",
 			));
 		}
-		let document: Document = serde_json::from_value(value).map_err(D::Error::custom)?;
+		let mut document: Document = serde_json::from_value(value).map_err(D::Error::custom)?;
 		let (lifecycle, operation) = match document.version {
 			1 if document.lifecycle.is_none() && document.operation.is_none() => {
 				let status = document
@@ -92,6 +92,24 @@ impl<'de> Deserialize<'de> for TaskRecord {
 			}
 		};
 
+		// Published v1–v4 shapes require these booleans. Validate the old invariant,
+		// then discard the option before comparing admissions or running operations.
+		if document.pull && document.no_fetch {
+			return Err(D::Error::custom("Invalid legacy creation options"));
+		}
+		for options in document
+			.participants
+			.iter_mut()
+			.filter_map(|p| p.creation.as_mut())
+		{
+			if options.legacy_pull && options.no_fetch {
+				return Err(D::Error::custom(
+					"Invalid legacy participant creation options",
+				));
+			}
+			options.legacy_pull = false;
+		}
+
 		Ok(TaskRecord {
 			// In-memory normalization also makes subsequent serialization canonical.
 			version: document.version.max(3),
@@ -102,7 +120,7 @@ impl<'de> Deserialize<'de> for TaskRecord {
 			state_dir: document.state_dir,
 			checkout: document.checkout,
 			no_fetch: document.no_fetch,
-			pull: document.pull,
+			legacy_pull: false,
 			lifecycle,
 			operation,
 			participants: document.participants,

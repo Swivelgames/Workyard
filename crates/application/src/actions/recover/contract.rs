@@ -9,8 +9,6 @@ use crate::contracts::{ProblemOutcome, removal};
 pub struct RecoverOutcome {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub registration_problem: Option<ProblemOutcome>,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub pull_failures: Vec<crate::contracts::PullFailure>,
 	/// Verified no-op; task/evidence history was preserved.
 	pub nothing_to_recover: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -55,7 +53,6 @@ impl RecoverOutcome {
 		Self {
 			changes: Vec::new(),
 			registration_problem: None,
-			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
 			mutation_started: None,
@@ -77,7 +74,6 @@ impl RecoverOutcome {
 		Self {
 			changes: Vec::new(),
 			registration_problem: None,
-			pull_failures: Vec::new(),
 			nothing_to_recover: false,
 			condition: None,
 			mutation_started: None,

@@ -1,4 +1,4 @@
-//! Consent belongs to one invocation and the content disclosed by that invocation.
+//! Each invocation checks consent against a fresh disclosure before unlinking worktrees.
 use crate::{
 	Control, Decision, DecisionKind, Participant, Problem, ProblemCode, RemovalGit,
 	RemovalObservation, RemovalObserver, RemovalOptions,
@@ -8,41 +8,36 @@ pub(crate) async fn authorize(
 	observer: &impl RemovalObserver,
 	options: RemovalOptions,
 	task: &str,
-	participants: &[String],
+	participants: Option<&[String]>,
 	discards_files: bool,
 ) -> Result<(), Problem> {
 	if options.force || (options.yes && !discards_files) {
 		return Ok(());
 	}
 
-	let (kind, message) = if participants.is_empty() {
-		if discards_files {
-			(DecisionKind::DiscardTask, "Remove the task and discard the disclosed files? Discarded changes cannot be restored.".into())
-		} else {
-			(
-				DecisionKind::RemoveTask,
-				"Remove the task worktrees while retaining branches and local commits?".into(),
-			)
-		}
-	} else {
-		let names = participants.join(", ");
-		if discards_files {
-			(
-				DecisionKind::DiscardParticipants,
-				format!("Remove {names} from {task} and discard the disclosed files?"),
-			)
-		} else {
-			(
-				DecisionKind::RemoveParticipants,
-				format!("Remove {names} from {task}?"),
-			)
-		}
+	let (kind, message) = match (participants, discards_files) {
+		(None, true) => (
+			DecisionKind::DiscardTask,
+			"Remove the task and discard the disclosed files? Discarded changes cannot be restored.".into(),
+		),
+		(None, false) => (
+			DecisionKind::RemoveTask,
+			"Remove the task worktrees while retaining branches and local commits?".into(),
+		),
+		(Some(names), true) => (
+			DecisionKind::DiscardParticipants,
+			format!("Remove {} from {task} and discard the disclosed files?", names.join(", ")),
+		),
+		(Some(names), false) => (
+			DecisionKind::RemoveParticipants,
+			format!("Remove {} from {task}?", names.join(", ")),
+		),
 	};
 	let decision = Decision {
 		task: Some(task.into()),
 		kind,
 		participant: String::new(),
-		participants: participants.to_vec(),
+		participants: participants.unwrap_or_default().to_vec(),
 		message,
 	};
 	if discards_files {
@@ -70,7 +65,12 @@ async fn recheck(
 				"Worktree or branch changed after disclosure; inspect and retry.",
 			));
 		}
-		if current.dirty_paths.is_empty() || current.dirty_token == disclosed.dirty_token {
+		let same_disclosure = if observer.requires_unchanged_disclosure() {
+			current.dirty_token == disclosed.dirty_token && current.history == disclosed.history
+		} else {
+			current.dirty_paths.is_empty() || current.dirty_token == disclosed.dirty_token
+		};
+		if same_disclosure {
 			*disclosed = current;
 			return Ok(());
 		}

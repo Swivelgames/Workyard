@@ -1,7 +1,10 @@
 use super::{AmendInput, AmendOutcome};
 use crate::{
 	contracts::Progress,
-	execution::{blocking_action, removal::RemovalEvents},
+	execution::{
+		blocking_action,
+		removal::{RemovalEvents, RemovalRequest},
+	},
 };
 use trine::InvocationContext;
 use workyard_core::{Control, OperationOutcome};
@@ -10,13 +13,21 @@ pub async fn amend(
 	input: AmendInput,
 	context: InvocationContext<Progress>,
 ) -> Result<AmendOutcome, AmendOutcome> {
-	blocking_action(run(input, context)).await
+	execute(input.into(), context).await
+}
+
+pub(super) async fn execute(
+	request: RemovalRequest<AmendInput>,
+	context: InvocationContext<Progress>,
+) -> Result<AmendOutcome, AmendOutcome> {
+	blocking_action(run(request, context)).await
 }
 
 async fn run(
-	input: AmendInput,
+	request: RemovalRequest<AmendInput>,
 	context: InvocationContext<Progress>,
 ) -> Result<AmendOutcome, AmendOutcome> {
+	let input = request.input;
 	let name = input.task.clone();
 	let rejected = |problem| AmendOutcome::rejected(name.clone(), problem);
 
@@ -28,7 +39,8 @@ async fn run(
 	let prepared = input.prepare(&control).await.map_err(rejected)?;
 	let store = workyard_state::Store::open_existing(&prepared.state, None).map_err(rejected)?;
 
-	let observer = RemovalEvents::new(context, "amend", name.clone());
+	let observer = RemovalEvents::new(context, "amend", name.clone())
+		.with_consent(request.consent, &prepared.state);
 	let result = workyard_core::amend(
 		prepared.request,
 		&workyard_git::Runner::default(),

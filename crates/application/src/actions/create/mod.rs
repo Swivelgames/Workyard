@@ -31,6 +31,7 @@ pub(crate) fn build_entry() -> Result<CreateEntry, RegistrationError> {
 		.set("checkout", true);
 	let cli = CliBinding::new(cli::bindings()).alias(checkout_shorthand);
 	let rpc = crate::presentation::structured::progress_binding();
+	let mcp = crate::presentation::mcp::progress_binding();
 
 	Ok(Entry::new(handler)
 		.cli(
@@ -38,5 +39,6 @@ pub(crate) fn build_entry() -> Result<CreateEntry, RegistrationError> {
 			|output| Ok(cli::CreateView { output }),
 			|result| exit_status::operation(result, |outcome| &outcome.operation),
 		)
-		.rpc(rpc))
+		.rpc(rpc)
+		.mcp(mcp))
 }

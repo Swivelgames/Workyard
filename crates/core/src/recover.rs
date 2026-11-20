@@ -1,6 +1,8 @@
 mod creation;
 mod participant;
-mod pull;
+mod scope;
+
+pub use scope::RecoveryScope;
 
 use crate::{
 	Control, Observer, OperationOutcome, Phase, Problem, ProblemCode, RecoveryGit, RecoveryState,
@@ -15,12 +17,29 @@ struct Recovery<'a, G, S: RecoveryState, O> {
 	store: &'a S,
 	guard: &'a S::Admission,
 	publication_attempted: AtomicBool,
-	pull_failures: std::sync::Mutex<Vec<crate::PullFailure>>,
 }
 
 pub async fn recover(
 	name: &str,
-	accept_pull: &[String],
+	runner: &impl RecoveryGit,
+	control: &Control,
+	observer: &impl Observer,
+	store: &impl RecoveryState,
+) -> Result<crate::RecoveryResult, Problem> {
+	recover_with_scope(
+		name,
+		RecoveryScope::Reconcile,
+		runner,
+		control,
+		observer,
+		store,
+	)
+	.await
+}
+
+pub async fn recover_with_scope(
+	name: &str,
+	scope: RecoveryScope,
 	runner: &impl RecoveryGit,
 	control: &Control,
 	observer: &impl Observer,
@@ -30,22 +49,8 @@ pub async fn recover(
 	control.check()?;
 	let guard = store.admit(name)?;
 	let record = store.load(&guard, name)?;
+	scope.authorize(&record.task)?;
 	let mut task = prepare_recovery(record.task.clone());
-
-	for accepted in accept_pull {
-		if !task
-			.participants
-			.iter()
-			.any(|p| &p.name == accepted && p.phase == Phase::Pulling)
-		{
-			return Err(Problem::new(
-				ProblemCode::InvalidInput,
-				format!(
-					"--accept-pull {accepted:?} must name a participant with an unsettled pull outcome."
-				),
-			));
-		}
-	}
 
 	if let Some(index) = record.pending
 		&& task.participants[index].phase != Phase::Fetching
@@ -61,9 +66,8 @@ pub async fn recover(
 		store,
 		guard: &guard,
 		publication_attempted: AtomicBool::new(false),
-		pull_failures: std::sync::Mutex::new(Vec::new()),
 	};
-	let result = recovery.resume(&mut task, accept_pull).await;
+	let result = recovery.resume(&mut task).await;
 
 	if result.is_ok()
 		&& !recovery.publication_attempted.load(Ordering::Relaxed)
@@ -78,7 +82,6 @@ pub async fn recover(
 				.as_ref()
 				.expect("verified published task")
 				.operation,
-			pull_failures: Vec::new(),
 			problem: None,
 			task: record.recorded.expect("verified published task"),
 			record: path,
@@ -100,7 +103,6 @@ pub async fn recover(
 			admitted_roots: Vec::new(),
 			operation,
 			problem: Some(problem),
-			pull_failures: Vec::new(),
 			task: record.recorded.unwrap_or(record.task),
 			record: path,
 			nothing_to_recover: false,
@@ -115,7 +117,7 @@ pub async fn recover(
 	task.problem = result.err();
 	let mut invocation = task.operation;
 	let mut invocation_problem = task.problem.clone();
-	crate::optional_pull::preserve_settled_cancellation(&mut task);
+	task.preserve_settled_cancellation();
 
 	if let Err(problem) = store.save(&guard, &task) {
 		task.operation.outcome = OperationOutcome::Failed;
@@ -123,12 +125,10 @@ pub async fn recover(
 		invocation.outcome = OperationOutcome::Failed;
 		invocation_problem = Some(problem);
 	}
-	let pull_failures = recovery.pull_failures.into_inner().expect("pull failures");
 	let admitted_roots = record.newly_admitted_roots(&task);
 	Ok(crate::RecoveryResult {
 		admitted_roots,
-		operation: crate::optional_pull::invocation_operation(invocation, &pull_failures),
-		pull_failures,
+		operation: invocation,
 		problem: invocation_problem,
 		task,
 		record: path,
@@ -137,11 +137,11 @@ pub async fn recover(
 }
 
 impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
-	async fn resume(&self, task: &mut Task, accepted: &[String]) -> Result<(), Problem> {
+	async fn resume(&self, task: &mut Task) -> Result<(), Problem> {
 		for index in 0..task.participants.len() {
 			self.control.check()?;
 			self.store.verify()?;
-			self.participant(task, index, accepted).await?;
+			self.participant(task, index).await?;
 		}
 		Ok(())
 	}

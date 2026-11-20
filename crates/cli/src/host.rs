@@ -6,7 +6,7 @@ use trine::{
 	application::{Application, CliViewContext},
 	cli::{Parsed, completion, output_mode::json_requested},
 	error::{Failure, FailureKind},
-	rpc,
+	mcp, rpc,
 };
 
 pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8, Failure> {
@@ -37,6 +37,10 @@ pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8
 	};
 
 	match matches.subcommand() {
+		Some(("mcp", _)) => {
+			reject_json(&arguments, "mcp")?;
+			run_mcp(&application)
+		}
 		Some(("rpc", _)) => {
 			reject_json(&arguments, "rpc")?;
 			run_rpc(&application)
@@ -60,10 +64,12 @@ fn command(application: &Application) -> Command {
 	let completion = Command::new("completion")
 		.about("Print a shell completion script")
 		.arg(shell);
+	let mcp = Command::new("mcp").about("Serve agent tools over standard input/output");
 	let rpc = Command::new("rpc").about("Serve JSON-RPC over standard input/output");
 
 	application
 		.cli_command()
+		.subcommand(mcp)
 		.subcommand(rpc)
 		.subcommand(completion)
 }
@@ -98,6 +104,15 @@ fn run_action(
 			Ok(report.exit_code())
 		}
 	}
+}
+
+fn run_mcp(application: &Application) -> Result<u8, Failure> {
+	let cancellation = signal_cancellation()?;
+	let (reader, writer) =
+		mcp::stdio::open().map_err(|error| Failure::new(FailureKind::Unavailable, error))?;
+	smol::block_on(mcp::serve(application, reader, writer, cancellation))
+		.map_err(|error| Failure::new(FailureKind::OutputFailed, error))?;
+	Ok(0)
 }
 
 fn run_rpc(application: &Application) -> Result<u8, Failure> {

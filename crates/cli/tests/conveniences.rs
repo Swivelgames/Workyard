@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod support;
 use serde_json::Value;
 use std::{fs, process::Output};
@@ -165,36 +166,6 @@ fn display_commands_stay_plain_and_json_rejects_transports_and_scripts() {
 		assert!(!output.status.success());
 		assert_eq!(json(&output)["error"]["code"], "invalid_input");
 	}
-}
-
-#[test]
-fn optional_pull_failure_is_an_invocation_result_not_damaged_membership() {
-	let root = tempfile::tempdir().unwrap();
-	init_workspace(root.path());
-	let (api, _) = remote_clone(root.path(), "api");
-	let output = workyard(
-		root.path(),
-		&[
-			"create",
-			"feat/payments",
-			"--repo",
-			text(&api),
-			"--from",
-			"main",
-			"--pull",
-			"--json",
-		],
-	);
-	assert!(!output.status.success());
-	let value = json(&output);
-	assert!(value["error"].is_null());
-	assert_eq!(value["result"]["pull_failures"][0]["participant"], "api");
-	assert_eq!(value["result"]["participants"][0]["phase"], "completed");
-	assert_eq!(value["result"]["lifecycle"], "active");
-	assert!(output.stderr.is_empty());
-	let saved = record(&root.path().join(".workyard"));
-	assert!(saved["problem"].is_null());
-	assert!(saved.get("pull_failures").is_none());
 }
 
 #[test]

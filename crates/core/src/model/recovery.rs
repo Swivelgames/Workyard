@@ -25,7 +25,6 @@ pub struct RecoveryResult {
 	pub admitted_roots: Vec<PathBuf>,
 	pub operation: crate::Operation,
 	pub problem: Option<crate::Problem>,
-	pub pull_failures: Vec<crate::PullFailure>,
 	pub task: Task,
 	pub record: PathBuf,
 	pub nothing_to_recover: bool,
@@ -56,7 +55,6 @@ impl RecoveryRecord {
 			Some(crate::OperationKind::Remove) => "the removal operation",
 			_ => match participant.phase {
 				crate::Phase::Creating => "worktree creation",
-				crate::Phase::Pulling => "the pull",
 				crate::Phase::Fetching => "the fetch",
 				_ => "the task operation",
 			},

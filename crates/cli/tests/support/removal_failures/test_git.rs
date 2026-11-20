@@ -87,15 +87,6 @@ impl Git for FaultGit {
 			.add(repository, task, destination, plan, control)
 			.await
 	}
-
-	async fn pull(
-		&self,
-		repository: &Repository,
-		destination: &Path,
-		control: &Control,
-	) -> Result<(), Problem> {
-		self.runner.pull(repository, destination, control).await
-	}
 }
 
 impl RemovalGit for FaultGit {

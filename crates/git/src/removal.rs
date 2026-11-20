@@ -1,6 +1,5 @@
 //! Destructive worktree operations verify Git ownership independently of cached paths.
 mod dirty;
-mod index;
 mod protected;
 mod restoration;
 mod validation;
@@ -53,7 +52,7 @@ impl RemovalGit for Runner {
 		if facts.conflicted {
 			return Err(blocked("Worktree has unresolved Git conflicts."));
 		}
-		validation::require_idle(&git_dir, &repository.common_dir)?;
+		validation::require_removable_admin(&git_dir, &repository.common_dir)?;
 
 		let branch = facts.branch.filter(|branch| branch != "HEAD");
 		let history = match &branch {
@@ -63,7 +62,8 @@ impl RemovalGit for Runner {
 				RetainedHistory::Detached
 			}
 		};
-		let (dirty_paths, dirty_token) = dirty::inspect(self, &destination, control).await?;
+		let (dirty_paths, dirty_token) =
+			dirty::inspect(self, &destination, worktree_entry, control).await?;
 		Ok(RemovalObservation {
 			administration_identity: workyard_system::directory_identity(&git_dir)?,
 			worktree_entry,

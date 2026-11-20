@@ -7,14 +7,28 @@ use std::{
 	fs::{self, FileType},
 	path::{Path, PathBuf},
 };
-use workyard_core::{Problem, ProblemCode};
+use workyard_core::{Control, Problem, ProblemCode};
 
 /// Create an initialized workspace, or return its configured tasks directory.
 pub fn initialize_workspace(target: &Path, tasks: Option<&Path>) -> Result<PathBuf, Problem> {
+	smol::block_on(initialize_workspace_with_control(
+		target,
+		tasks,
+		&Control::default(),
+	))
+}
+
+pub async fn initialize_workspace_with_control(
+	target: &Path,
+	tasks: Option<&Path>,
+	control: &Control,
+) -> Result<PathBuf, Problem> {
+	control.check()?;
 	let workspace = canonical_future(target)?;
 	let state = workspace.join(MARKER);
 	if !exists(&state)? {
 		select_tasks(&workspace, tasks)?;
+		control.check()?;
 		fs::create_dir_all(&workspace)
 			.map_err(|error| Problem::io("Create workspace directory", error))?;
 		stage_marker(&workspace, &state)?;
@@ -29,11 +43,12 @@ pub fn initialize_workspace(target: &Path, tasks: Option<&Path>) -> Result<PathB
 	} else {
 		LockMode::Shared
 	};
-	let gate = Lock::wait_existing(&gate_path, mode)?;
+	let gate = Lock::wait_existing_with_control(&gate_path, mode, control).await?;
 
 	// Recheck under the gate. Another initializer may already have activated its layout.
 	if exists(&pending)? {
 		let root = select_tasks(&workspace, tasks)?;
+		control.check()?;
 		activate_layout(&workspace, &state, &root, &gate)?;
 		return Ok(root);
 	}
@@ -42,6 +57,7 @@ pub fn initialize_workspace(target: &Path, tasks: Option<&Path>) -> Result<PathB
 		.map(|path| resolve_tasks(&workspace, path))
 		.transpose()?;
 	let root = Workspace::configured_root(&state, requested.as_deref())?;
+	control.check()?;
 	create_tasks(&root)?;
 	gate.verify()?;
 	Ok(root)

@@ -6,9 +6,8 @@ use workyard_git::Runner;
 use workyard_state::Store;
 
 pub(super) async fn run(
-	request: workyard_core::AmendRequest,
 	name: &str,
-	accepted: &[String],
+	scope: workyard_core::AmendRecovery,
 	runner: &Runner,
 	control: &Control,
 	context: InvocationContext<Progress>,
@@ -17,7 +16,8 @@ pub(super) async fn run(
 	let rejected = |problem| RecoverOutcome::rejected(name.to_owned(), problem);
 	let observer = RemovalEvents::new(context, "recover", name.to_owned());
 	let result =
-		workyard_core::recover_amend(request, accepted, runner, control, &observer, store).await;
+		workyard_core::recover_amend_with_scope(name, scope, runner, control, &observer, store)
+			.await;
 
 	let mut outcome = match result {
 		Ok(result) => {
@@ -26,7 +26,6 @@ pub(super) async fn run(
 				crate::projects::register(store, &result.admitted_roots, control).await;
 			let mut outcome = RecoverOutcome::from_task(result.task, result.record);
 			outcome.registration_problem = registration.map(Into::into);
-			outcome.pull_failures = result.pull_failures.into_iter().map(Into::into).collect();
 			outcome.problem = result.problem.map(Into::into);
 			outcome.operation = result.operation.into();
 			outcome.changes = result.changes.into_iter().map(Into::into).collect();

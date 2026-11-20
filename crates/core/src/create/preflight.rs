@@ -29,7 +29,6 @@ pub(crate) async fn preflight(
 		participants,
 		checkout: request.checkout,
 		no_fetch: request.no_fetch,
-		pull: request.pull,
 		lifecycle: crate::TaskLifecycle::Active,
 		operation: crate::Operation::create(),
 		problem: None,

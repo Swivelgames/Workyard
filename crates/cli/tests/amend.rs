@@ -67,14 +67,7 @@ fn adds_then_repeats_without_changing_membership_or_options() {
 	let before = state_bytes(&root);
 	let result = workyard(
 		&root,
-		&[
-			"amend",
-			"feat/task",
-			"--pull",
-			"--checkout",
-			"--repo",
-			text(&web),
-		],
+		&["amend", "feat/task", "--checkout", "--repo", text(&web)],
 	);
 	assert_ok(&result);
 	assert!(String::from_utf8_lossy(&result.stdout).contains("No changes needed"));
@@ -264,7 +257,7 @@ fn retired_tasks_reject_amend_and_name_reuse_archives_revision() {
 }
 
 #[test]
-fn remote_addition_fetches_tracks_and_pulls_with_its_own_options() {
+fn remote_addition_fetches_and_tracks_with_its_own_options() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let (web, remote) = support::remote_clone(fixture.path(), "web");
@@ -273,19 +266,11 @@ fn remote_addition_fetches_tracks_and_pulls_with_its_own_options() {
 	create(&root, &api);
 	assert_ok(&workyard(
 		&root,
-		&[
-			"amend",
-			"feat/task",
-			"--checkout",
-			"--pull",
-			"--repo",
-			text(&web),
-		],
+		&["amend", "feat/task", "--checkout", "--repo", text(&web)],
 	));
 	let saved = record(&root.join(".workyard"));
 	assert_eq!(saved["no_fetch"], true);
-	assert_eq!(saved["pull"], false);
-	assert_eq!(saved["participants"][1]["creation"]["pull"], true);
+	assert_eq!(saved["participants"][1]["creation"]["no_fetch"], false);
 	assert_eq!(
 		git(
 			&root.join("tasks/feat/task/web"),

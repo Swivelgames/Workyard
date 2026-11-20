@@ -36,7 +36,6 @@ pub struct AmendmentChange {
 
 pub struct AmendResult {
 	pub admitted_roots: Vec<PathBuf>,
-	pub pull_failures: Vec<crate::PullFailure>,
 	pub mutation_started: bool,
 	pub task: Task,
 	pub record: PathBuf,

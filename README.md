@@ -1,7 +1,8 @@
 # Workyard
 
 Workyard creates branch-named tasks across Git repositories. The CLI and on-demand
-stdio RPC host run the same actions. MCP and the persistent TUI are planned.
+stdio RPC host run the same actions. Agents can initialize a workspace, register
+projects and manage tasks through the stdio MCP host. The persistent TUI is planned.
 
 ## Start a workspace
 
@@ -72,11 +73,10 @@ to override that participant. Common `--remote` and `--from` apply irrespective 
 argument position. Repeated aliases of one repository must have compatible names
 and options. An existing final task directory or active task record is never adopted.
 
-Creation fetches the selected remote by default, then creates each worktree and
-optionally runs plain `git pull` there. `--no-fetch` disables the preliminary fetch;
-it cannot be combined with `--pull`. Local default/source branch tips stay local.
-Explicit `--from origin/main` uses the remote-tracking source. Missing default
-metadata requires an explicit `--from` rather than guessing the current branch.
+Creation fetches the selected remote by default, then creates each worktree.
+Pass `--no-fetch` to use locally available references. A local source branch keeps
+its current tip. Explicit `--from origin/main` uses the remote-tracking source.
+When the repository has no default branch metadata, supply `--from`.
 
 `checkout` is `create --checkout`: existing local target branches are reused and
 remote-only targets become local tracking branches. Source checkouts never switch.
@@ -96,11 +96,11 @@ record identity still hashes the exact task name. Lockfiles remain after release
 Git common-directory identity and current Git metadata are revalidated before
 worktree effects; cached paths are observations rather than a separate Git registry.
 
-Failure or cancellation retains successful worktrees and reports each participant's
-last observed phase. Inspect the reported state record and use `git -C <path> status`
-and `git -C <source> worktree list --porcelain` to investigate. Do not rerun create on
-a partial task: use `recover` with the original task name. A publication error
-reports uncertainty, even if the desired JSON is already visible; visibility does not prove durability.
+Ctrl-C stops Workyard from starting the next step. Worktrees that Git has already
+created and Workyard has verified stay available. For example, if you interrupt
+`amend` after its last addition, the task can already be healthy. If another
+participant was still pending, `workyard recover <task>` finishes the outstanding
+work. Recovery also checks Git when a state-write failure leaves the outcome uncertain.
 
 ## Amending tasks
 
@@ -129,17 +129,19 @@ the final membership and shows the selected worktrees before asking once. Declin
 at this point leaves the task intact. In unattended use, clean worktrees can be
 removed with local commits retained on their branches. `--yes` skips the courtesy
 prompt. `--force` also authorizes discarding the changes disclosed in the selected
-worktrees. Files hidden from Git status by index flags also appear in the disclosure.
-A nested Git repository must be moved out of the selected worktree before removal.
+worktrees. Both whole-task and participant removal disclose files hidden by Git
+index flags and files inside uninitialized submodule directories. Empty submodule
+placeholders need no discard approval. If Git retained submodule storage after
+deinitialization, Workyard identifies the directory to preserve before retrying.
+Move any nested Git repository out of the selected worktree before removal.
 New changes require a fresh decision. If removal is interrupted after
 a worktree changes, run `workyard recover feat/payments` to resume.
 
-New participants use creation's source, remote, fetch and pull options; existing
-branches require `--checkout`. These flags do not pull or reset established
-participants. An identical completed request is a notified no-op. Ordinary failures
-preserve completed changes and permit `amend` retry; a failed addition does not
-roll back a successful rename. A leftover branch without verified creation evidence
-still requires explicit `--checkout` rather than silent adoption.
+New participants use creation's source, remote and fetch options. Reusing an
+existing branch requires `--checkout`. Repeating a completed request reports that
+no changes are needed. If an addition fails, completed changes such as an earlier
+rename survive and you can retry `amend`. To use a leftover branch without verified
+creation evidence, pass `--checkout`.
 
 Repository identity comes from Git's backing storage, not its remote URL. Replacement
 clones and moves that change filesystem identity are not automatically adopted.
@@ -178,34 +180,23 @@ writers before asking Git to repair them.
 
 ```sh
 workyard recover feat/payments --workspace /workspace
-workyard recover feat/payments --accept-pull api --accept-pull web
 ```
 
-Recovery opens an initialized workspace. It preserves completed trees and authored changes, reconciles verified Git
-moves/repairs, and resumes only remaining safe work. Healthy tasks do not fetch or
-pull for freshness. Branch-valued sources resolve their current tips; explicit
-commit sources retain their exact meaning.
+Recovery opens an initialized workspace, preserves authored changes and reconciles
+verified Git moves and repairs. It resumes unfinished worktrees using their recorded
+sources. A branch source resolves at its current tip. A commit source retains its
+exact commit. A healthy task needs no fetch.
 
-An ordinary optional pull failure leaves its successfully created worktree established.
-Workyard reports each participant's Git error and exits nonzero, while continuing
-other independent participants. Fix or retry the pull with Git; no Workyard acceptance
-is needed. Invocation results carry `pull_failures`; status uses current Git facts,
-so conflicts remain visible without persisting stale pull errors as task damage.
+Older tasks may record a request to pull after worktree creation. Recovery ignores
+that option. When the writer has settled, Workyard checks the worktree identity
+and native Git state before marking setup complete. If Git reports an unfinished
+operation, inspect `git -C <path> status`, resolve the operation and retry recovery.
 
-Legacy or genuinely uncertain pull evidence is never automatically replayed. Inspect `git -C <path> status`,
-finish or abort the native Git operation manually, then name that participant with
-`--accept-pull`. Acceptance preserves your repair and does not bypass unresolved
-Git conflicts, native locks, backing/worktree identity checks or uncertain writers.
-
-A pending add/pull without durable writer-settlement evidence remains diagnostic,
-even when the task lock is free. Inspect the interrupted Workyard/Git process tree
-and preserve the state and worktrees. This slice has no force/unquarantine command:
-manual Git work may continue once you have established that writers stopped;
-restore only genuinely verified backup evidence if available. Do not edit a
-pending marker to manufacture settlement. Legacy completed records can be inspected
-at their verified original location; legacy uncertain creating/pulling records
-cannot acquire historical settlement through an upgrade. Fetch-only uncertainty
-allows explicit recovery retry under the existing native Git coordination rules.
+A pending worktree writer, including a pull started by an older Workyard, requires
+durable evidence that the writer stopped. A free task lock alone cannot establish
+that. Inspect the interrupted Workyard and Git processes and preserve the worktrees
+and state. If settlement evidence was lost, restore it from a verified backup.
+A pending fetch can be retried under the repository's Git coordination rules.
 
 ## Inspection
 
@@ -269,7 +260,7 @@ response before sending commands that depend on the workspace.
 ```
 
 Recovery uses the same `invoke` envelope with `action: ["recover"]` and input
-`{"task":"feat/payments","accept_pull":["api"],"workspace":"/workspace"}`.
+`{"task":"feat/payments","workspace":"/workspace"}`.
 Amend uses `action: ["amend"]` and the same repository groups/options as creation,
 with an explicit task and existing-state selection. For example,
 `{"task":"feat/payments","remove":["infra","docs"],"yes":true}` removes two
@@ -281,6 +272,126 @@ Status also accepts an explicit `task`.
 RPC uses Trine's shared invocation, progress, cancellation and terminal response
 contract. Native Git output never enters protocol stdout. Clean stdin EOF drains
 accepted work; shutdown, read failure or output failure requests cancellation.
+
+## MCP
+
+Configure an agent client to launch `workyard mcp` over stdio. Clients with an
+`mcpServers` configuration can use this entry.
+
+```json
+{
+	"mcpServers": {
+		"workyard": {
+			"command": "workyard",
+			"args": ["mcp"]
+		}
+	}
+}
+```
+
+The host negotiates MCP revision `2025-11-25`. Four tools read workspace state.
+
+| Tool | What it returns | Example arguments |
+| --- | --- | --- |
+| `list` | Task inventory and participants, including recent closures | `{}` |
+| `status` | Current participant health for active tasks or one named task | `{"task":"feat/payments"}` |
+| `info` | Workspace paths, discovery source and task counts | `{"workspace":"/path/to/workspace"}` |
+| `projects.list` | Available repository references and paths, plus the status of each tracked root | `{}` |
+
+To start in an empty directory, call these tools in order. Wait for each result
+before using it in the next call.
+
+| Tool | Example arguments | Result |
+| --- | --- | --- |
+| `init` | `{}` | Initializes the server’s working directory and returns `workspace` and `tasks_root`. To choose another layout, pass e.g. `{"directory":"/work/payments","tasks":"dev/trees"}`. |
+| `projects.track` | `{"paths":["/repos"]}` | Registers one or more repositories or directories to scan. `changed` contains the roots added by this call. |
+| `projects.list` | `{}` | Returns the project references you can pass to `create`. |
+
+Use `projects.untrack` with the same `paths` array to stop discovering projects
+through those roots. Existing tasks, branches and working files stay available.
+Repeating an applied track or untrack returns `{"changed":[]}`.
+
+The writable `create` tool takes a task name and an explicit selection of projects
+or repositories. This call uses two references returned by `projects.list`.
+
+```json
+{"task":"feat/payments","projects":["api","web"],"no_fetch":true}
+```
+
+Sending the call authorizes that creation. Workyard fetches configured remotes
+by default. Set `"no_fetch":true` to skip it. Reusing an existing target branch
+requires `"checkout":true`.
+The terminal result reports the operation outcome and each participant’s phase.
+
+To follow `create` (including checkout), `amend`, `remove`, or named `recover`
+while it runs, pass a string or integer `_meta.progressToken` in the
+`tools/call` parameters alongside `arguments`.
+
+```json
+{"name":"create","arguments":{"task":"feat/payments","projects":["api","web"]},"_meta":{"progressToken":"payments"}}
+```
+
+Each `notifications/progress` carries that token, an increasing event count
+starting at 1 and a participant message such as `Fetching web`. Git’s remaining
+work is unknown, so the host omits `total`. Use a distinct token for each active
+call. Clients that omit the token receive only the terminal response.
+
+If the client cancels the call or disconnects, Workyard stops scheduling new
+steps and records the outcome of work already in progress.
+After a lost reply, call `status` with the same task and workspace. For example,
+if `api` exists and `web` is missing after an interrupted create or checkout,
+call the writable `recover` tool with `{"task":"feat/payments"}`. This finishes
+the outstanding work and preserves edits in `api`. A repeat `recover` reports
+`nothing_to_recover: true` once the task is healthy. A repeat `create` returns
+`task_exists`.
+
+Use `amend` to add projects or rename an existing participant. For example, this
+adds the tracked project `infra` and renames the participant backed by `/repos/api`
+to `backend`. Its worktree moves with its uncommitted files.
+
+```json
+{"task":"feat/payments","projects":["infra"],"repositories":[{"path":"/repos/api","name":"backend"}]}
+```
+
+An observed amendment might report `Renamed participant to backend` followed by
+`Fetching infra`. On removal, progress identifies the inspected worktree. The
+terminal response carries the file list and any approval the operation needs.
+
+After an interrupted addition or rename, call `status` and then `recover` with
+the same task name to finish the outstanding changes. A subscribed recovery can
+report `Repairing Git worktree link for api` or confirm that a participant is
+unchanged. A healthy task can also return `nothing_to_recover: true` immediately.
+
+Use the CLI or RPC to activate a workspace or undo an interrupted removal.
+
+Use `amend` with `{"task":"feat/payments","remove":["web"]}` to unlink one
+participant, or `remove` with `{"task":"feat/payments"}` to retire the whole
+task. Both keep the branches and local commits. Clean worktrees can be removed
+in one call. A subscribed `remove` reports inspections and successful unlinks,
+such as `Unlinked worktree for api`. The successful tool result confirms retirement.
+
+If files would be discarded, Workyard returns `decision_required`. Show the
+user each participant’s `disclosures[].dirty_paths`, including ignored files.
+With their approval, repeat the same call with the returned `decision.token`
+in `approve_discard`. To remove `web` after review, send the following arguments.
+
+```json
+{"task":"feat/payments","remove":["web"],"approve_discard":"<token from the reviewed response>"}
+```
+
+The client can reconnect before sending approval. If a file changed, review the
+new disclosure. If all changes were saved, retry without `approve_discard`.
+When some worktrees have already been unlinked, the next decision covers the
+outstanding participants. The outcome records the completed changes.
+
+If the removal reply was lost, check `list` for a recent closure and `status`
+for the active task. Repeat `remove` only after confirming the same task has an
+unfinished removal. A new checkout can reuse a retired task’s name.
+
+After `init`, you can pass its returned `workspace` to each subsequent tool.
+Omitting it selects the nearest workspace in the server’s working directory or
+its ancestors. Relative paths in `paths` resolve from the server’s working
+directory. Results are available in `structuredContent` and as JSON text in `content`.
 
 ## Source boundaries and checks
 
@@ -296,7 +407,7 @@ accepted work; shutdown, read failure or output failure requests cancellation.
 	workspace and admission modules own binding/bootstrap and task guards. Document
 	publication, record encoding and path representation remain separate concerns.
 - `system`: focused native identity and stable lock modules, reexported at the root.
-- `cli`: process entrypoint, signals and CLI/RPC host selection.
+- `cli`: process entrypoint, signals and CLI, RPC and MCP host selection.
 
 Small inseparable concepts stay together: `CommandOutput` owns its diagnostics,
 `TaskGuard` owns verification of its locks, and Windows containment keeps its handle
@@ -317,6 +428,16 @@ CARGO_TARGET_DIR="$PWD/target" cargo test --workspace --all-targets
 CARGO_TARGET_DIR="$PWD/target" cargo test --workspace --doc
 CARGO_TARGET_DIR="$PWD/target" cargo fmt --all --check
 CARGO_TARGET_DIR="$PWD/target" cargo clippy --workspace --all-targets -- -D warnings
+```
+
+Run the official TypeScript MCP SDK smoke test from the Workyard checkout. It
+exercises discovery, task operations, progress and reconnect against the release
+executable. [SDK smoke test](tests/smoke_mcp.mjs)
+
+```sh
+CARGO_TARGET_DIR="$PWD/target" cargo build --release --locked
+npm install --prefix target/mcp-interop --no-save --package-lock=false @modelcontextprotocol/sdk@1.32.2
+node tests/smoke_mcp.mjs
 ```
 
 Linux tests use isolated repositories and remotes. Windows cross-compilation checks
@@ -343,7 +464,7 @@ unless CLI/framework execution or presentation failed; it then contains a stable
 
 JSON mode suppresses progress, styling and prompts. It does not imply `--yes` or
 `--force`; existing noninteractive consent rules apply. Explicit help/version remain
-plain displays, and combining JSON mode with `rpc` or `completion` is rejected.
+plain displays, and combining JSON mode with `rpc`, `mcp` or `completion` is rejected.
 A failed output stream can prevent delivery of a complete document; check the exit
 code and stderr too.
 
@@ -374,8 +495,6 @@ cached remote-tracking branches and tags; no network query or fetch occurs.
 
 `checkout` and `create --checkout` suggest the union of existing local branches and
 branches cached for each repository's selected remote. New names remain valid.
-`recover --accept-pull` suggests only participants with recorded unsettled pulls in the
-selected task. These are advisory names, not evidence that recovery is currently safe.
 
 Zsh shows named Tasks and Options groups, with tasks first and available help beside
 options. Existing Zsh completion styles control the headings. Repository child

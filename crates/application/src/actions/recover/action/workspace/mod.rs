@@ -16,7 +16,7 @@ pub(super) async fn run(
 	context: InvocationContext<Progress>,
 ) -> Result<WorkspaceRecovery, WorkspaceRecovery> {
 	let reject = |p| WorkspaceRecovery::default().failed(p);
-	if input.undo || input.force || input.yes || !input.accept_pull.is_empty() {
+	if input.undo || input.force || input.yes {
 		return Err(reject(Problem::new(
 			ProblemCode::InvalidInput,
 			"Task recovery options require a task name.",

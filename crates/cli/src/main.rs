@@ -18,7 +18,9 @@ fn main() -> ExitCode {
 		arguments.push("--help".into());
 	}
 
-	let json = json_requested(&arguments);
+	// MCP clients own stdout even when startup fails before Clap finishes parsing.
+	let command = arguments.iter().skip(1).find(|arg| *arg != "--json");
+	let json = json_requested(&arguments) && command.is_none_or(|arg| arg != "mcp");
 	match host::run(arguments, output.clone()) {
 		Ok(code) => ExitCode::from(code),
 		Err(error) => {

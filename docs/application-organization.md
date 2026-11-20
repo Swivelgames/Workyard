@@ -41,9 +41,11 @@ marker in the current directory or its ancestors, or accept a selected workspace
 The optional reader reports missing state without creating directories or locks.
 Info exposes the discovery source as part of its diagnostic contract.
 
-Recovery's `action/mod.rs` validates, checks cancellation, resolves state, reads the
-record under admission, releases that guard, and routes to removal, amendment or
-creation. Local mode modules own invocation options and result interpretation.
+Named recovery validates the request, checks cancellation and opens the selected
+workspace. Under task admission, `actions/recover/action/route.rs` selects creation,
+amendment or removal from the current record and the caller's authority. The
+selected core operation then acquires its mutation lock and checks its scope.
+The local mode modules invoke those operations and interpret their results.
 They deliberately retain their existing cancellation and no-op semantics. Shared
 removal observation belongs to execution because ordinary removal also uses it.
 

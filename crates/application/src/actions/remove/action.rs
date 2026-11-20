@@ -1,5 +1,11 @@
 use super::{RemoveInput, RemoveOutcome};
-use crate::{contracts::Progress, execution::blocking_action, execution::removal::RemovalEvents};
+use crate::{
+	contracts::Progress,
+	execution::{
+		blocking_action,
+		removal::{RemovalConsent, RemovalEvents, RemovalRequest},
+	},
+};
 use trine::InvocationContext;
 use workyard_core::{Control, OperationOutcome, ProblemCode, RemovalOptions};
 
@@ -7,13 +13,21 @@ pub async fn remove(
 	input: RemoveInput,
 	context: InvocationContext<Progress>,
 ) -> Result<RemoveOutcome, RemoveOutcome> {
-	blocking_action(run(input, context)).await
+	execute(input.into(), context).await
+}
+
+pub(super) async fn execute(
+	request: RemovalRequest<RemoveInput>,
+	context: InvocationContext<Progress>,
+) -> Result<RemoveOutcome, RemoveOutcome> {
+	blocking_action(run(request, context)).await
 }
 
 async fn run(
-	input: RemoveInput,
+	request: RemovalRequest<RemoveInput>,
 	context: InvocationContext<Progress>,
 ) -> Result<RemoveOutcome, RemoveOutcome> {
+	let input = request.input;
 	let rejected = |problem| RemoveOutcome::rejected(input.task.clone(), problem);
 	workyard_core::validate_task(&input.task).map_err(rejected)?;
 
@@ -26,15 +40,21 @@ async fn run(
 			.map_err(rejected)?;
 	let store = workyard_state::Store::open_existing(&state, None).map_err(rejected)?;
 	let runner = workyard_git::Runner::default();
-	let observer = RemovalEvents::new(context, "remove", input.task.clone());
-	let options = RemovalOptions {
-		yes: input.yes,
-		force: input.force,
-		undo: false,
-	};
+	let forward_only = matches!(request.consent, RemovalConsent::ReviewDiscard { .. });
+	let observer = RemovalEvents::new(context, "remove", input.task.clone())
+		.with_consent(request.consent, &state);
 
-	let result =
-		workyard_core::remove(&input.task, options, &runner, &control, &observer, &store).await;
+	let result = if forward_only {
+		workyard_core::retire(&input.task, &runner, &control, &observer, &store).await
+	} else {
+		let options = RemovalOptions {
+			yes: input.yes,
+			force: input.force,
+			undo: false,
+		};
+
+		workyard_core::remove(&input.task, options, &runner, &control, &observer, &store).await
+	};
 
 	let mut outcome = match result {
 		Ok(result) => RemoveOutcome::from_removal(result),

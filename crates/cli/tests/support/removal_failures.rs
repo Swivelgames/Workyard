@@ -337,7 +337,6 @@ fn only_an_unsupervised_destructive_unlink_retains_writer_evidence() {
 			options: CreationOptions {
 				checkout: false,
 				no_fetch: true,
-				pull: false,
 			},
 			removal_options: RemovalOptions {
 				yes: true,

@@ -4,14 +4,18 @@ mod admission;
 mod completion;
 mod execution;
 mod existing;
+mod intent;
 mod movement;
 mod plan;
 mod removal;
 mod replacement;
 
+pub use intent::AmendRecovery;
+use intent::Intent;
+
 use crate::{
 	AmendGit, AmendRequest, AmendResult, AmendState, AmendmentChange, Control, Operation,
-	OperationKind, OperationOutcome, Problem, ProblemCode, RemovalObserver, Task,
+	OperationKind, OperationOutcome, Problem, RemovalObserver, Task,
 };
 
 struct Amendment<'a, G, S: AmendState, O> {
@@ -21,13 +25,11 @@ struct Amendment<'a, G, S: AmendState, O> {
 	control: &'a Control,
 	observer: &'a O,
 	request: &'a AmendRequest,
-	accept_pull: &'a [String],
 	targets: &'a [crate::RemovalTarget],
 	checkpoint: Option<S::Checkpoint>,
 	changed: bool,
 	uncertain: bool,
 	changes: Vec<AmendmentChange>,
-	pull_failures: Vec<crate::PullFailure>,
 }
 
 pub async fn amend(
@@ -37,56 +39,53 @@ pub async fn amend(
 	observer: &impl RemovalObserver,
 	store: &impl AmendState,
 ) -> Result<AmendResult, Problem> {
-	run(request, &[], false, git, control, observer, store).await
+	admission::validate_selection(&request)?;
+	let name = request.task.clone();
+	run(&name, Intent::Apply(request), git, control, observer, store).await
 }
 
 pub async fn recover_amend(
 	request: AmendRequest,
-	accept_pull: &[String],
 	git: &impl AmendGit,
 	control: &Control,
 	observer: &impl RemovalObserver,
 	store: &impl AmendState,
 ) -> Result<AmendResult, Problem> {
-	run(request, accept_pull, true, git, control, observer, store).await
+	admission::validate_selection(&request)?;
+	let scope = AmendRecovery::WithRemovalOptions(request.removal_options);
+	recover_amend_with_scope(&request.task, scope, git, control, observer, store).await
+}
+
+pub async fn recover_amend_with_scope(
+	name: &str,
+	scope: AmendRecovery,
+	git: &impl AmendGit,
+	control: &Control,
+	observer: &impl RemovalObserver,
+	store: &impl AmendState,
+) -> Result<AmendResult, Problem> {
+	run(name, Intent::Resume(scope), git, control, observer, store).await
 }
 
 async fn run(
-	mut request: AmendRequest,
-	accept_pull: &[String],
-	recovering: bool,
+	name: &str,
+	intent: Intent,
 	git: &impl AmendGit,
 	control: &Control,
 	observer: &impl RemovalObserver,
 	store: &impl AmendState,
 ) -> Result<AmendResult, Problem> {
-	crate::validate_task(&request.task)?;
-	if (request.repositories.is_empty() && request.remove.is_empty())
-		|| (request.options.no_fetch && request.options.pull)
-	{
-		return Err(Problem::new(
-			ProblemCode::InvalidInput,
-			"Supply a repository or participant removal. --no-fetch and --pull are mutually exclusive.",
-		));
-	}
+	crate::validate_task(name)?;
 	control.check()?;
-	let guard = store.admit(&request.task)?;
-	let record = store.load(&guard, &request.task)?;
-	admission::validate(&record, accept_pull)?;
+	let guard = store.admit(name)?;
+	let record = store.load(&guard, name)?;
+	let recovering = matches!(intent, Intent::Resume(_));
+	admission::validate(&record)?;
+	let mut request = intent.resolve(&record, store, &guard)?;
 
-	let restore_record = record.recorded.is_none()
-		|| record.needs_publication
-		|| record.task.operation.outcome != OperationOutcome::Succeeded;
+	let restore_record = recovering && completion::needs_publication(&record, &request);
 	let original = record.into_amendment_task();
 	if recovering {
-		let options = request.removal_options;
-		request = store.amend_request(&guard)?.ok_or_else(|| {
-			Problem::new(
-				ProblemCode::InvalidInput,
-				"This task has no amendment to resume.",
-			)
-		})?;
-		request.removal_options = options;
 		admission::refresh_request(&mut request, &original, git, control).await?;
 	}
 
@@ -121,18 +120,14 @@ async fn run(
 		control,
 		observer,
 		request: &request,
-		accept_pull,
 		targets: &plan.targets,
 		checkpoint: None,
 		changed: false,
 		uncertain: false,
 		changes: Vec::new(),
-		pull_failures: Vec::new(),
 	};
-	let result = run
-		.execute(&mut task, plan.changes, recovering && restore_record)
-		.await;
-	if result.is_ok() && recovering && restore_record {
+	let result = run.execute(&mut task, plan.changes, restore_record).await;
+	if result.is_ok() && restore_record {
 		run.begin(&task)?;
 		run.changed = true;
 		run.publish(&task, 0)?;

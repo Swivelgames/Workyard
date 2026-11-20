@@ -23,7 +23,12 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 			));
 		}
 
-		let participant = current.participant;
+		let mut participant = current.participant;
+		if participant.phase != Phase::Completed {
+			self.verify_created(task, &participant).await?;
+			participant.phase = Phase::Completed;
+		}
+
 		let renaming = participant.name != change.name;
 		let updated = renaming || task.participants[index] != participant;
 		if renaming {
@@ -54,13 +59,39 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 			};
 			self.report(task, index, kind).await?;
 		}
-		if task.participants[index].phase != Phase::Completed {
-			return self
-				.finish_addition(task, index, &change.repository, &change.name)
-				.await;
-		}
 		if !updated && !change.repair {
 			self.report(task, index, Kind::Unchanged).await?;
+		}
+		Ok(())
+	}
+
+	/// Older additions can still need verification after the Git writer settled.
+	async fn verify_created(
+		&self,
+		task: &Task,
+		participant: &crate::Participant,
+	) -> Result<(), Problem> {
+		let observed = self
+			.git
+			.reconcile(participant, &task.name, self.control)
+			.await?;
+		if observed.destination.as_ref() != Some(&participant.destination) {
+			return Err(Problem::new(
+				ProblemCode::RepositoryChanged,
+				"The task branch is no longer at the recorded participant worktree.",
+			)
+			.remedy(
+				"Inspect git worktree list and the participant branch before retrying recovery.",
+			));
+		}
+		if observed.operation_in_progress {
+			return Err(Problem::new(
+				ProblemCode::ResourceBusy,
+				"The participant has native Git locks, unresolved conflicts or an unfinished Git operation.",
+			)
+			.remedy(
+				"Inspect git status and finish or abort the Git operation before retrying recovery.",
+			));
 		}
 		Ok(())
 	}

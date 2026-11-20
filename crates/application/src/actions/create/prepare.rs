@@ -19,13 +19,6 @@ impl CreateInput {
 			));
 		}
 
-		if self.no_fetch && self.pull {
-			return Err(Problem::new(
-				workyard_core::ProblemCode::InvalidInput,
-				"--no-fetch and --pull are mutually exclusive.",
-			));
-		}
-
 		let state = crate::workspace::required(self.workspace.as_ref().map(NativePath::as_path))?;
 		let reader = workyard_state::Reader::open(&state, None)?;
 		let repositories =
@@ -38,7 +31,6 @@ impl CreateInput {
 			state_dir: state,
 			checkout: self.checkout,
 			no_fetch: self.no_fetch,
-			pull: self.pull,
 			remote: self.remote,
 			from: self.from,
 		})

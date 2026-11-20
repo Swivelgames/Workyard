@@ -7,8 +7,6 @@ use workyard_core::{AmendResult, OperationKind, Problem};
 pub struct AmendOutcome {
 	#[serde(flatten)]
 	pub removal: crate::contracts::removal::RemovalReport,
-	#[serde(skip_serializing_if = "Vec::is_empty")]
-	pub pull_failures: Vec<crate::contracts::PullFailure>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub registration_problem: Option<ProblemOutcome>,
 	pub operation: OperationReport,
@@ -26,7 +24,6 @@ impl AmendOutcome {
 		Self {
 			removal: Default::default(),
 			registration_problem: None,
-			pull_failures: Vec::new(),
 			operation: OperationReport::rejected(OperationKind::Amend, &problem),
 			task,
 			lifecycle: None,
@@ -56,7 +53,6 @@ impl AmendOutcome {
 		Self {
 			removal: Default::default(),
 			registration_problem: None,
-			pull_failures: result.pull_failures.into_iter().map(Into::into).collect(),
 			operation: result.operation.into(),
 			task: result.task.name,
 			lifecycle: Some(result.task.lifecycle.as_str()),

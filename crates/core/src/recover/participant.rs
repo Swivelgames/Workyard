@@ -2,12 +2,7 @@ use super::Recovery;
 use crate::{Observer, Phase, Problem, ProblemCode, RecoveryGit, RecoveryState, Task};
 
 impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
-	pub(super) async fn participant(
-		&self,
-		task: &mut Task,
-		index: usize,
-		accepted: &[String],
-	) -> Result<(), Problem> {
+	pub(super) async fn participant(&self, task: &mut Task, index: usize) -> Result<(), Problem> {
 		self.repair_location(task, index).await?;
 		let observed = self
 			.runner
@@ -30,12 +25,12 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 
 		if let Some(destination) = observed.destination {
 			return self
-				.resume_existing(task, index, accepted, &repository, destination, previous)
+				.resume_existing(task, index, destination, previous)
 				.await;
 		}
 
 		self.create_missing(task, index, &repository).await?;
-		self.complete_created(task, index, &repository).await
+		self.phase(task, index, Phase::Completed).await
 	}
 
 	async fn repair_location(&self, task: &mut Task, index: usize) -> Result<(), Problem> {
@@ -89,8 +84,6 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 		&self,
 		task: &mut Task,
 		index: usize,
-		accepted: &[String],
-		repository: &crate::Repository,
 		destination: std::path::PathBuf,
 		previous: crate::Participant,
 	) -> Result<(), Problem> {
@@ -115,34 +108,6 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 			return Ok(());
 		}
 
-		if participant.phase == Phase::Pulling {
-			if !accepted.contains(&participant.name) {
-				let message = format!(
-					"Pull outcome for {:?} needs explicit acceptance after manual repair.",
-					participant.name
-				);
-				let remedy = format!(
-					"Inspect git status and complete or abort the pull yourself. Then run workyard recover {:?} --accept-pull {:?} from the workspace. No pull will be replayed.",
-					task.name, participant.name
-				);
-				return Err(Problem::new(ProblemCode::GitFailed, message).remedy(remedy));
-			}
-			return self.phase(task, index, Phase::Completed).await;
-		}
-
-		participant.phase = Phase::WorktreeCreated;
-		self.complete_created(task, index, repository).await
-	}
-
-	async fn complete_created(
-		&self,
-		task: &mut Task,
-		index: usize,
-		repository: &crate::Repository,
-	) -> Result<(), Problem> {
-		if task.creation_options(index).pull {
-			self.pull(task, index, repository).await?;
-		}
 		self.phase(task, index, Phase::Completed).await
 	}
 }

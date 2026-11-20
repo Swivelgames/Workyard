@@ -130,7 +130,7 @@ pub(crate) fn same_path(left: &Path, right: &Path) -> bool {
 			| (Prefix::VerbatimUNC(a, b), Prefix::UNC(c, d)) => a == c && b == d,
 			_ => false,
 		};
-		return prefixes_match && left.eq(right);
+		prefixes_match && left.eq(right)
 	}
 	#[cfg(not(windows))]
 	false

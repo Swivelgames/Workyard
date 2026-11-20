@@ -39,9 +39,7 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 			.iter()
 			.all(|change| change.kind == "unchanged");
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		if !outcome.pull_failures.is_empty() && outcome.problem.is_none() {
-			terminal.completed_with_pull_failures("Amendment", &outcome.task);
-		} else if succeeded && unchanged {
+		if succeeded && unchanged {
 			terminal.heading(&format!("No changes needed: {}", text(&outcome.task)));
 		} else {
 			terminal.heading(&format!(
@@ -65,7 +63,6 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 				&format!("Changes retained: {changed}"),
 			);
 		}
-		terminal.pull_failures(&outcome.pull_failures);
 		if let Some(problem) = &outcome.registration_problem {
 			terminal.problem(problem);
 		}

@@ -15,18 +15,21 @@ pub use action::recover;
 pub use contract::{RecoverOutcome, RecoveryOutcome};
 pub use input::RecoverInput;
 
-type RecoverEntry = Entry<RecoverInput, RecoveryOutcome, RecoveryOutcome, Progress>;
+use input::RecoveryRequest;
+
+type RecoverEntry = Entry<RecoveryRequest, RecoveryOutcome, RecoveryOutcome, Progress>;
 
 pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 	let handler = Action::new(
 		"recover",
 		"Repair workspace locations or resume an interrupted task operation",
-		action::recover,
+		action::execute,
 	)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = crate::presentation::structured::progress_binding();
+	let mcp = crate::presentation::mcp::progress_binding();
 
-	Ok(Entry::new(handler)
+	Entry::new(handler)
 		.cli(
 			cli,
 			|output| {
@@ -42,5 +45,10 @@ pub(crate) fn build_entry() -> Result<RecoverEntry, RegistrationError> {
 				_ => exit_status::result(result),
 			},
 		)
-		.rpc(rpc))
+		.rpc(rpc)
+		.mcp_with_input(
+			mcp,
+			"Resume creation, checkout or participant additions and renames for one named task",
+			RecoveryRequest::Participants,
+		)
 }

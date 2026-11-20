@@ -27,6 +27,7 @@ pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
 	)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();
+	let mcp = StructuredBinding::serde();
 
 	Ok(Entry::new(handler)
 		.cli(
@@ -34,5 +35,7 @@ pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
 			|output| Ok(cli::StatusView { output }),
 			exit_status::result,
 		)
-		.rpc(rpc))
+		.rpc(rpc)
+		.mcp(mcp)
+		.mcp_observation())
 }

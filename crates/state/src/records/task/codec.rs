@@ -7,7 +7,6 @@ pub(crate) fn match_intent(intent: &TaskRecord, current: &TaskRecord) -> Result<
 	let same = intent.generation == current.generation
 		&& intent.checkout == current.checkout
 		&& intent.no_fetch == current.no_fetch
-		&& intent.pull == current.pull
 		&& intent.participants.len() == current.participants.len()
 		&& intent
 			.participants
@@ -45,7 +44,6 @@ pub(crate) fn validate(
 	if record.task != name
 		|| !super::placement::matches_workspace(record, root, state)?
 		|| record.participants.is_empty()
-		|| (record.pull && record.no_fetch)
 	{
 		return Err(damaged(
 			"Task identity, placement or options do not match authoritative state.",
@@ -63,11 +61,6 @@ pub(crate) fn validate(
 		}
 		for path in [&p.source, &p.common_dir, &p.destination] {
 			super::placement::check_path(&path.decode()?)?;
-		}
-		if p.creation
-			.is_some_and(|options| options.pull && options.no_fetch)
-		{
-			return Err(damaged("Invalid participant creation options."));
 		}
 		parse_phase(&p.phase)?;
 	}
@@ -108,7 +101,6 @@ pub(crate) fn decode(record: TaskRecord, root: &Path, state: &Path) -> Result<Ta
 		state_dir: state.to_owned(),
 		checkout: record.checkout,
 		no_fetch: record.no_fetch,
-		pull: record.pull,
 		lifecycle: if record.lifecycle == "retired" {
 			TaskLifecycle::Retired
 		} else {
@@ -153,8 +145,9 @@ fn parse_phase(value: &str) -> Result<Phase, Problem> {
 		"not_started" => Ok(Phase::NotStarted),
 		"fetching" => Ok(Phase::Fetching),
 		"creating" => Ok(Phase::Creating),
-		"worktree_created" => Ok(Phase::WorktreeCreated),
-		"pulling" => Ok(Phase::Pulling),
+		// A legacy pull followed worktree creation. Recovery still verifies the tree
+		// and checks independent writer evidence before completing membership.
+		"worktree_created" | "pulling" => Ok(Phase::WorktreeCreated),
 		"completed" => Ok(Phase::Completed),
 		_ => Err(damaged("Invalid participant phase.")),
 	}
@@ -165,5 +158,14 @@ fn decode_problem(record: crate::records::ProblemRecord) -> Result<Problem, Prob
 		.code
 		.parse()
 		.map_err(|()| damaged(format!("Unknown stored problem code {:?}.", record.code)))?;
-	Ok(Problem::new(code, record.message).remedy(record.remedy))
+	let retired_option = record
+		.remedy
+		.split_ascii_whitespace()
+		.any(|word| word == "--accept-pull");
+	let remedy = if code == ProblemCode::GitFailed && retired_option {
+		"Inspect git status in the participant worktree. Wait for Git writers to stop and resolve any unfinished Git operation. Then run workyard recover with the task name from its workspace.".into()
+	} else {
+		record.remedy
+	};
+	Ok(Problem::new(code, record.message).remedy(remedy))
 }

@@ -5,8 +5,7 @@ use trine::cli::Bindings;
 pub(crate) fn project_bindings(bindings: Bindings) -> Bindings {
 	let bindings = bindings
 		.option("checkout", "checkout")
-		.option("no_fetch", "no-fetch")
-		.option("pull", "pull");
+		.option("no_fetch", "no-fetch");
 
 	let bindings = workspace_binding(bindings)
 		.positional("projects")

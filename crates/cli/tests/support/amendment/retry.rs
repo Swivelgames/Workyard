@@ -31,7 +31,6 @@ fn request(repositories: Vec<workyard_core::RepositoryInput>) -> workyard_core::
 		options: workyard_core::CreationOptions {
 			checkout: false,
 			no_fetch: true,
-			pull: false,
 		},
 		remote: None,
 		from: Some("main".into()),
@@ -154,46 +153,51 @@ fn cancellation_before_first_effect_preserves_all_task_bytes() {
 }
 
 #[test]
-fn settled_pull_needs_no_acceptance_after_an_unrelated_amendment() {
+fn legacy_amendment_recovery_requires_the_original_branch_before_settlement() {
 	let fixture = tempfile::tempdir().unwrap();
 	let api = repo(fixture.path(), "api");
 	let web = repo(fixture.path(), "web");
 	let root = fixture.path().join("workspace");
 	create(&root, &api);
-
-	let failed = workyard(
-		&root,
-		&[
-			"amend",
-			"feat/task",
-			"--pull",
-			"--from",
-			"main",
-			"--repo",
-			text(&web),
-		],
-	);
-	assert!(!failed.status.success());
 	assert_ok(&workyard(
 		&root,
-		&[
-			"amend",
-			"feat/task",
-			"--repo",
-			text(&api),
-			"--repo-name",
-			"legacy",
-		],
+		&["amend", "feat/task", "--from", "main", "--repo", text(&web)],
 	));
 
-	// There is still no upstream: replaying pull would fail again.
-	let recovered = workyard(&root, &["recover", "feat/task"]);
-	assert_ok(&recovered);
-	assert!(String::from_utf8_lossy(&recovered.stdout).contains("Nothing to recover"));
-	let saved = crate::support::record(&root.join(".workyard"));
-	assert_eq!(saved["participants"][0]["name"], "legacy");
+	let state = root.join(".workyard");
+	let filename = workyard_state::task_filename("feat/task");
+	let revision_path = state
+		.join("evidence")
+		.join(&filename)
+		.with_extension("revision");
+	let mut revision: serde_json::Value =
+		serde_json::from_slice(&std::fs::read(&revision_path).unwrap()).unwrap();
+	assert!(revision["current"]["pending"].is_null());
+	revision["request"]["pull"] = true.into();
+	let task = &mut revision["current"]["task"];
+	task["operation"]["outcome"] = "failed".into();
+	task["participants"][1]["creation"]["pull"] = true.into();
+	task["participants"][1]["phase"] = "pulling".into();
+	std::fs::write(
+		state.join("tasks").join(filename),
+		serde_json::to_vec(task).unwrap(),
+	)
+	.unwrap();
+	std::fs::write(revision_path, serde_json::to_vec(&revision).unwrap()).unwrap();
+
+	let tree = root.join("tasks/feat/task/web");
+	git(&tree, &["checkout", "-b", "other"]);
+	let before = state_bytes(&root);
+	let refused = workyard(&root, &["recover", "feat/task"]);
+	assert!(!refused.status.success());
+	assert_eq!(git(&tree, &["branch", "--show-current"]), "other");
+	assert_eq!(state_bytes(&root), before);
+
+	git(&tree, &["checkout", "feat/task"]);
+	assert_ok(&workyard(&root, &["recover", "feat/task"]));
+	let saved = crate::support::record(&state);
 	assert_eq!(saved["participants"][1]["phase"], "completed");
-	assert_eq!(saved["participants"][1]["creation"]["pull"], true);
+	assert_eq!(saved["operation"]["outcome"], "succeeded");
 }
 
 #[test]

@@ -72,12 +72,6 @@ pub trait Git: Sync {
 		plan: &BranchPlan,
 		control: &Control,
 	) -> impl Future<Output = Result<(), Problem>> + Send;
-	fn pull(
-		&self,
-		repository: &Repository,
-		destination: &Path,
-		control: &Control,
-	) -> impl Future<Output = Result<(), Problem>> + Send;
 }
 
 pub trait RecoveryGit: Git {

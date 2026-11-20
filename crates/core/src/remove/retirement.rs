@@ -14,13 +14,21 @@ struct InspectedParticipant {
 
 impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O> {
 	pub(super) async fn retire(&mut self, task: &mut Task) -> Result<(), Problem> {
+		self.observer.begin_disclosure(task, None);
 		let inspected = self.inspect_participants(task).await?;
 		self.inspected = true;
 
 		let discards_files = inspected
 			.iter()
 			.any(|member| !member.observation.dirty_paths.is_empty());
-		consent::authorize(self.observer, self.options, &task.name, &[], discards_files).await?;
+		consent::authorize(
+			self.observer,
+			self.options,
+			&task.name,
+			None,
+			discards_files,
+		)
+		.await?;
 		if task.removal.is_none() {
 			task.removal = Some(removal_intent(&inspected));
 		}
@@ -109,7 +117,7 @@ impl<G: RemovalGit, S: RecoveryState, O: RemovalObserver> RemovalRun<'_, G, S, O
 		}
 
 		self.observer
-			.phase(&task.name, &task.participants[index].name, "removed")
+			.removed(&task.name, &task.participants[index].name)
 			.await
 	}
 }

@@ -1,6 +1,16 @@
 use crate::{Phase, Problem, ProblemCode, RecoveryRecord, TaskLifecycle};
 
-pub(super) fn validate(record: &RecoveryRecord, accept_pull: &[String]) -> Result<(), Problem> {
+pub(super) fn validate_selection(request: &crate::AmendRequest) -> Result<(), Problem> {
+	if request.repositories.is_empty() && request.remove.is_empty() {
+		return Err(Problem::new(
+			ProblemCode::InvalidInput,
+			"Supply a repository or participant removal.",
+		));
+	}
+	Ok(())
+}
+
+pub(super) fn validate(record: &RecoveryRecord) -> Result<(), Problem> {
 	if let Some(index) = record.pending
 		&& record.task.participants[index].phase != Phase::Fetching
 	{
@@ -18,20 +28,6 @@ pub(super) fn validate(record: &RecoveryRecord, accept_pull: &[String]) -> Resul
 			ProblemCode::InvalidInput,
 			"Amend requires an active task without an incomplete removal.",
 		));
-	}
-
-	for accepted in accept_pull {
-		if !record
-			.task
-			.participants
-			.iter()
-			.any(|p| &p.name == accepted && p.phase == Phase::Pulling)
-		{
-			return Err(Problem::new(
-				ProblemCode::InvalidInput,
-				"--accept-pull must name a participant with an unsettled pull.",
-			));
-		}
 	}
 
 	Ok(())

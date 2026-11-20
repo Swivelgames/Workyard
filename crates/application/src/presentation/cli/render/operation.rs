@@ -36,7 +36,6 @@ impl Terminal {
 					"restored" => "restored",
 					"restoration_unconfirmed" => "restoration unconfirmed",
 					"worktree_created" => "worktree created (recorded)",
-					"pulling" => "pull needs review",
 					"not_started" | "fetching" => "creation unconfirmed",
 					_ => "needs attention",
 				};

@@ -12,6 +12,7 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 		task: &Task,
 		report_settled: bool,
 	) -> Result<Vec<(RemovalTarget, RemovalObservation)>, Problem> {
+		self.observer.begin_disclosure(task, Some(self.request));
 		let mut selected = Vec::new();
 		for target in self.targets {
 			let Some(participant) = task.participants.iter().find(|p| target.matches(p)) else {
@@ -36,13 +37,15 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 
 		if !selected.is_empty() {
 			self.protect_membership(task, &selected).await?;
+		}
+		if !selected.is_empty() || self.observer.requires_unchanged_disclosure() {
 			let names: Vec<_> = selected.iter().map(|(t, _)| t.name.clone()).collect();
 			let dirty = selected.iter().any(|(_, o)| !o.dirty_paths.is_empty());
 			consent::authorize(
 				self.observer,
 				self.request.removal_options,
 				&task.name,
-				&names,
+				Some(&names),
 				dirty,
 			)
 			.await?;
@@ -135,9 +138,7 @@ impl<G: AmendGit, S: AmendState, O: RemovalObserver> Amendment<'_, G, S, O> {
 			return Err(problem);
 		}
 		self.store.save(self.guard, task)?;
-		self.observer
-			.phase(&task.name, &target.name, "removed")
-			.await
+		self.observer.removed(&task.name, &target.name).await
 	}
 
 	async fn settle_failure(

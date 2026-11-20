@@ -99,6 +99,14 @@ pub struct Decision {
 }
 
 pub trait RemovalObserver: crate::Observer {
+	/// Scope the disclosure to the task incarnation under mutation admission.
+	fn begin_disclosure(&self, _task: &crate::Task, _amendment: Option<&crate::AmendRequest>) {}
+
+	/// Exact approvals must also notice when previously disclosed changes have been saved.
+	fn requires_unchanged_disclosure(&self) -> bool {
+		false
+	}
+
 	fn disclose(
 		&self,
 		_participant: &str,
@@ -106,6 +114,15 @@ pub trait RemovalObserver: crate::Observer {
 	) -> impl Future<Output = Result<(), Problem>> + Send {
 		async { Ok(()) }
 	}
+	/// Forget a completed target before any later discard decision.
+	fn removed(
+		&self,
+		task: &str,
+		participant: &str,
+	) -> impl Future<Output = Result<(), Problem>> + Send {
+		self.phase(task, participant, "removed")
+	}
+
 	/// Returns None when the interface cannot ask; never silently grants consent.
 	fn confirm(
 		&self,
