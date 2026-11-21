@@ -4,7 +4,7 @@ use std::{
 	collections::BTreeMap,
 	ffi::OsStr,
 	fs,
-	path::{Path, PathBuf},
+	path::{MAIN_SEPARATOR, Path, PathBuf},
 	process::Command,
 };
 use support::*;
@@ -123,7 +123,13 @@ fn recorded_tasks_are_live_read_only_and_distinct_from_files() {
 				"feat/".as_ref(),
 			],
 		);
-		assert!(paths.iter().any(|path| path == "feat/decoy/"));
+		let separator = if shell == "powershell" {
+			MAIN_SEPARATOR
+		} else {
+			'/'
+		};
+		let directory = format!("feat/decoy{separator}");
+		assert!(paths.contains(&directory), "{shell}: {paths:?}");
 	}
 	assert_eq!(files(&state), before);
 	let nested = root.path().join("feat/decoy");
@@ -238,11 +244,11 @@ fn busy_and_damaged_records_remain_suggestible_without_creating_gates() {
 	let lock_path = state
 		.join("locks")
 		.join(Path::new(&filename).with_extension("lock"));
-	let gate = workyard_state::Lock::acquire(&lock_path, false).unwrap();
 	let before = files(&state);
+	let gate = workyard_state::Lock::acquire(&lock_path, false).unwrap();
 	assert_eq!(tasks(root.path(), "recover", "fix/"), ["fix/one"]);
-	assert_eq!(files(&state), before);
 	drop(gate);
+	assert_eq!(files(&state), before);
 	fs::remove_file(&lock_path).unwrap();
 	let before = files(&state);
 	assert_eq!(tasks(root.path(), "recover", "fix/"), ["fix/one"]);
@@ -290,8 +296,8 @@ fn evidence_only_records_and_inaccessible_workspace_do_not_change_state() {
 
 	let gate = workyard_state::Lock::acquire(&state.join("workspace.lock"), false).unwrap();
 	assert!(tasks(root.path(), "recover", "fix/").is_empty());
-	assert_eq!(files(&state), before);
 	drop(gate);
+	assert_eq!(files(&state), before);
 	fs::remove_file(state.join("workspace.lock")).unwrap();
 	let before = files(&state);
 	assert!(tasks(root.path(), "recover", "fix/").is_empty());

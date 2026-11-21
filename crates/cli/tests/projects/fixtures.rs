@@ -53,9 +53,13 @@ pub(super) fn invoke(cwd: &Path, action: &[&str], input: Value) -> Value {
 }
 
 pub(super) fn complete(workspace: &Path, arguments: &[&str]) -> Vec<String> {
+	suggestions(workspace, "zsh", arguments)
+}
+
+pub(super) fn suggestions(workspace: &Path, shell: &str, arguments: &[&str]) -> Vec<String> {
 	let output = Command::new(env!("CARGO_BIN_EXE_workyard"))
 		.current_dir(workspace)
-		.env("TRINE_COMPLETE", "zsh")
+		.env("TRINE_COMPLETE", shell)
 		.env("_CLAP_COMPLETE_INDEX", arguments.len().to_string())
 		.env_remove("TRINE_COMPLETE_LINE")
 		.env_remove("TRINE_COMPLETE_METADATA")
@@ -67,7 +71,8 @@ pub(super) fn complete(workspace: &Path, arguments: &[&str]) -> Vec<String> {
 	assert_ok(&output);
 	String::from_utf8(output.stdout)
 		.unwrap()
-		.lines()
+		.split(if shell == "bash" { '\u{b}' } else { '\n' })
+		.filter(|candidate| !candidate.is_empty())
 		.map(str::to_owned)
 		.collect()
 }

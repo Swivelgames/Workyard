@@ -10,6 +10,7 @@ workyard-system.workspace = true
 workyard-core.workspace = true
 smol.workspace = true
 sha2.workspace = true
+dunce = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

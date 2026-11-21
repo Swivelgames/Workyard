@@ -28,7 +28,7 @@ fn relative_git_links_and_nonstandard_worktree_locations_are_preserved() {
 	));
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"][0]["destination"],
-		serde_json::json!(external)
+		serde_json::json!(external.canonicalize().unwrap())
 	);
 	let before = state_bytes(&root);
 	assert_ok(&workyard(&root, &["status"]));
@@ -137,6 +137,6 @@ fn amended_task_recovery_follows_an_external_repaired_backing_move() {
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"][0]["common_dir"],
-		serde_json::json!(moved.join(".git"))
+		serde_json::json!(moved.join(".git").canonicalize().unwrap())
 	);
 }

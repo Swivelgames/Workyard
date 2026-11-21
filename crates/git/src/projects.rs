@@ -185,7 +185,7 @@ async fn inspect_directory(
 	// An explicit git-dir keeps Git from discovering an unrelated parent repository.
 	let args = [
 		OsString::from("--git-dir"),
-		git_dir.into_os_string(),
+		dunce::simplified(&git_dir).into(),
 		"rev-parse".into(),
 		"--path-format=absolute".into(),
 		"--git-common-dir".into(),

@@ -1,5 +1,5 @@
 //! Git-current inspection without index refresh or lifecycle adoption decisions.
-use crate::{Runner, output::path_line, process::args};
+use crate::{Runner, output::path_line, process::args, worktree_path::registered_path};
 use std::path::{Path, PathBuf};
 use workyard_core::{Control, GitFacts, ObservationGit, Participant, Phase, Problem, ProblemCode};
 
@@ -89,6 +89,7 @@ impl Observation<'_> {
 			};
 			let path = crate::output::path_field(bytes)
 				.map_err(|_| changed("Invalid Git worktree path."))?;
+			let path = registered_path(path, &participant.destination);
 			// Unrelated prunable or inaccessible registrations cannot establish this
 			// participant's identity and must not hide a reachable matching worktree.
 			match path.try_exists() {

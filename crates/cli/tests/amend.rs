@@ -154,13 +154,11 @@ fn supplied_moved_clone_repairs_links_without_manual_git_commands() {
 			text(&moved),
 		],
 	));
-	assert_eq!(
-		git(
-			&root.join("tasks/feat/task/api"),
-			&["rev-parse", "--path-format=absolute", "--git-common-dir"]
-		),
-		text(&moved.join(".git"))
+	let common_dir = git(
+		&root.join("tasks/feat/task/api"),
+		&["rev-parse", "--path-format=absolute", "--git-common-dir"],
 	);
+	assert_eq!(Path::new(&common_dir), moved.join(".git"));
 	assert_eq!(
 		record(&root.join(".workyard"))["participants"][0]["name"],
 		"api"

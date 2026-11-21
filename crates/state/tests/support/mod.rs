@@ -32,7 +32,7 @@ impl Workspace {
 		let temporary = tempfile::tempdir().unwrap();
 		let workspace = temporary.path().join("workspace");
 		let root = workyard_state::initialize_workspace(&workspace, None).unwrap();
-		let state = workspace.join(".workyard");
+		let state = workspace.join(".workyard").canonicalize().unwrap();
 		let store = Store::open_existing(&state, Some(&root)).unwrap();
 		Self {
 			store,

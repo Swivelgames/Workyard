@@ -3,7 +3,10 @@ mod location;
 pub(crate) mod pointer;
 mod portability;
 mod repair;
-use crate::{Runner, operations::operations_present, output::path_line, process::args};
+use crate::{
+	Runner, operations::operations_present, output::path_line, process::args,
+	worktree_path::same_path,
+};
 use location::locate;
 pub use portability::Placement;
 use std::path::Path;
@@ -40,19 +43,21 @@ impl AmendGit for Runner {
 	) -> Result<(), Problem> {
 		let _gate = relationship_lock(repository, control).await?;
 		let current = self.relationship(repository, participant, control).await?;
-		if current.needs_repair || current.participant.destination != participant.destination {
+		if current.needs_repair
+			|| !same_path(&current.participant.destination, &participant.destination)
+		{
 			return Err(changed(
 				"Participant location changed before its rename; retry amend.",
 			));
 		}
 		let mut arguments = args(&["worktree", "move", "--"]);
-		arguments.push(participant.destination.as_os_str().into());
-		arguments.push(destination.as_os_str().into());
+		arguments.push(dunce::simplified(&participant.destination).into());
+		arguments.push(dunce::simplified(destination).into());
 		self.effect(&repository.source, &arguments, control).await?;
 		let moved = self
 			.relationship(repository, participant, &Control::new(|| false))
 			.await?;
-		if moved.needs_repair || moved.participant.destination != destination {
+		if moved.needs_repair || !same_path(&moved.participant.destination, destination) {
 			return Err(changed(
 				"Git moved the worktree, but its registered destination differs from the requested path.",
 			));
@@ -110,7 +115,7 @@ impl Runner {
 		)?);
 		current.source = repository.source.clone();
 		current.common_dir = repository.common_dir.clone();
-		if !needs_repair && participant.destination != location.destination {
+		if !needs_repair && !same_path(&participant.destination, &location.destination) {
 			current.placement = None;
 		}
 		current.destination = location.destination;

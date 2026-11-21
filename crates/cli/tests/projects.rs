@@ -5,6 +5,7 @@ mod support;
 mod projects {
 	mod catalog;
 	mod fixtures;
+	mod path_completion;
 	mod registration;
 	mod selection;
 }

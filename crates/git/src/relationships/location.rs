@@ -1,6 +1,7 @@
 //! Locate a recorded administrative identity without requiring working .git pointers.
 use super::changed;
-use super::pointer::{absolute, matches_pointer, read_path, same_path};
+use super::pointer::{absolute, matches_pointer, read_path};
+use crate::worktree_path::same_path;
 use std::path::{Path, PathBuf};
 use workyard_core::{Participant, Problem, Repository};
 
@@ -55,7 +56,7 @@ pub(super) fn inspect(
 		}
 		let backlink = read_path(&administration.join("gitdir"))?;
 		let current = worktree_from_backlink(&administration, &backlink)?;
-		if identity.is_none() && current != participant.destination {
+		if identity.is_none() && !same_path(&current, &participant.destination) {
 			continue;
 		}
 		let registration = Registration::inspect(current, &administration, &backlink, participant)?;

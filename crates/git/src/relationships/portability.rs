@@ -1,6 +1,6 @@
 //! A preview binds consent to the inspected repository, locations and native entries.
 use super::{changed, location, relationship_lock};
-use crate::{Runner, operations::locks_present};
+use crate::{Runner, operations::locks_present, worktree_path::same_path};
 use std::{
 	collections::HashSet,
 	path::{Path, PathBuf},
@@ -85,7 +85,7 @@ impl Runner {
 			if repo.identity != participant.backing_identity {
 				continue;
 			}
-			if super::pointer::same_path(path, &participant.destination) {
+			if same_path(path, &participant.destination) {
 				repo.source = repo.common_dir.clone();
 			}
 			return Ok(repo.into());

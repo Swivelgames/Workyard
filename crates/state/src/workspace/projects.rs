@@ -14,6 +14,12 @@ pub enum RootEdit {
 }
 
 impl Reader {
+	/// Absolute selection to retain for a deferred project registration.
+	pub fn project_registration_path(&self, path: &Path) -> Result<PathBuf, Problem> {
+		let workspace = self.state().parent().expect("workspace marker");
+		Ok(workspace.join(registration(workspace, path)?))
+	}
+
 	pub fn project_roots(&self) -> Result<Vec<PathBuf>, Problem> {
 		let workspace = self.state().parent().expect("workspace marker");
 		Ok(Layout::read(self.state())?

@@ -10,10 +10,10 @@ import {
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CallbackTransport, ProgressTransport } from "./mcp_progress.mjs";
 
 const requireSdk = createRequire(new URL("../target/mcp-interop/package.json", import.meta.url));
 const { Client } = requireSdk("@modelcontextprotocol/sdk/client");
-const { StdioClientTransport } = requireSdk("@modelcontextprotocol/sdk/client/stdio.js");
 const target = fileURLToPath(new URL("../target/", import.meta.url));
 const binary = join(target, "release", process.platform === "win32" ? "workyard.exe" : "workyard");
 
@@ -50,34 +50,35 @@ async function callForResult(client, name, args, options) {
 }
 
 async function callWithProgress(client, name, args, expectedMessages) {
-	const updates = [];
-	const result = await callForResult(client, name, args, {
-		onprogress: update => updates.push(update),
-	});
-	assert.deepEqual(updates.map(update => update.message), expectedMessages);
-	assert.deepEqual(updates.map(update => update.progress), expectedMessages.map((_, i) => i + 1));
-	assert.ok(updates.every(update => update.total === undefined));
-	return result;
+	client.transport.expectProgress(expectedMessages);
+	// Supplying a callback asks the SDK to attach its progress token.
+	return callForResult(client, name, args, { onprogress() {} });
 }
 
 async function initializeTasks(workspace, sources) {
 	const client = new Client({ name: "workyard-sdk-setup", version: "1" });
 	try {
-		await client.connect(new StdioClientTransport({ command: binary, args: ["mcp"], cwd: workspace }));
+		await client.connect(new CallbackTransport({ command: binary, args: ["mcp"], cwd: workspace }));
 		const initialized = await callForResult(client, "init", {});
-		assert.equal(realpathSync(initialized.workspace), realpathSync(workspace));
-		assert.equal(realpathSync(initialized.tasks_root), realpathSync(join(workspace, "tasks")));
+		assert.equal(realpathSync.native(initialized.workspace), realpathSync.native(workspace));
+		assert.equal(realpathSync.native(initialized.tasks_root), realpathSync.native(join(workspace, "tasks")));
 
 		const tracked = await callForResult(client, "projects.track", { paths: [sources] });
-		assert.deepEqual(tracked.changed.map(path => realpathSync(path)), [realpathSync(sources)]);
+		assert.deepEqual(tracked.changed.map(path => realpathSync.native(path)), [realpathSync.native(sources)]);
 		const catalog = await callForResult(client, "projects.list", {});
 		const references = catalog.projects.map(project => project.reference);
 		assert.deepEqual(references, ["api", "web"]);
 
 		for (const task of ["feat/inventory", "fix/other"]) {
 			const args = { task, projects: [references[0]], no_fetch: true, from: "main" };
-			const created = await callForResult(client, "create", args);
+			const updates = [];
+			const created = await callForResult(client, "create", args, {
+				onprogress: update => updates.push(update.message),
+			});
 			assert.equal(created.lifecycle, "active");
+			assert.deepEqual(updates, [
+				"Creating worktree for api", "Created worktree for api", "Finished worktree setup for api",
+			]);
 		}
 	} finally {
 		await client.close();
@@ -122,11 +123,11 @@ async function verifyProjects(client, cwd, sources, workspace) {
 	const catalog = await observe(client, cwd, "projects.list", {});
 	assert.deepEqual(catalog.projects.map(project => project.reference), ["api", "web"]);
 	for (const project of catalog.projects) {
-		assert.equal(realpathSync(project.path), realpathSync(join(sources, project.reference)));
+		assert.equal(realpathSync.native(project.path), realpathSync.native(join(sources, project.reference)));
 	}
 
 	const available = catalog.roots.find(root => root.status === "available");
-	assert.equal(realpathSync(available.path), realpathSync(sources));
+	assert.equal(realpathSync.native(available.path), realpathSync.native(sources));
 	const missing = catalog.roots.find(root => root.status === "missing");
 	assert.equal(missing.path, join(workspace, "projects"));
 	assert.equal(existsSync(missing.path), false);
@@ -198,14 +199,15 @@ async function verifyRemoval(client, workspace) {
 	const decision = await client.callTool({ name: "amend", arguments: args });
 	assert.equal(decision.isError, true);
 	const { problem, disclosures, decision: required } = decision.structuredContent;
-	assert.equal(problem.code, "decision_required");
+	assert.equal(problem.code, "decision_required", problem.message);
 	assert.deepEqual(disclosures.find(d => d.participant === "web").dirty_paths, ["draft"]);
 	assert.equal(typeof required.token, "string");
 	assert.equal(readFileSync(draft, "utf8"), "waiting for review");
 
 	const reconnected = new Client({ name: "workyard-sdk-reconnected", version: "1" });
+	const transport = new ProgressTransport({ command: binary, args: ["mcp"], cwd: workspace });
 	try {
-		await reconnected.connect(new StdioClientTransport({ command: binary, args: ["mcp"], cwd: workspace }));
+		await reconnected.connect(transport);
 		const approved = { ...args, approve_discard: required.token };
 		const amended = await callForResult(reconnected, "amend", approved);
 		assert.deepEqual(amended.changes, [{ participant: "web", kind: "removed" }]);
@@ -224,6 +226,7 @@ async function verifyRemoval(client, workspace) {
 	} finally {
 		await reconnected.close();
 	}
+	transport.verify();
 }
 
 async function verifyUntrack(client, { workspace, repo, sources }) {
@@ -232,7 +235,7 @@ async function verifyUntrack(client, { workspace, repo, sources }) {
 	const status = await callForResult(client, "status", args);
 	const registrations = git(repo, "worktree", "list", "--porcelain");
 	const removed = await callForResult(client, "projects.untrack", { paths: [sources] });
-	assert.deepEqual(removed.changed.map(path => realpathSync(path)), [realpathSync(sources)]);
+	assert.deepEqual(removed.changed.map(path => realpathSync.native(path)), [realpathSync.native(sources)]);
 
 	const catalog = await callForResult(client, "projects.list", {});
 	assert.deepEqual(catalog.projects, []);
@@ -245,7 +248,7 @@ async function verifyTools(fixture) {
 	const { workspace } = fixture;
 	const cwd = join(workspace, "tasks");
 	const client = new Client({ name: "workyard-sdk-smoke", version: "1" });
-	const transport = new StdioClientTransport({ command: binary, args: ["mcp"], cwd });
+	const transport = new ProgressTransport({ command: binary, args: ["mcp"], cwd });
 	try {
 		await client.connect(transport);
 		assert.equal(client.getServerVersion().name, "workyard");
@@ -285,6 +288,7 @@ async function verifyTools(fixture) {
 	} finally {
 		await client.close();
 	}
+	transport.verify();
 }
 
 const root = mkdtempSync(join(target, "sdk-workspace-"));

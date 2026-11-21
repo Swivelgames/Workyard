@@ -328,13 +328,27 @@ fn deferred_project_registration_follows_a_moved_workspace_without_rewriting_adm
 				&["create", "topic", "baseline", "--from", "main"],
 			));
 		}
+		let caller = old.join("nested");
+		fs::create_dir(&caller).unwrap();
+		#[cfg(unix)]
+		let ready_selector = {
+			// Following the link before ".." reaches ready outside the workspace.
+			// Collapsing it lexically would select the unrelated local repository.
+			let outside = fixture.path().join("outside");
+			fs::create_dir(&outside).unwrap();
+			std::os::unix::fs::symlink(outside, caller.join("link")).unwrap();
+			repo(&caller, "ready");
+			"link/../ready"
+		};
+		#[cfg(windows)]
+		let ready_selector = text(&ready);
 		let partial = workyard(
-			&old,
+			&caller,
 			&[
 				action,
 				"topic",
-				text(&ready),
-				text(&deferred),
+				ready_selector,
+				"../deferred",
 				"--from",
 				"main",
 			],

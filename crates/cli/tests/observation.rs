@@ -133,8 +133,8 @@ fn record_damage_and_pending_writers_do_not_hide_healthy_tasks() {
 		.join("locks")
 		.join(workyard_state::task_filename("feat/bad"))
 		.with_extension("lock");
-	let _writer = workyard_state::Lock::acquire(&lock_path, false).unwrap();
 	let before = snapshot(fixture.path());
+	let writer = workyard_state::Lock::acquire(&lock_path, false).unwrap();
 	let result = rpc(&root, "status", json!({}));
 	let tasks = result["result"]["tasks"].as_array().unwrap();
 	assert_eq!(tasks.len(), 2);
@@ -151,6 +151,7 @@ fn record_damage_and_pending_writers_do_not_hide_healthy_tasks() {
 	assert!(!tasks[0]["problems"].as_array().unwrap().is_empty());
 	assert_eq!(tasks[1]["name"], "feat/good");
 	assert_eq!(tasks[1]["recorded"]["operation"]["outcome"], "succeeded");
+	drop(writer);
 	assert_eq!(before, snapshot(fixture.path()));
 }
 
@@ -166,7 +167,7 @@ fn explicit_workspace_selects_tasks_and_reports_unknown_task_without_writes() {
 	let status = rpc(fixture.path(), "status", json!({"workspace":workspace}));
 	assert_eq!(
 		status["result"]["tasks_root"],
-		json!(workspace.join("tasks"))
+		json!(workspace.join("tasks").canonicalize().unwrap())
 	);
 
 	let unknown = rpc(
@@ -202,8 +203,12 @@ fn repaired_moves_and_renamed_branch_report_actual_identity_location() {
 	let before = snapshot(fixture.path());
 	let result = rpc(&root, "status", json!({"task":"feat/task"}));
 	assert_eq!(
-		result["result"]["tasks"][0]["current"][0]["current_path"],
-		json!(moved)
+		Path::new(
+			result["result"]["tasks"][0]["current"][0]["current_path"]
+				.as_str()
+				.unwrap()
+		),
+		moved
 	);
 	assert_eq!(
 		result["result"]["tasks"][0]["current"][0]["branch"],
@@ -681,8 +686,9 @@ fn command_roles_keep_inventory_compact_status_active_and_info_read_only() {
 	assert_eq!(info["result"]["discovery"], "ancestor");
 	assert_eq!(info["result"]["active_tasks"], 1);
 	assert_eq!(info["result"]["retired_tasks"], 6);
-	assert_eq!(info["result"]["workspace"], json!(root));
-	assert_eq!(info["result"]["tasks_root"], json!(root.join("tasks")));
+	let workspace = root.canonicalize().unwrap();
+	assert_eq!(info["result"]["workspace"], json!(workspace));
+	assert_eq!(info["result"]["tasks_root"], json!(workspace.join("tasks")));
 	let info = rpc(&root, "info", json!({"workspace":root}));
 	assert_eq!(info["result"]["discovery"], "explicit");
 	let info = workyard(&root, &["info"]);

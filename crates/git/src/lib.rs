@@ -14,6 +14,7 @@ mod repository;
 mod unix;
 #[cfg(windows)]
 mod windows;
+mod worktree_path;
 
 pub use process::{CommandOutput, Runner};
 pub use relationships::Placement;

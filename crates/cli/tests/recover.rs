@@ -218,8 +218,12 @@ fn repaired_main_and_linked_moves_refresh_git_locations() {
 	);
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	assert_eq!(
-		record(&root.join(".workyard"))["participants"][0]["destination"],
-		text(&moved_tree)
+		Path::new(
+			record(&root.join(".workyard"))["participants"][0]["destination"]
+				.as_str()
+				.unwrap()
+		),
+		moved_tree
 	);
 }
 
@@ -348,6 +352,7 @@ fn explicit_commit_source_stays_exact_during_recovery() {
 	let commit = git(&web, &["rev-parse", "HEAD"]);
 	let root = fixture.path().join("workspace");
 	init_workspace(&root);
+	let root = root.canonicalize().unwrap();
 	struct StopAfterApi;
 	impl workyard_core::Observer for StopAfterApi {
 		async fn phase(

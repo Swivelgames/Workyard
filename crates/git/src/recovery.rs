@@ -1,7 +1,7 @@
 mod registrations;
 
 use crate::operations::operations_present;
-use crate::{Repository, Runner, process::args};
+use crate::{Repository, Runner, process::args, worktree_path::registered_path};
 use registrations::registrations;
 use std::path::PathBuf;
 use workyard_core::{Control, Participant, Problem, ProblemCode, RecoveryGit, RecoveryObservation};
@@ -164,7 +164,11 @@ impl Reconciliation<'_> {
 			));
 		}
 
-		Ok(matching.into_iter().next().map(|(path, _)| path))
+		let destination = &self.participant.destination;
+		Ok(matching
+			.into_iter()
+			.next()
+			.map(|(path, _)| registered_path(path, destination)))
 	}
 
 	async fn inspect_registered(

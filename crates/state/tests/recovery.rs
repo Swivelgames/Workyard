@@ -95,7 +95,7 @@ fn explicit_workspace_wins_and_missing_selection_does_not_bootstrap() {
 	let other = workspace.temporary.path().join("other");
 	let other_root = workyard_state::initialize_workspace(&other, None).unwrap();
 	let state = discover_state(&nested, Some(&other)).unwrap();
-	assert_eq!(state, other.join(".workyard"));
+	assert_eq!(state, other.join(".workyard").canonicalize().unwrap());
 	assert!(Store::open_existing(&state, Some(&other_root)).is_ok());
 	assert_eq!(
 		Store::open_existing(&state, Some(&workspace.root))

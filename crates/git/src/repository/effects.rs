@@ -27,17 +27,17 @@ impl Repository {
 		match plan {
 			BranchPlan::Reuse => {
 				arguments.push("--".into());
-				arguments.push(destination.into());
+				arguments.push(dunce::simplified(destination).into());
 				arguments.push(task.into());
 			}
 			BranchPlan::Track(source) => {
 				arguments.extend(args(&["--track", "-b", task, "--"]));
-				arguments.push(destination.into());
+				arguments.push(dunce::simplified(destination).into());
 				arguments.push(source.into());
 			}
 			BranchPlan::Create(source) => {
 				arguments.extend(args(&["-b", task, "--"]));
-				arguments.push(destination.into());
+				arguments.push(dunce::simplified(destination).into());
 				arguments.push(source.into());
 			}
 		}

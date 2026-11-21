@@ -65,16 +65,17 @@ pub async fn initialize_workspace_with_control(
 
 fn select_tasks(workspace: &Path, tasks: Option<&Path>) -> Result<PathBuf, Problem> {
 	let root = resolve_tasks(workspace, tasks.unwrap_or(Path::new("tasks")))?;
-	if exists(&root)? && !root.is_dir() {
-		return Err(Problem::new(
-			ProblemCode::InvalidInput,
-			format!("Tasks path is not a directory: {root:?}."),
-		));
-	}
+
 	for directory in root
 		.ancestors()
 		.take_while(|directory| *directory != workspace)
 	{
+		if exists(directory)? && !directory.is_dir() {
+			return Err(Problem::new(
+				ProblemCode::InvalidInput,
+				format!("Tasks path is not a directory: {directory:?}."),
+			));
+		}
 		if exists(&directory.join(MARKER))? {
 			return Err(Problem::new(
 				ProblemCode::PathOverlap,

@@ -9,13 +9,14 @@ use workyard_core::{Control, Problem, RepositoryInput as SelectedRepo, projects:
 use workyard_git::{Runner, projects::enclosing_project};
 use workyard_state::Reader;
 
-struct Resolver {
+struct Resolver<'a> {
+	reader: &'a Reader,
 	catalog: Catalog,
 	cwd: PathBuf,
 	runner: Runner,
 }
 
-impl Resolver {
+impl Resolver<'_> {
 	async fn repository(
 		&self,
 		selector: &Path,
@@ -30,7 +31,7 @@ impl Resolver {
 			// Git also accepts interior directories. Track their enclosing project,
 			// keeping symlink spellings that give the project a local name.
 			if let Some(project) = enclosing_project(&path, &self.runner, control).await? {
-				path = project.path;
+				path = self.reader.project_registration_path(&project.path)?;
 				identity = Some(project.identity);
 			}
 			registration_roots.push(path.clone());
@@ -64,6 +65,7 @@ pub(crate) async fn repositories(
 	let cwd =
 		std::env::current_dir().map_err(|error| Problem::io("Read current directory", error))?;
 	let resolver = Resolver {
+		reader,
 		catalog,
 		cwd,
 		runner: Runner::default(),

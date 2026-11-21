@@ -1,6 +1,8 @@
 //! Native Git also repairs links at the other registered paths in this repository.
-use super::pointer::{absolute, read_path, same_path};
-use crate::{Runner, operations::writer_lock_in, output::path_line, process::args};
+use super::pointer::{absolute, read_path};
+use crate::{
+	Runner, operations::writer_lock_in, output::path_line, process::args, worktree_path::same_path,
+};
 use std::{collections::HashSet, fs, path::Path};
 use workyard_core::{Control, Participant, Problem, ProblemCode, Repository};
 
@@ -36,7 +38,7 @@ impl Runner {
 
 		control.check()?;
 		let mut arguments = args(&["worktree", "repair", "--"]);
-		arguments.push(destination.as_os_str().into());
+		arguments.push(dunce::simplified(destination).into());
 		self.effect(&repo.source, &arguments, control).await?;
 		Ok(())
 	}

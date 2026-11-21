@@ -1,8 +1,9 @@
-"""Linux/macOS live Bash/Zsh acceptance; run after cargo build -p workyard-cli."""
+"""Live Bash/Zsh completion and optional Fish checks after cargo build -p workyard-cli."""
 import os
 import pty
 import select
 import shlex
+import shutil
 import subprocess
 import tempfile
 import time
@@ -66,6 +67,7 @@ def main():
 				cwd=workspace, check=True, capture_output=True)
 		(workspace / "feat/decoy").mkdir(parents=True)
 		(workspace / "some space/child").mkdir(parents=True)
+		(workspace / r"api\files" / "child").mkdir(parents=True)
 		for args in [
 			["branch", "suggest/topic"],
 			["remote", "add", "origin", "file:///workyard-completion-offline-missing"],
@@ -144,6 +146,13 @@ def main():
 				output = capture(shell, inspect, typed + "\n")
 				assert "ARGS:<info><--workspace><some space/child/>" in output, output
 				print(shell, "two-Tab path", repr(quote), "passed")
+			# A backslash is literal inside single quotes, including before a name.
+			close_quote = "'" if shell == "zsh" else ""
+			typed = "workyard info --workspace 'api\\fi\tch\t" + close_quote + "\n"
+			output = capture(shell, inspect, typed)
+			assert r"ARGS:<info><--workspace><api\files/child/>" in output, output
+			print(shell, "quoted literal backslash passed")
+
 			if shell == "bash":
 				fallback = inspect + "; enable -n compopt"
 				output = capture(shell, fallback, "workyard status fix/o\t\n")
@@ -177,6 +186,17 @@ def main():
 			output = capture(shell, setup, typed)
 			assert "fix/" in output, output
 			print(shell, "explicit equals placement passed")
+
+		if fish := shutil.which("fish"):
+			query = 'workyard completion fish | source; complete -C "$argv[1]"'
+			env = {**os.environ, "PATH": f"{binary.parent}:{os.environ['PATH']}"}
+			for prefix in [r"'api\fi", "'api\\"]:
+				result = subprocess.run(
+					[fish, "--no-config", "-c", query, f"workyard info --workspace {prefix}"],
+					cwd=workspace, env=env, text=True, capture_output=True, check=True,
+				)
+				assert result.stdout.splitlines() == [r"api\files/"], result
+			print("fish quoted and trailing literal backslashes passed")
 
 		assert snapshot(workspace / ".workyard") == before
 		print("State documents and directory entries unchanged.")

@@ -9,6 +9,17 @@ use std::{
 };
 use support::*;
 
+fn assert_registered_worktree(source: &Path, expected: &Path) {
+	let listing = git(source, &["worktree", "list", "--porcelain"]);
+	assert!(
+		listing
+			.lines()
+			.filter_map(|line| line.strip_prefix("worktree "))
+			.any(|path| Path::new(path) == expected),
+		"{expected:?} missing from {listing}"
+	);
+}
+
 fn snapshot(state: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 	let mut files = BTreeMap::new();
 	for directory in ["tasks", "evidence"] {
@@ -141,8 +152,12 @@ fn repaired_git_move_is_real_metadata_work_then_becomes_noop() {
 	assert!(String::from_utf8_lossy(&repaired.stdout).contains("Recovery succeeded"));
 	let state = root.join(".workyard");
 	assert_eq!(
-		record(&state)["participants"][0]["destination"],
-		text(&destination)
+		Path::new(
+			record(&state)["participants"][0]["destination"]
+				.as_str()
+				.unwrap()
+		),
+		destination
 	);
 	let before = snapshot(&state);
 	let repeated = workyard(&root, &["recover", "feat/task"]);
@@ -189,14 +204,14 @@ fn recovery_repairs_unique_manually_renamed_task_child_and_preserves_membership(
 	let task = record(&root.join(".workyard"));
 	assert_eq!(task["participants"][0]["name"], "api");
 	assert_eq!(
-		task["participants"][0]["destination"],
-		text(destination.strip_prefix(&root).unwrap())
+		Path::new(task["participants"][0]["destination"].as_str().unwrap()),
+		destination.strip_prefix(&root).unwrap()
 	);
 	assert_eq!(
 		fs::read_to_string(destination.join("file")).unwrap(),
 		"authored edits"
 	);
-	assert!(git(&source, &["worktree", "list", "--porcelain"]).contains(text(&destination)));
+	assert_registered_worktree(&source, &destination);
 	let before = snapshot(&root.join(".workyard"));
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	assert_eq!(snapshot(&root.join(".workyard")), before);
@@ -227,8 +242,8 @@ fn recovery_finds_renamed_worktree_when_original_path_is_reused() {
 	let task = record(&root.join(".workyard"));
 	assert_eq!(task["participants"][0]["name"], "api");
 	assert_eq!(
-		task["participants"][0]["destination"],
-		text(renamed.strip_prefix(&root).unwrap())
+		Path::new(task["participants"][0]["destination"].as_str().unwrap()),
+		renamed.strip_prefix(&root).unwrap()
 	);
 	assert_eq!(
 		fs::read_to_string(original.join("notes")).unwrap(),
@@ -239,7 +254,7 @@ fn recovery_finds_renamed_worktree_when_original_path_is_reused() {
 		fs::read_to_string(renamed.join("file")).unwrap(),
 		"authored edits"
 	);
-	assert!(git(&source, &["worktree", "list", "--porcelain"]).contains(text(&renamed)));
+	assert_registered_worktree(&source, &renamed);
 }
 
 #[cfg(unix)]

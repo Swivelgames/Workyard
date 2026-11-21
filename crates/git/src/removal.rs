@@ -101,7 +101,7 @@ impl RemovalGit for Runner {
 			arguments.push("--force".into());
 		}
 		arguments.push("--".into());
-		arguments.push(destination.into());
+		arguments.push(dunce::simplified(destination).into());
 
 		before_unlink()?;
 		self.effect(&observation.repository.common_dir, &arguments, control)
@@ -188,7 +188,10 @@ impl Runner {
 		destination: &std::path::Path,
 		control: &Control,
 	) -> Result<std::path::PathBuf, Problem> {
-		use crate::relationships::pointer::{absolute, read_path, same_path};
+		use crate::{
+			relationships::pointer::{absolute, read_path},
+			worktree_path::same_path,
+		};
 		let actual = destination
 			.canonicalize()
 			.map_err(|e| Problem::io("Resolve worktree before removal", e))?;

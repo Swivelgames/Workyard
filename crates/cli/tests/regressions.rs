@@ -44,13 +44,11 @@ fn repository_routing_environment_cannot_redirect_selected_git_effects() {
 			.count(),
 		1
 	);
-	assert_eq!(
-		git(
-			&root.join("tasks/feat/selected/selected"),
-			&["rev-parse", "--git-common-dir"]
-		),
-		text(&selected.join(".git"))
+	let common_dir = git(
+		&root.join("tasks/feat/selected/selected"),
+		&["rev-parse", "--git-common-dir"],
 	);
+	assert_eq!(PathBuf::from(common_dir), selected.join(".git"));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! Read both directions of Git's native worktree links.
 use super::changed;
-use crate::output::path_line;
+use crate::{output::path_line, worktree_path::same_path};
 use std::path::{Path, PathBuf};
 use workyard_core::{PlacementHint, Problem};
 
@@ -104,34 +104,4 @@ pub(crate) fn absolute(base: &Path, path: &Path) -> PathBuf {
 		}
 	}
 	result
-}
-
-/// Git for Windows can omit the verbatim prefix on an otherwise identical path.
-pub(crate) fn same_path(left: &Path, right: &Path) -> bool {
-	if left == right {
-		return true;
-	}
-	#[cfg(windows)]
-	{
-		use std::path::{Component, Prefix};
-
-		let mut left = left.components();
-		let mut right = right.components();
-		let (Some(Component::Prefix(a)), Some(Component::Prefix(b))) = (left.next(), right.next())
-		else {
-			return false;
-		};
-		let prefixes_match = match (a.kind(), b.kind()) {
-			(
-				Prefix::Disk(a) | Prefix::VerbatimDisk(a),
-				Prefix::Disk(b) | Prefix::VerbatimDisk(b),
-			) => a.eq_ignore_ascii_case(&b),
-			(Prefix::UNC(a, b), Prefix::VerbatimUNC(c, d))
-			| (Prefix::VerbatimUNC(a, b), Prefix::UNC(c, d)) => a == c && b == d,
-			_ => false,
-		};
-		prefixes_match && left.eq(right)
-	}
-	#[cfg(not(windows))]
-	false
 }
