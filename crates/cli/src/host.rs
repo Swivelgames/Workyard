@@ -39,11 +39,13 @@ pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8
 	match matches.subcommand() {
 		Some(("mcp", _)) => {
 			reject_json(&arguments, "mcp")?;
-			run_mcp(&application)
+			mcp::run_stdio(&application, signal_cancellation()?)?;
+			Ok(0)
 		}
 		Some(("rpc", _)) => {
 			reject_json(&arguments, "rpc")?;
-			run_rpc(&application)
+			rpc::run_stdio(&application, signal_cancellation()?)?;
+			Ok(0)
 		}
 		Some(("completion", matches)) => {
 			reject_json(&arguments, "completion")?;
@@ -104,34 +106,6 @@ fn run_action(
 			Ok(report.exit_code())
 		}
 	}
-}
-
-fn run_mcp(application: &Application) -> Result<u8, Failure> {
-	let cancellation = signal_cancellation()?;
-	let (reader, writer) =
-		mcp::stdio::open().map_err(|error| Failure::new(FailureKind::Unavailable, error))?;
-	smol::block_on(mcp::serve(application, reader, writer, cancellation))
-		.map_err(|error| Failure::new(FailureKind::OutputFailed, error))?;
-	Ok(0)
-}
-
-fn run_rpc(application: &Application) -> Result<u8, Failure> {
-	let cancellation = signal_cancellation()?;
-	let (reader, writer) =
-		rpc::stdio::open().map_err(|error| Failure::new(FailureKind::Unavailable, error))?;
-	let report = smol::block_on(rpc::serve(
-		application,
-		reader,
-		writer,
-		rpc::Config::default(),
-		cancellation,
-		|_| {},
-	))
-	.map_err(|error| Failure::new(FailureKind::OutputFailed, error))?;
-	if let Some(failure) = report.failure {
-		return Err(Failure::message(FailureKind::Unavailable, failure));
-	}
-	Ok(0)
 }
 
 fn signal_cancellation() -> Result<Cancellation, Failure> {

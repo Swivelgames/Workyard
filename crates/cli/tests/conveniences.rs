@@ -157,15 +157,18 @@ fn display_commands_stay_plain_and_json_rejects_transports_and_scripts() {
 		assert_ok(&output);
 		assert!(serde_json::from_slice::<Value>(&output.stdout).is_err());
 	}
-	for args in [
-		vec!["--json", "rpc"],
-		vec!["rpc", "--json"],
-		vec!["completion", "bash", "--json"],
-	] {
+	for args in [["--json", "rpc"], ["rpc", "--json"]] {
 		let output = workyard(root.path(), &args);
 		assert!(!output.status.success());
-		assert_eq!(json(&output)["error"]["code"], "invalid_input");
+		assert!(output.stdout.is_empty());
+		assert!(
+			String::from_utf8_lossy(&output.stderr).contains("--json cannot be combined with rpc")
+		);
 	}
+
+	let output = workyard(root.path(), &["completion", "bash", "--json"]);
+	assert!(!output.status.success());
+	assert_eq!(json(&output)["error"]["code"], "invalid_input");
 }
 
 #[test]
