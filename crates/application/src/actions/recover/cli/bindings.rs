@@ -12,9 +12,9 @@ pub(in super::super) fn bindings() -> Bindings {
 	let bindings = Bindings::new().examples(EXAMPLES);
 
 	// Target task
-	let bindings = bindings.positional("task").complete_group(
+	let bindings = bindings.positional("task").complete_candidates(
 		"task",
-		"Tasks",
+		Some("Tasks"),
 		crate::presentation::cli::completion::tasks::suggest,
 	);
 

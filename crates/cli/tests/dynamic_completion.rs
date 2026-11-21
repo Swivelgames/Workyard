@@ -456,7 +456,7 @@ fn zsh_metadata_names_task_groups_without_changing_values() {
 
 		let text = String::from_utf8(output.stdout).unwrap();
 		let fields: Vec<_> = text.lines().collect();
-		assert_eq!(&fields[..3], ["Tasks", "fix/one", ""]);
+		assert_eq!(&fields[..3], ["Tasks", "fix/one", "api"]);
 		assert!(
 			fields
 				.chunks_exact(3)
