@@ -2,11 +2,15 @@ use crate::damage::damaged;
 use serde::{Deserialize, Serialize};
 use workyard_core::{Operation, OperationKind, OperationOutcome, Problem};
 
+/// Stored operation provenance and settlement.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OperationRecord {
+	/// Classification used to interpret this record.
 	pub kind: Option<String>,
+	/// Original operation being continued by recovery.
 	pub continues: Option<String>,
+	/// Settlement of this invocation.
 	pub outcome: String,
 }
 
@@ -21,6 +25,7 @@ impl From<Operation> for OperationRecord {
 }
 
 impl OperationRecord {
+	/// Convert persisted data into the domain representation.
 	pub fn decode(&self) -> Result<Operation, Problem> {
 		let kind = self.kind.as_deref().map(parse_kind).transpose()?;
 		let continues = self.continues.as_deref().map(parse_kind).transpose()?;

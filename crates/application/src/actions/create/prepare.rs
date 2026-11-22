@@ -3,6 +3,7 @@ use trine::NativePath;
 use workyard_core::{CreateRequest, Problem, validate_task};
 
 impl CreateInput {
+	/// Resolve workspace and project selections into a core creation request.
 	pub fn normalize(self) -> Result<CreateRequest, Problem> {
 		smol::block_on(self.prepare(&workyard_core::Control::default()))
 	}

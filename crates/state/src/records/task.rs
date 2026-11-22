@@ -78,21 +78,34 @@ impl From<&Problem> for ProblemRecord {
 	}
 }
 
+/// Versioned on-disk representation of a task incarnation.
 #[derive(Clone, Debug, Serialize)]
 pub struct TaskRecord {
+	/// Identifier distinguishing successive uses of the same task name.
 	pub generation: u64,
+	/// Removal or restoration evidence associated with this task.
 	pub removal: Option<RemovalRecord>,
+	/// Storage format version used to interpret this record.
 	pub version: u32,
+	/// Task selected for this operation.
 	pub task: String,
+	/// Directory containing the task workspaces.
 	pub tasks_root: StoredPath,
+	/// Directory holding authoritative Workyard state.
 	pub state_dir: StoredPath,
+	/// Allow reuse of an existing target branch.
 	pub checkout: bool,
+	/// Use locally available refs without fetching.
 	pub no_fetch: bool,
 	#[serde(rename = "pull")]
 	legacy_pull: bool,
+	/// Current membership lifecycle of the task.
 	pub lifecycle: String,
+	/// Invocation history tracked separately from task lifecycle.
 	pub operation: OperationRecord,
+	/// Members associated with this task or operation.
 	pub participants: Vec<ParticipantRecord>,
+	/// Diagnostic describing a failure or an unresolved condition.
 	pub problem: Option<ProblemRecord>,
 }
 

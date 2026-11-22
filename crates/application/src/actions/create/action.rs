@@ -10,6 +10,7 @@ use crate::{
 
 use super::{CreateInput, CreateOutcome};
 
+/// Establish the task and its participant worktrees.
 pub async fn create(
 	input: CreateInput,
 	context: InvocationContext<Progress>,

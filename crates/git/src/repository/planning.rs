@@ -3,6 +3,7 @@ use crate::{Runner, process::args};
 use workyard_core::{BranchPlan, Control, Problem};
 
 impl Repository {
+	/// Resolve reuse, tracking or creation of the task branch.
 	pub async fn plan(
 		&self,
 		runner: &Runner,

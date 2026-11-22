@@ -1,6 +1,7 @@
 use crate::actions::{amend, create, info, init, list, projects, recover, remove, status};
 use trine::application::Application;
 
+/// Build the catalog shared by the CLI, RPC and MCP hosts.
 pub fn application() -> Result<Application, Box<dyn std::error::Error>> {
 	let mut app = Application::new("workyard", env!("CARGO_PKG_VERSION"))?;
 

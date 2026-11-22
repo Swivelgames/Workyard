@@ -19,6 +19,7 @@ struct Recovery<'a, G, S: RecoveryState, O> {
 	publication_attempted: AtomicBool,
 }
 
+/// Reconcile the task with recorded evidence and current Git facts.
 pub async fn recover(
 	name: &str,
 	runner: &impl RecoveryGit,
@@ -37,6 +38,7 @@ pub async fn recover(
 	.await
 }
 
+/// Run recovery with the caller's explicit scope.
 pub async fn recover_with_scope(
 	name: &str,
 	scope: RecoveryScope,

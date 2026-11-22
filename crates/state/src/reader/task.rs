@@ -4,6 +4,7 @@ use std::{collections::BTreeSet, path::Path};
 use workyard_core::{Problem, ProblemCode, TaskSnapshot};
 
 impl Reader {
+	/// Read task snapshots for inspection.
 	pub fn tasks(&self, selected: Option<&str>) -> Result<Vec<TaskSnapshot>, Problem> {
 		self.verify()?;
 		if let Some(name) = selected {

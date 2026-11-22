@@ -1,32 +1,45 @@
 use crate::{Repository, Task};
 use std::{collections::BTreeMap, path::PathBuf};
 
+/// Task reconstructed from the saved document and independent evidence.
 #[derive(Clone, Debug)]
 pub struct RecoveryRecord {
 	/// Last published task document, distinct from independent effect evidence.
 	pub recorded: Option<Task>,
 	/// Existing formats may need a supported migration even when Git is unchanged.
 	pub needs_publication: bool,
+	/// Task selected for this operation.
 	pub task: Task,
+	/// Participant index associated with unresolved effect evidence.
 	pub pending: Option<usize>,
 	/// Current locations of admission roots whose recorded workspace moved.
 	pub relocated_project_roots: BTreeMap<PathBuf, PathBuf>,
 }
 
+/// Facts obtained from Git before resuming a participant.
 #[derive(Clone, Debug)]
 pub struct RecoveryObservation {
+	/// Verified backing repository for this participant.
 	pub repository: Repository,
+	/// Location of the participant worktree.
 	pub destination: Option<PathBuf>,
+	/// Whether an unfinished repository operation was observed.
 	pub operation_in_progress: bool,
 }
 
 /// The invocation result is separate from preserved task operation history.
 pub struct RecoveryResult {
+	/// Newly established project roots eligible for catalog registration.
 	pub admitted_roots: Vec<PathBuf>,
+	/// Invocation history tracked separately from task lifecycle.
 	pub operation: crate::Operation,
+	/// Diagnostic describing a failure or an unresolved condition.
 	pub problem: Option<crate::Problem>,
+	/// Task selected for this operation.
 	pub task: Task,
+	/// Location of the task record when available.
 	pub record: PathBuf,
+	/// Whether inspection found no outstanding work to resume.
 	pub nothing_to_recover: bool,
 }
 

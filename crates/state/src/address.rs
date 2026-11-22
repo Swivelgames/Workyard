@@ -1,5 +1,14 @@
 use sha2::{Digest, Sha256};
 
+/// Derive a record filename directly from the task name without a directory index.
+///
+/// ```
+/// use workyard_state::task_filename;
+///
+/// let file = task_filename("feat/payments");
+/// assert!(file.starts_with("feat-payments-"));
+/// assert_ne!(file, task_filename("feat-payments"));
+/// ```
 pub fn task_filename(name: &str) -> String {
 	let mut slug = String::new();
 	for character in name.chars() {

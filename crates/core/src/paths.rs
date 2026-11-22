@@ -1,5 +1,6 @@
 use crate::{Problem, ProblemCode};
 
+/// Check that a branch-shaped task name is safe to use beneath the tasks root.
 pub fn validate_task(task: &str) -> Result<(), Problem> {
 	if task.is_empty() || task.starts_with('-') || task.split('/').any(|part| !safe_component(part))
 	{
@@ -12,6 +13,7 @@ pub fn validate_task(task: &str) -> Result<(), Problem> {
 	Ok(())
 }
 
+/// Check whether a name is safe as one directory component on the current platform.
 pub fn safe_component(name: &str) -> bool {
 	if name.is_empty()
 		|| name == "."
@@ -48,6 +50,7 @@ pub fn safe_component(name: &str) -> bool {
 	true
 }
 
+/// Test whether either path contains the other or both denote the same path.
 pub fn overlaps(left: &std::path::Path, right: &std::path::Path) -> bool {
 	left.starts_with(right) || right.starts_with(left)
 }

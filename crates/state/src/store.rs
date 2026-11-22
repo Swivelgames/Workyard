@@ -17,6 +17,7 @@ use std::{
 };
 use workyard_core::{Problem, Task};
 
+/// Workspace state adapter for admitted task mutations.
 pub struct Store {
 	root: PathBuf,
 	state: PathBuf,
@@ -24,6 +25,7 @@ pub struct Store {
 }
 
 impl Store {
+	/// Publish initial task state while admission is held.
 	pub fn begin(&self, guard: &TaskGuard, task: &Task) -> Result<(), Problem> {
 		self.verify()?;
 		guard.verify()?;
@@ -40,6 +42,7 @@ impl Store {
 		publish(&guard.record_path, &record)
 	}
 
+	/// Publish updated task state while admission is held.
 	pub fn save(&self, guard: &TaskGuard, task: &Task) -> Result<(), Problem> {
 		self.verify()?;
 		guard.verify()?;

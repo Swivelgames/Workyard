@@ -7,6 +7,7 @@ use std::path::Path;
 use trine::{InvocationContext, NativePath};
 use workyard_core::Control;
 
+/// Initialize a workspace with the requested tasks directory.
 pub async fn init(
 	input: InitInput,
 	context: InvocationContext<Progress>,

@@ -6,6 +6,7 @@ use std::path::Path;
 use workyard_core::{Control, Problem};
 
 impl Repository {
+	/// Inspect the selected repository or task without applying changes.
 	pub async fn inspect(
 		runner: &Runner,
 		path: &Path,
@@ -49,6 +50,7 @@ impl Repository {
 		})
 	}
 
+	/// Check the repository against its earlier identity before proceeding.
 	pub async fn revalidate(&self, runner: &Runner, control: &Control) -> Result<(), Problem> {
 		let current = Self::inspect(runner, &self.source, self.remote.as_deref(), control).await?;
 		self.verify_backing(&current)

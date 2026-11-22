@@ -1,4 +1,9 @@
 //! Workyard orchestration and interface DTOs; Git and state remain focused adapters.
+//!
+//! [`application()`] registers shared actions and their views for the three hosts.
+//! Each action owns its input, outcome and mapping to a user-facing command.
+#![deny(missing_docs)]
+
 mod actions;
 mod application;
 mod contracts;

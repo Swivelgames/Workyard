@@ -14,15 +14,22 @@ pub struct WorktreeLocations {
 	pub candidate: NativePath,
 }
 
+/// Diagnostic representation shared by the public interfaces.
 #[derive(Serialize)]
 pub struct ProblemOutcome {
+	/// Paths associated with a worktree relationship problem.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub worktree_locations: Option<Box<WorktreeLocations>>,
+	/// Stable machine-readable diagnostic classification.
 	pub code: String,
+	/// Human-readable explanation for the caller.
 	pub message: String,
+	/// Suggested action for resolving the problem.
 	pub remedy: String,
+	/// Matching project references the caller may select.
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub candidates: Vec<NativePath>,
+	/// An explicit name or selector that can resolve the conflict.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub suggested_override: Option<SuggestedOverride>,
 }

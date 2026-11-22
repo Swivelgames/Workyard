@@ -9,6 +9,7 @@ use crate::{
 use workyard_core::{Problem, TaskSnapshot};
 
 impl Reader {
+	/// Read and validate archived incarnations of retired tasks.
 	pub fn history(&self) -> Result<Vec<TaskSnapshot>, Problem> {
 		self.verify()?;
 		let directory = self.state.join("history");

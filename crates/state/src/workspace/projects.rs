@@ -7,9 +7,12 @@ use std::{
 };
 use workyard_core::{Control, Problem, ProblemCode};
 
+/// Requested change to the project's discovery roots.
 #[derive(Clone, Copy)]
 pub enum RootEdit {
+	/// Add the supplied roots to the project catalog configuration.
 	Track,
+	/// Remove the supplied roots from the project catalog configuration.
 	Untrack,
 }
 
@@ -20,6 +23,7 @@ impl Reader {
 		Ok(workspace.join(registration(workspace, path)?))
 	}
 
+	/// Read the workspace's configured discovery roots.
 	pub fn project_roots(&self) -> Result<Vec<PathBuf>, Problem> {
 		let workspace = self.state().parent().expect("workspace marker");
 		Ok(Layout::read(self.state())?
@@ -31,6 +35,7 @@ impl Reader {
 }
 
 impl Store {
+	/// Record the verified location of the active workspace.
 	pub async fn remember_workspace(&self, control: &Control) -> Result<bool, Problem> {
 		let state = self.state_dir();
 		let workspace = state.parent().expect("workspace marker");
@@ -50,6 +55,7 @@ impl Store {
 		Ok(true)
 	}
 
+	/// Apply the requested root changes to workspace configuration.
 	pub async fn edit_project_roots(
 		&self,
 		edit: RootEdit,

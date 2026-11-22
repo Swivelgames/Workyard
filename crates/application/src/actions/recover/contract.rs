@@ -5,33 +5,47 @@ use workyard_core::{OperationKind, Problem, Task};
 pub use crate::contracts::{OperationReport, ParticipantOutcome};
 use crate::contracts::{ProblemOutcome, removal};
 
+/// Result of reconciling a single task and its participants.
 #[derive(Serialize)]
 pub struct RecoverOutcome {
+	/// Failure to record a project root after participant work succeeded.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub registration_problem: Option<ProblemOutcome>,
 	/// Verified no-op; task/evidence history was preserved.
 	pub nothing_to_recover: bool,
+	/// User-facing health classification for the observed task.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub condition: Option<crate::contracts::Condition>,
+	/// Whether the invocation entered the mutation phase.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub mutation_started: Option<bool>,
+	/// Removal or restoration evidence associated with this task.
 	#[serde(flatten)]
 	pub removal: removal::RemovalReport,
+	/// Invocation history tracked separately from task lifecycle.
 	pub operation: OperationReport,
 	/// None when this invocation could not establish task membership.
 	pub lifecycle: Option<&'static str>,
+	/// Task selected for this operation.
 	pub task: String,
+	/// Directory containing the task workspaces.
 	pub tasks_root: Option<NativePath>,
+	/// Directory holding authoritative Workyard state.
 	pub state_dir: Option<NativePath>,
+	/// Location of the task record when available.
 	pub record: Option<NativePath>,
+	/// Members associated with this task or operation.
 	pub participants: Vec<ParticipantOutcome>,
+	/// Changes reported for individual participants.
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub changes: Vec<crate::contracts::ParticipantChange>,
+	/// Diagnostic describing a failure or an unresolved condition.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub problem: Option<ProblemOutcome>,
 }
 
 impl RecoverOutcome {
+	/// Present a removal or restoration result with its participant evidence.
 	pub fn from_removal(result: workyard_core::RemovalResult) -> Self {
 		let condition = removal::condition(&result);
 		let nothing_to_recover = result.nothing_to_recover;
@@ -49,6 +63,7 @@ impl RecoverOutcome {
 		outcome
 	}
 
+	/// Build an invocation outcome for a request rejected before effects.
 	pub fn rejected(task: String, problem: Problem) -> Self {
 		Self {
 			changes: Vec::new(),
@@ -68,6 +83,7 @@ impl RecoverOutcome {
 		}
 	}
 
+	/// Present the recorded task and its participants.
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
 		let participants = removal::participants(task.participants, task.removal.as_ref());
 
@@ -90,9 +106,12 @@ impl RecoverOutcome {
 	}
 }
 
+/// Result of either named task recovery or workspace-wide reconciliation.
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum RecoveryOutcome {
+	/// Result of reconciling one named task.
 	Task(Box<RecoverOutcome>),
+	/// Result of reconciling workspace placement.
 	Workspace(super::workspace::WorkspaceRecovery),
 }

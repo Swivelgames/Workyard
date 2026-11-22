@@ -18,6 +18,7 @@ impl Store {
 		})
 	}
 
+	/// Revalidate the workspace binding before relying on its state.
 	pub fn verify(&self) -> Result<(), Problem> {
 		Workspace::verify(&self.state, &self.root, &self.workspace)
 	}

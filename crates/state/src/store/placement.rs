@@ -9,6 +9,7 @@ use crate::{
 use workyard_core::{Participant, Problem};
 
 impl Store {
+	/// Persist the participant's verified placement hint.
 	pub fn remember_participant(
 		&self,
 		guard: &TaskGuard,

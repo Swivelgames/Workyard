@@ -39,6 +39,7 @@ pub fn canonical_future(path: &Path) -> Result<PathBuf, Problem> {
 	Ok(resolved)
 }
 
+/// Check path presence while preserving errors that prevent inspection.
 pub fn exists(path: &Path) -> Result<bool, Problem> {
 	match path.symlink_metadata() {
 		Ok(_) => Ok(true),

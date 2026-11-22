@@ -9,6 +9,7 @@ use crate::{
 use trine::InvocationContext;
 use workyard_core::{Control, OperationOutcome};
 
+/// Apply the requested membership changes to a managed task.
 pub async fn amend(
 	input: AmendInput,
 	context: InvocationContext<Progress>,

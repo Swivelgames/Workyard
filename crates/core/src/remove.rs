@@ -39,6 +39,7 @@ impl RemovalIntent {
 	}
 }
 
+/// Inspect and retire the task, retaining its Git branches.
 pub async fn remove(
 	name: &str,
 	options: RemovalOptions,
@@ -77,6 +78,7 @@ pub async fn retire(
 	.await
 }
 
+/// Continue removal or restore the task according to stored direction and consent.
 pub async fn recover_removal(
 	name: &str,
 	options: RemovalOptions,

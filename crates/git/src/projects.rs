@@ -11,18 +11,26 @@ use workyard_core::{
 	projects::{Catalog, ProjectLocation},
 };
 
+/// Scan result for one configured discovery root.
 pub struct Coverage {
+	/// Project root examined by this scan.
 	pub root: PathBuf,
+	/// True when the configured scan root does not exist.
 	pub missing: bool,
+	/// Problems encountered while scanning this root.
 	pub issues: Vec<Problem>,
 }
 
+/// Projects and per-root coverage collected in one scan.
 pub struct Discovery {
+	/// Repository identities and their unambiguous selectors.
 	pub catalog: Catalog,
+	/// Scan outcomes for the configured roots.
 	pub coverage: Vec<Coverage>,
 }
 
 impl Discovery {
+	/// Discover repositories beneath the supplied project roots.
 	pub async fn scan(
 		roots: &[PathBuf],
 		state: &Path,

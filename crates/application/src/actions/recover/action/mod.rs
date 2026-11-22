@@ -15,6 +15,7 @@ mod workspace;
 
 use route::{Authority, Route};
 
+/// Reconcile the task with recorded evidence and current Git facts.
 pub async fn recover(
 	input: RecoverInput,
 	context: InvocationContext<Progress>,

@@ -1,5 +1,6 @@
 use crate::{OperationKind, Problem, ProblemCode, Task, TaskLifecycle};
 
+/// Authority granted to a recovery invocation.
 pub enum RecoveryScope {
 	/// Include older active tasks whose records have no operation provenance.
 	Reconcile,

@@ -4,8 +4,11 @@ use crate::{
 	RecoveryRecord, RemovalOptions, TaskLifecycle,
 };
 
+/// Inputs needed to resume an interrupted amendment.
 pub enum AmendRecovery {
+	/// Continue adding or renaming participants.
 	AddOrRename,
+	/// Continue an amendment with explicit removal consent.
 	WithRemovalOptions(RemovalOptions),
 }
 

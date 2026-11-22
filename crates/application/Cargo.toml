@@ -1,7 +1,10 @@
 [package]
 name = "workyard-application"
+description = "Task actions and interface contracts for Workyard"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [dependencies]

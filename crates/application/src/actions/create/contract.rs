@@ -5,23 +5,33 @@ use workyard_core::{OperationKind, Problem, Task};
 use crate::contracts::ProblemOutcome;
 pub use crate::contracts::{OperationReport, ParticipantOutcome};
 
+/// Task placement, participant progress and the result of the creation attempt.
 #[derive(Serialize)]
 pub struct CreateOutcome {
+	/// Failure to record a project root after participant work succeeded.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub registration_problem: Option<ProblemOutcome>,
+	/// Invocation history tracked separately from task lifecycle.
 	pub operation: OperationReport,
 	/// None when this invocation could not establish task membership.
 	pub lifecycle: Option<&'static str>,
+	/// Task selected for this operation.
 	pub task: String,
+	/// Directory containing the task workspaces.
 	pub tasks_root: Option<NativePath>,
+	/// Directory holding authoritative Workyard state.
 	pub state_dir: Option<NativePath>,
+	/// Location of the task record when available.
 	pub record: Option<NativePath>,
+	/// Members associated with this task or operation.
 	pub participants: Vec<ParticipantOutcome>,
+	/// Diagnostic describing a failure or an unresolved condition.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub problem: Option<ProblemOutcome>,
 }
 
 impl CreateOutcome {
+	/// Build an invocation outcome for a request rejected before effects.
 	pub fn rejected(task: String, problem: Problem) -> Self {
 		Self {
 			registration_problem: None,
@@ -36,6 +46,7 @@ impl CreateOutcome {
 		}
 	}
 
+	/// Present the recorded task and its participants.
 	pub fn from_task(task: Task, record: std::path::PathBuf) -> Self {
 		Self {
 			registration_problem: None,

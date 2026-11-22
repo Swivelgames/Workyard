@@ -7,13 +7,20 @@ use std::{
 };
 use workyard_core::{Control, Participant, PlacementHint, Problem, ProblemCode, Repository};
 
+/// Git registration and candidate paths used to reconcile a moved workspace.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Placement {
+	/// Location reported by Git registration.
 	pub registered: PathBuf,
+	/// Location of the participant worktree.
 	pub destination: PathBuf,
+	/// True when both locations have files that could belong to the same worktree.
 	pub competing: bool,
+	/// Whether the Git links require reconciliation.
 	pub needs_repair: bool,
+	/// Git administration directory shared by the repository's worktrees.
 	pub common_dir: PathBuf,
+	/// Path to the backing repository.
 	pub source: PathBuf,
 	backing: String,
 	admin: String,
@@ -22,10 +29,12 @@ pub struct Placement {
 }
 
 impl Placement {
+	/// Problem discovered while resolving placement.
 	pub fn diagnostic(&self) -> Problem {
 		placement_problem(&self.registered, &self.destination, self.competing)
 	}
 
+	/// Refresh the participant hint from verified placement.
 	pub fn update_hint(&self, participant: &mut Participant, workspace: &Path) {
 		participant.common_dir = self.common_dir.clone();
 		participant.source = self.source.clone();
@@ -41,6 +50,7 @@ impl Placement {
 }
 
 impl Runner {
+	/// Inspect registered and candidate locations before choosing a repair.
 	pub async fn inspect_placement(
 		&self,
 		participant: &Participant,
@@ -127,6 +137,7 @@ impl Runner {
 		})
 	}
 
+	/// Apply the verified placement decision for this participant.
 	pub async fn apply_placement(
 		&self,
 		participant: &Participant,

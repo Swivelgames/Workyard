@@ -1,27 +1,45 @@
 use std::path::PathBuf;
 
+/// Structured guidance for an ambiguous or conflicting project selection.
 #[derive(Clone, Debug)]
 pub enum ProjectRemedy {
+	/// Select one of the matching project references.
 	Choose(Vec<PathBuf>),
-	Rename { source: PathBuf, name: String },
+	/// Supply a unique name for the participant.
+	Rename {
+		/// Backing repository whose participant needs a distinct name.
+		source: PathBuf,
+		/// Proposed replacement participant name.
+		name: String,
+	},
 }
 
+/// Locations to inspect when Git and recorded placement disagree.
 #[derive(Clone, Debug)]
 pub struct WorktreeLocations {
+	/// Location reported by Git registration.
 	pub registered: PathBuf,
+	/// Possible current location requiring verification.
 	pub candidate: PathBuf,
 }
 
+/// Classified failure with diagnostic text and optional recovery guidance.
 #[derive(Clone, Debug)]
 pub struct Problem {
+	/// Paths associated with a worktree relationship problem.
 	pub worktree_locations: Option<Box<WorktreeLocations>>,
+	/// Stable machine-readable diagnostic classification.
 	pub code: crate::ProblemCode,
+	/// Human-readable explanation for the caller.
 	pub message: String,
+	/// Suggested action for resolving the problem.
 	pub remedy: String,
+	/// Structured project selection or naming guidance.
 	pub project_remedy: Option<Box<ProjectRemedy>>,
 }
 
 impl Problem {
+	/// Create a classified diagnostic with the supplied message.
 	pub fn new(code: crate::ProblemCode, message: impl Into<String>) -> Self {
 		Self {
 			code,
@@ -32,6 +50,7 @@ impl Problem {
 		}
 	}
 
+	/// Attach a suggested next step for the caller.
 	pub fn remedy(mut self, remedy: impl Into<String>) -> Self {
 		self.remedy = remedy.into();
 		self
@@ -46,6 +65,7 @@ impl Problem {
 		Self::new(crate::ProblemCode::ResourceBusy, message).remedy(remedy)
 	}
 
+	/// Build a diagnostic from a filesystem error.
 	pub fn io(context: impl std::fmt::Display, error: std::io::Error) -> Self {
 		Self::new(crate::ProblemCode::IoError, format!("{context}: {error}"))
 	}

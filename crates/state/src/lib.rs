@@ -1,4 +1,10 @@
 //! Versioned documents and stable OS locks for a single workspace.
+//!
+//! Use [`Reader`] for observations and [`Store`] for admitted changes. Records
+//! describe task membership and progress. Separate evidence lets recovery
+//! reconcile interrupted writes with the worktrees Git actually created.
+#![deny(missing_docs)]
+
 mod address;
 mod damage;
 mod discovery;

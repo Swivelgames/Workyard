@@ -9,6 +9,7 @@ use crate::{
 use trine::InvocationContext;
 use workyard_core::{Control, OperationOutcome, ProblemCode, RemovalOptions};
 
+/// Retire the task using the supplied confirmation and discard policy.
 pub async fn remove(
 	input: RemoveInput,
 	context: InvocationContext<Progress>,

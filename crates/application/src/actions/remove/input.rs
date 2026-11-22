@@ -2,9 +2,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use trine::NativePath;
 
+/// Task to retire and consent options for unlinking its worktrees.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RemoveInput {
+	/// Task selected for this operation.
 	pub task: String,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,

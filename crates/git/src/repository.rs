@@ -6,11 +6,16 @@ pub(crate) mod remote;
 use std::path::PathBuf;
 use workyard_core::Problem;
 
+/// Identity, location and selected remote of a backing Git repository.
 #[derive(Clone, Debug)]
 pub struct Repository {
+	/// Path to the backing repository.
 	pub source: PathBuf,
+	/// Git administration directory shared by the repository's worktrees.
 	pub common_dir: PathBuf,
+	/// Remote selected for branch resolution or fetch.
 	pub remote: Option<String>,
+	/// Stable identifier used to match repository observations.
 	pub identity: String,
 }
 

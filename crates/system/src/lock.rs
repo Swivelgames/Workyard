@@ -8,9 +8,12 @@ use workyard_core::{Control, Problem};
 
 const RETRY_INTERVAL: Duration = Duration::from_millis(20);
 
+/// Access requested on a stable OS lock file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LockMode {
+	/// Permit concurrent holders of shared access.
 	Shared,
+	/// Exclude other holders of the same lock.
 	Exclusive,
 }
 
@@ -40,6 +43,7 @@ impl Lock {
 		Self::acquire_mode(path, mode)
 	}
 
+	/// Acquire the requested OS lock mode.
 	pub fn acquire_mode(path: &Path, mode: LockMode) -> Result<Self, Problem> {
 		let file = OpenOptions::new()
 			.create(true)
@@ -103,6 +107,7 @@ impl Lock {
 		))
 	}
 
+	/// Wait for an existing lock while observing cancellation.
 	pub async fn wait_existing_with_control(
 		path: &Path,
 		mode: LockMode,
@@ -134,6 +139,7 @@ impl Lock {
 		Ok(guard)
 	}
 
+	/// Wait for admission to the requested lock.
 	pub async fn wait(path: &Path, control: &Control) -> Result<Self, Problem> {
 		loop {
 			control.check()?;
@@ -148,6 +154,7 @@ impl Lock {
 		}
 	}
 
+	/// Check that the lock path still names the file held by this guard.
 	pub fn verify(&self) -> Result<(), Problem> {
 		let named = File::open(&self.path).map_err(|e| Problem::io("Open named lock", e))?;
 

@@ -3,13 +3,16 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use trine::NativePath;
 
+/// Task, project selections and consent options for changing membership.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AmendInput {
+	/// Task selected for this operation.
 	pub task: String,
 	/// Tracked project references or explicit repository paths.
 	#[serde(default)]
 	pub projects: Vec<NativePath>,
+	/// Backing repositories selected for membership.
 	#[serde(default)]
 	pub repositories: Vec<RepositoryInput>,
 	/// Task participant names to remove. Repeat to remove several in one amendment.

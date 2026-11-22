@@ -5,6 +5,8 @@ resolver = "3"
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Swivelgames/Workyard"
 publish = false
 
 [workspace.dependencies]
@@ -13,7 +15,7 @@ workyard-core = { path = "crates/core" }
 workyard-git = { path = "crates/git" }
 workyard-state = { path = "crates/state" }
 workyard-application = { path = "crates/application" }
-trine = { path = "../trine" }
+trine = "=0.0.1"
 smol = "2.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

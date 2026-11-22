@@ -1,4 +1,9 @@
 //! Installed Git is authoritative for repository and worktree relationships.
+//!
+//! [`Runner`] supervises the installed Git executable. Branch planning, relationship
+//! inspection and repair use repository identity to verify the intended worktree.
+#![deny(missing_docs)]
+
 mod adapter;
 pub mod completion;
 mod observation;

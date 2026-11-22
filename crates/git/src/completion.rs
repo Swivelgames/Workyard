@@ -3,6 +3,7 @@ use crate::{Runner, process::args, repository::remote::choose_remote};
 use std::{collections::BTreeSet, path::Path};
 use workyard_core::{Control, Problem, ProblemCode};
 
+/// Locally known branches, tags and remotes available for shell completion.
 pub struct Catalog {
 	remotes: BTreeSet<String>,
 	branches: BTreeSet<String>,
@@ -11,6 +12,7 @@ pub struct Catalog {
 }
 
 impl Catalog {
+	/// Read locally available Git names for completion.
 	pub async fn read(path: &Path) -> Result<Self, Problem> {
 		let runner = Runner::default();
 		let control = Control::default();
@@ -64,10 +66,12 @@ impl Catalog {
 		Ok(catalog)
 	}
 
+	/// Return configured remote names.
 	pub fn remotes(&self) -> BTreeSet<String> {
 		self.remotes.clone()
 	}
 
+	/// Return starting revisions available for completion.
 	pub fn sources(&self) -> BTreeSet<String> {
 		let mut values = self.remote_branches.clone();
 		for name in &self.branches {
@@ -91,6 +95,7 @@ impl Catalog {
 		values
 	}
 
+	/// Return branch suggestions suitable for checkout.
 	pub fn checkout_branches(
 		&self,
 		requested_remote: Option<&str>,

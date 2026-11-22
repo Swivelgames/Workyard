@@ -1,3 +1,8 @@
+//! Workyard executable for the terminal, local JSON-RPC clients and MCP hosts.
+//!
+//! The host selects the interface and delegates task operations to the application catalog.
+#![deny(missing_docs)]
+
 mod host;
 
 use std::{ffi::OsString, process::ExitCode};

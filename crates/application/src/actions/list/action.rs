@@ -2,6 +2,7 @@ use super::{ListInput, ListOutcome};
 use crate::{contracts::Progress, execution::blocking_action};
 use trine::InvocationContext;
 
+/// List active tasks and recent retirements from workspace state.
 pub async fn list(
 	input: ListInput,
 	context: InvocationContext<Progress>,

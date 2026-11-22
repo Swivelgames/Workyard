@@ -6,18 +6,36 @@ use std::{
 
 /// One observable path to a backing repository. Linked worktrees can share its identity.
 pub struct ProjectLocation {
+	/// Stable identifier used to match repository observations.
 	pub identity: String,
+	/// Filesystem path associated with this entry.
 	pub path: PathBuf,
 }
 
 type Suffixes = BTreeMap<PathBuf, BTreeSet<usize>>;
 
+/// A discovered repository and the reference that selects it.
 pub struct Project {
+	/// Stable identifier used to match repository observations.
 	pub identity: String,
+	/// Short unambiguous selector for this project.
 	pub reference: PathBuf,
+	/// Filesystem path associated with this entry.
 	pub path: PathBuf,
 }
 
+/// Resolves project names by their shortest unambiguous path suffix.
+///
+/// ```
+/// use workyard_core::projects::{Catalog, ProjectLocation};
+/// use std::path::Path;
+///
+/// let a = ProjectLocation { identity: "repo-a".into(), path: "/product-a/api".into() };
+/// let b = ProjectLocation { identity: "repo-b".into(), path: "/product-b/api".into() };
+/// let catalog = Catalog::new(vec![a, b]);
+/// assert!(catalog.resolve(Path::new("api")).is_err());
+/// assert_eq!(catalog.resolve(Path::new("product-b/api")).unwrap().identity, "repo-b");
+/// ```
 #[derive(Default)]
 pub struct Catalog {
 	projects: Vec<Project>,
@@ -25,6 +43,7 @@ pub struct Catalog {
 }
 
 impl Catalog {
+	/// Group repository aliases by identity and index their path suffixes.
 	pub fn new(locations: Vec<ProjectLocation>) -> Self {
 		let mut aliases = BTreeMap::<String, BTreeSet<PathBuf>>::new();
 		for location in locations {
@@ -52,6 +71,7 @@ impl Catalog {
 		Self { projects, suffixes }
 	}
 
+	/// Return the projects available for selection.
 	pub fn projects(&self) -> impl Iterator<Item = &Project> {
 		self.projects.iter()
 	}
@@ -91,6 +111,7 @@ impl Catalog {
 			.collect()
 	}
 
+	/// Resolve a project reference or report ambiguity.
 	pub fn resolve(&self, selector: &Path) -> Result<&Project, Problem> {
 		let Some(matches) = self.suffixes.get(selector) else {
 			return Err(Problem::new(ProblemCode::ProjectUnknown, format!("Unknown project {selector:?}."))

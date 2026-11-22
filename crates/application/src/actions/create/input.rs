@@ -4,13 +4,16 @@ use trine::NativePath;
 
 use crate::contracts::RepositoryInput;
 
+/// Task branch, repository selectors and starting revisions for creation or checkout.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateInput {
+	/// Task selected for this operation.
 	pub task: String,
 	/// Tracked project references or explicit repository paths.
 	#[serde(default)]
 	pub projects: Vec<NativePath>,
+	/// Backing repositories selected for membership.
 	#[serde(default)]
 	pub repositories: Vec<RepositoryInput>,
 	/// Explicit workspace directory containing .workyard.

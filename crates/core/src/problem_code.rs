@@ -1,43 +1,80 @@
+/// Machine-readable classification carried by a Workyard problem.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProblemCode {
+	/// No task matches the requested name.
 	TaskUnknown,
+	/// The requested membership change would leave the task without participants.
 	EmptyTask,
+	/// The operation requires a choice or explicit consent to continue.
 	DecisionRequired,
+	/// Creating the target branch would collide with an existing branch.
 	BranchExists,
+	/// Another worktree already has the requested branch checked out.
 	BranchInUse,
+	/// The caller requested cancellation.
 	Cancelled,
+	/// Stored data could not be validated or reconciled.
 	DamagedState,
+	/// The repository's default starting branch could not be determined.
 	DefaultBranchUnknown,
+	/// Git reported an unsuccessful exit.
 	GitFailed,
+	/// Git output exceeded the limit for reliable inspection.
 	GitOutputLimit,
+	/// The stored format or required state capability is unsupported.
 	IncompatibleState,
+	/// Git returned data the adapter could not interpret.
 	InvalidGitOutput,
+	/// An argument or combination of arguments is invalid.
 	InvalidInput,
+	/// The supplied name cannot be used for a participant directory.
 	InvalidParticipantName,
+	/// The selected Git remote is invalid for this repository.
 	InvalidRemote,
+	/// The proposed task name is invalid.
 	InvalidTask,
+	/// The supervised process could not start.
 	LaunchFailed,
+	/// Multiple participants would occupy the same task-local name.
 	ParticipantNameConflict,
+	/// A participant needs an explicit task-local name.
 	ParticipantNameRequired,
+	/// The requested locations overlap in an unsupported way.
 	PathOverlap,
+	/// Several discovered repositories match the project selector.
 	ProjectAmbiguous,
+	/// No discovered project matches the selector.
 	ProjectUnknown,
+	/// A write may be visible but its final publication could not be confirmed.
 	PublicationUncertain,
+	/// The operation requires an unambiguous remote selection.
 	RemoteRequired,
+	/// Multiple selections resolve to the same backing repository.
 	RepositoryAliasConflict,
+	/// The observed repository or worktree no longer matches expectations.
 	RepositoryChanged,
+	/// Another operation may still own the resource.
 	ResourceBusy,
+	/// Data could not be encoded for storage or delivery.
 	SerializationFailed,
+	/// The requested branch starting point could not be resolved.
 	SourceMissing,
+	/// The named filesystem entry no longer matches its expected identity.
 	StaleIdentity,
+	/// The process supervisor could not establish a reliable command outcome.
 	SupervisionFailed,
+	/// The requested task or its destination is already occupied.
 	TaskExists,
+	/// No initialized workspace was found for the supplied location.
 	WorkspaceNotFound,
+	/// Workspace state and requested workspace placement disagree.
 	WorkspaceBindingConflict,
+	/// An operating-system I/O operation failed.
 	IoError,
 }
 
 impl ProblemCode {
+	/// Return the stable spelling used in records or output.
 	pub fn as_str(self) -> &'static str {
 		match self {
 			Self::EmptyTask => "empty_task",

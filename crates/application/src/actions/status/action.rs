@@ -2,6 +2,7 @@ use super::{StatusInput, StatusOutcome, contract::PresentedStatus};
 use crate::{contracts::Progress, execution::blocking_action};
 use trine::InvocationContext;
 
+/// Inspect live Git state for the selected task or active workspace tasks.
 pub async fn status(
 	input: StatusInput,
 	context: InvocationContext<Progress>,

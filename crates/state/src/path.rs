@@ -2,12 +2,22 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Lossless on-disk representation of a native path.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum StoredPath {
+	/// A path representable as Unicode text.
 	Text(String),
-	Unix { unix: Vec<u8> },
-	Windows { windows: Vec<u16> },
+	/// Unix path bytes.
+	Unix {
+		/// Original Unix filename bytes.
+		unix: Vec<u8>,
+	},
+	/// Windows wide path units.
+	Windows {
+		/// Original Windows UTF-16 code units.
+		windows: Vec<u16>,
+	},
 }
 
 impl From<&std::path::Path> for StoredPath {
@@ -43,6 +53,7 @@ impl StoredPath {
 		Ok(path)
 	}
 
+	/// Convert persisted data into the domain representation.
 	pub fn decode(&self) -> Result<PathBuf, workyard_core::Problem> {
 		match self {
 			Self::Text(text) => Ok(text.into()),

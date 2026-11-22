@@ -1,7 +1,10 @@
 [package]
 name = "workyard-git"
+description = "Git worktree inspection and process supervision for Workyard"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
 publish.workspace = true
 
 [dependencies]

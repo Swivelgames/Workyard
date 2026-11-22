@@ -3,6 +3,7 @@ use std::fs::OpenOptions;
 use std::{fs::File, path::Path};
 use workyard_core::Problem;
 
+/// Read the volume serial number and file index from the open Windows handle.
 #[cfg(windows)]
 pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 	use std::os::windows::io::AsRawHandle;
@@ -26,6 +27,7 @@ pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 	))
 }
 
+/// Read the native filesystem identity of the selected file.
 #[cfg(unix)]
 pub fn file_identity(file: &File) -> Result<(u64, u64), Problem> {
 	use std::os::unix::fs::MetadataExt;
@@ -48,6 +50,7 @@ pub fn entry_identity(path: &Path) -> Result<(u64, u64), Problem> {
 	Ok((metadata.dev(), metadata.ino()))
 }
 
+/// Identify the directory entry itself, including a reparse point, using its Windows handle.
 #[cfg(windows)]
 pub fn entry_identity(path: &Path) -> Result<(u64, u64), Problem> {
 	use std::os::windows::fs::OpenOptionsExt;
@@ -63,6 +66,7 @@ pub fn entry_identity(path: &Path) -> Result<(u64, u64), Problem> {
 	file_identity(&entry)
 }
 
+/// Read the native filesystem identity of the selected directory.
 pub fn directory_identity(path: &Path) -> Result<String, Problem> {
 	#[cfg(unix)]
 	let directory = File::open(path).map_err(|e| Problem::io("Open repository identity", e))?;

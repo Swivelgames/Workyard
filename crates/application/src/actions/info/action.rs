@@ -3,6 +3,7 @@ use crate::{contracts::Progress, execution::blocking_action};
 use trine::{InvocationContext, NativePath};
 use workyard_core::{Control, Problem, TaskLifecycle};
 
+/// Inspect workspace placement and aggregate task state.
 pub async fn info(
 	input: InfoInput,
 	context: InvocationContext<Progress>,

@@ -4,9 +4,12 @@ use crate::{Lock, TaskRecord, canonical_future, exists};
 use std::{fs, path::PathBuf};
 use workyard_core::Problem;
 
+/// Locks and record paths held for one admitted task.
 pub struct TaskGuard {
 	locks: Vec<Lock>,
+	/// Return the authoritative document path for the admitted task.
 	pub record_path: PathBuf,
+	/// Return the independent effect evidence path for this admission.
 	pub evidence_path: PathBuf,
 }
 
@@ -21,6 +24,7 @@ impl TaskGuard {
 }
 
 impl Store {
+	/// Acquire operation admission for the named task.
 	pub fn admit(&self, name: &str) -> Result<TaskGuard, Problem> {
 		self.verify()?;
 		// ASCII case aliases share prefix locks on every platform. Unicode
@@ -60,6 +64,7 @@ impl Store {
 		Ok(guard)
 	}
 
+	/// Check under admission that the proposed task can be created.
 	pub fn ensure_new(&self, guard: &TaskGuard, name: &str) -> Result<(), Problem> {
 		if exists(&guard.record_path)?
 			|| exists(&guard.evidence_path)?

@@ -3,17 +3,24 @@ use serde::Serialize;
 use trine::NativePath;
 use workyard_core::ParticipantInspection;
 
+/// User-facing assessment of one participant worktree.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ParticipantState {
+	/// Git reports a clean worktree.
 	Clean,
+	/// The worktree contains local changes.
 	Modified,
+	/// Git reports unresolved conflicts.
 	Conflicted,
+	/// The participant worktree could not be located.
 	Missing,
+	/// Inspection could not establish current Git state.
 	Unavailable,
 }
 
 impl ParticipantState {
+	/// Return the human-readable status label.
 	pub fn label(self) -> &'static str {
 		match self {
 			Self::Clean => "clean",
@@ -25,17 +32,28 @@ impl ParticipantState {
 	}
 }
 
+/// Current Git facts alongside the participant's recorded placement.
 #[derive(Serialize)]
 pub struct ParticipantReport {
+	/// Name used to identify this entry.
 	pub name: String,
+	/// Location of the backing Git repository.
 	pub backing_repo: Option<NativePath>,
+	/// Assessment of the current worktree from inspection.
 	pub state: ParticipantState,
+	/// Worktree location stored in task state.
 	pub recorded_path: NativePath,
+	/// Worktree location discovered during inspection.
 	pub current_path: Option<NativePath>,
+	/// Branch associated with the worktree, when known.
 	pub branch: Option<String>,
+	/// Whether the worktree has local changes.
 	pub dirty: Option<bool>,
+	/// Whether Git reports unresolved conflicts.
 	pub conflicted: Option<bool>,
+	/// Whether an unfinished repository operation was observed.
 	pub operation_in_progress: Option<bool>,
+	/// Diagnostic describing a failure or an unresolved condition.
 	pub problem: Option<ProblemOutcome>,
 }
 

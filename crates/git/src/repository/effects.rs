@@ -5,6 +5,7 @@ use workyard_core::BranchPlan;
 use workyard_core::{Control, Problem};
 
 impl Repository {
+	/// Refresh refs from the selected remote under Workyard's fetch coordination.
 	pub async fn fetch(&self, runner: &Runner, control: &Control) -> Result<(), Problem> {
 		if let Some(remote) = &self.remote {
 			runner
@@ -15,6 +16,7 @@ impl Repository {
 		Ok(())
 	}
 
+	/// Create the linked worktree using the resolved branch plan.
 	pub async fn add(
 		&self,
 		runner: &Runner,

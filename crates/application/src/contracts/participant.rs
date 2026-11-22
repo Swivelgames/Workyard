@@ -2,10 +2,14 @@ use serde::Serialize;
 use trine::NativePath;
 use workyard_core::Participant;
 
+/// Participant placement and progress exposed to clients.
 #[derive(Serialize)]
 pub struct ParticipantOutcome {
+	/// Name used to identify this entry.
 	pub name: String,
+	/// Filesystem path associated with this entry.
 	pub path: NativePath,
+	/// Step reached by this participant.
 	pub phase: String,
 }
 

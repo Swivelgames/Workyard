@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use trine::NativePath;
 
+/// Select a task or the workspace and specify the authorized recovery direction.
 #[derive(Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RecoverInput {
@@ -12,10 +13,13 @@ pub struct RecoverInput {
 	pub activate_here: bool,
 	/// Explicit workspace directory containing .workyard.
 	pub workspace: Option<NativePath>,
+	/// Resume in the restoration direction.
 	#[serde(default)]
 	pub undo: bool,
+	/// Accept routine confirmation.
 	#[serde(default)]
 	pub yes: bool,
+	/// Authorize the disclosed discard and accept routine confirmation.
 	#[serde(default)]
 	pub force: bool,
 }

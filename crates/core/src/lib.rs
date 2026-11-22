@@ -1,4 +1,10 @@
 //! Workyard's lifecycle and values. Git, persistence and interfaces remain adapters.
+//!
+//! Lifecycle functions coordinate the [`Git`] and [`State`] ports under task admission.
+//! A [`Task`] records membership and operation history. Read-only inspection pairs
+//! that record with current Git facts before reporting participant health.
+#![deny(missing_docs)]
+
 mod amend;
 mod control;
 mod create;

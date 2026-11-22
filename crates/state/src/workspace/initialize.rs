@@ -18,6 +18,7 @@ pub fn initialize_workspace(target: &Path, tasks: Option<&Path>) -> Result<PathB
 	))
 }
 
+/// Initialize a workspace while observing the caller's cancellation policy.
 pub async fn initialize_workspace_with_control(
 	target: &Path,
 	tasks: Option<&Path>,

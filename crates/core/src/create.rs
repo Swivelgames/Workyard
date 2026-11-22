@@ -6,6 +6,7 @@ use execution::Creation;
 use crate::{Control, CreateRequest, Git, Observer, OperationOutcome, Problem, State};
 use preflight::{preflight, validate_plans};
 
+/// Establish the task and its participant worktrees.
 pub async fn create(
 	request: CreateRequest,
 	runner: &impl Git,

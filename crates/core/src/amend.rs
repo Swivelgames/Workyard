@@ -32,6 +32,7 @@ struct Amendment<'a, G, S: AmendState, O> {
 	changes: Vec<AmendmentChange>,
 }
 
+/// Apply the requested membership changes to a managed task.
 pub async fn amend(
 	request: AmendRequest,
 	git: &impl AmendGit,
@@ -44,6 +45,7 @@ pub async fn amend(
 	run(&name, Intent::Apply(request), git, control, observer, store).await
 }
 
+/// Resume the recorded amendment using its saved intent.
 pub async fn recover_amend(
 	request: AmendRequest,
 	git: &impl AmendGit,
@@ -56,6 +58,7 @@ pub async fn recover_amend(
 	recover_amend_with_scope(&request.task, scope, git, control, observer, store).await
 }
 
+/// Resume an amendment under the caller's recovery policy.
 pub async fn recover_amend_with_scope(
 	name: &str,
 	scope: AmendRecovery,
