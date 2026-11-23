@@ -5,7 +5,9 @@ use std::{
 	path::{Path, PathBuf},
 };
 use trine::NativePath;
-use workyard_core::{Control, Problem, RepositoryInput as SelectedRepo, projects::Catalog};
+use workyard_core::{
+	Control, Problem, ProblemCode, RepositoryInput as SelectedRepo, projects::Catalog,
+};
 use workyard_git::{Runner, projects::enclosing_project};
 use workyard_state::Reader;
 
@@ -14,6 +16,7 @@ struct Resolver<'a> {
 	catalog: Catalog,
 	cwd: PathBuf,
 	runner: Runner,
+	tracked_only: bool,
 }
 
 impl Resolver<'_> {
@@ -34,7 +37,20 @@ impl Resolver<'_> {
 				path = self.reader.project_registration_path(&project.path)?;
 				identity = Some(project.identity);
 			}
-			registration_roots.push(path.clone());
+			if self.tracked_only {
+				let tracked = self
+					.catalog
+					.projects()
+					.any(|project| Some(&project.identity) == identity.as_ref());
+				if !tracked {
+					return Err(Problem::new(
+						ProblemCode::ProjectUnknown,
+						format!("{} is outside the tracked projects.", selector.display()),
+					));
+				}
+			} else {
+				registration_roots.push(path.clone());
+			}
 		}
 		Ok(SelectedRepo {
 			path,
@@ -53,10 +69,12 @@ pub(crate) async fn repositories(
 	groups: Vec<RepositoryInput>,
 	control: &Control,
 ) -> Result<Vec<SelectedRepo>, Problem> {
-	let needs_lookup = projects
-		.iter()
-		.chain(groups.iter().map(|g| &g.path))
-		.any(|path| !is_explicit(path.as_path()));
+	let tracked_only = reader.tracked_only()?;
+	let needs_lookup = tracked_only
+		|| projects
+			.iter()
+			.chain(groups.iter().map(|g| &g.path))
+			.any(|path| !is_explicit(path.as_path()));
 	let catalog = if needs_lookup {
 		super::discover(reader, control).await?.catalog
 	} else {
@@ -69,6 +87,7 @@ pub(crate) async fn repositories(
 		catalog,
 		cwd,
 		runner: Runner::default(),
+		tracked_only,
 	};
 
 	let mut selected = Vec::new();

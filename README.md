@@ -50,3 +50,16 @@ See the [command guide](https://github.com/Swivelgames/Workyard/blob/main/docs/u
 ## License
 
 You may use Workyard under either the [MIT License](LICENSE-MIT) or the [Apache License, Version 2.0](LICENSE-APACHE).
+
+### Managed workspaces
+
+Use `init --detached-tasks <relative-path>` when a containing tool owns the
+workspace layout. The path is relative to the workspace being initialized and
+points outside it. Pass `--workspace <directory>` to later commands so Workyard
+can locate its state from a detached checkout.
+
+`init --tracked-only` requires participants to match discovered projects.
+With any workspace, use repeatable `init --track <path>` options to choose the
+initial project roots. Each path can name a repository or a directory to scan
+recursively. Relative paths are anchored at the workspace being initialized.
+Omitting these options keeps the default discovery root at `projects/`.

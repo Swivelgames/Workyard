@@ -237,3 +237,180 @@ fn invoke_init(cwd: &Path, input: Value) -> Value {
 	assert_ok(&output);
 	serde_json::from_slice(&output.stdout).unwrap()
 }
+
+#[test]
+fn detached_tasks_require_explicit_placement_and_limit_participants_to_tracked_projects() {
+	let fixture = tempfile::tempdir().unwrap();
+	let root = fixture.path();
+	fs::create_dir(root.join("projects")).unwrap();
+	repo(&root.join("projects"), "api");
+	let outside = repo(root, "outside");
+
+	let invalid = workyard(
+		root,
+		&[
+			"init",
+			"provider",
+			"--tasks",
+			"local",
+			"--detached-tasks",
+			"../tasks",
+		],
+	);
+	assert!(!invalid.status.success());
+	assert!(!root.join("provider").exists());
+	let ordinary = workyard(root, &["init", "provider", "--tasks", "../tasks"]);
+	assert!(!ordinary.status.success());
+	assert!(!root.join("provider").exists());
+
+	let options = [
+		"init",
+		"provider",
+		"--detached-tasks",
+		"../tasks",
+		"--tracked-only",
+		"--track",
+		"../projects",
+	];
+	let initialized = workyard(root, &options);
+	assert_ok(&initialized);
+	assert!(
+		String::from_utf8_lossy(&initialized.stdout).contains("Use --workspace on every command")
+	);
+	assert_ok(&workyard(root, &options));
+
+	let rejected = workyard(
+		root,
+		&[
+			"create",
+			"--workspace",
+			"provider",
+			"feat/rejected",
+			"api",
+			outside.to_str().unwrap(),
+			"--from",
+			"main",
+			"--no-fetch",
+		],
+	);
+	assert!(!rejected.status.success());
+	assert!(!root.join("tasks/feat/rejected").exists());
+
+	assert_ok(&workyard(
+		root,
+		&[
+			"create",
+			"--workspace",
+			"provider",
+			"feat/demo",
+			"api",
+			"--from",
+			"main",
+			"--no-fetch",
+		],
+	));
+	let observed = workyard(
+		root,
+		&["status", "--workspace", "provider", "feat/demo", "--json"],
+	);
+	assert_ok(&observed);
+	let result: Value = serde_json::from_slice(&observed.stdout).unwrap();
+	assert_eq!(result["result"]["tasks"][0]["current"][0]["name"], "api");
+	assert!(root.join("tasks/feat/demo/api/.git").is_file());
+	assert!(!root.join("provider/tasks").exists());
+}
+
+#[test]
+fn init_tracks_individual_repositories_and_deep_directories() {
+	let fixture = tempfile::tempdir().unwrap();
+	let root = fixture.path();
+	repo(root, "standalone repo");
+	let nested = root.join("code/products/backend");
+	fs::create_dir_all(&nested).unwrap();
+	repo(&nested, "service");
+	fs::write(root.join("file"), "not a directory").unwrap();
+
+	let invalid = workyard(root, &["init", "invalid", "--track", "../file"]);
+	assert!(!invalid.status.success());
+	assert!(!root.join("invalid").exists());
+
+	let init = workyard(
+		root,
+		&[
+			"init",
+			"workspace",
+			"--track",
+			"../standalone repo",
+			"--track",
+			"../code",
+			"--track",
+			"../future",
+		],
+	);
+	assert_ok(&init);
+
+	let inventory = workyard(
+		root,
+		&["projects", "list", "--workspace", "workspace", "--json"],
+	);
+	assert_ok(&inventory);
+	let inventory: Value = serde_json::from_slice(&inventory.stdout).unwrap();
+	let result = &inventory["result"];
+	assert_eq!(result["roots"].as_array().unwrap().len(), 3);
+	assert!(
+		result["roots"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.any(|root| root["status"] == "missing")
+	);
+	let references: Vec<_> = result["projects"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.filter_map(|project| project["reference"].as_str())
+		.collect();
+	assert_eq!(references, ["service", "standalone repo"]);
+
+	assert_ok(&workyard(
+		root,
+		&[
+			"init",
+			"workspace",
+			"--track",
+			"../future",
+			"--track",
+			"../code",
+			"--track",
+			"../standalone repo",
+		],
+	));
+
+	assert_ok(&workyard(
+		root,
+		&["projects", "track", "--workspace", "workspace", "./code"],
+	));
+	let inventory = workyard(
+		root,
+		&["projects", "list", "--workspace", "workspace", "--json"],
+	);
+	assert_ok(&inventory);
+	let inventory: Value = serde_json::from_slice(&inventory.stdout).unwrap();
+	assert_eq!(inventory["result"]["roots"].as_array().unwrap().len(), 3);
+
+	assert_ok(&workyard(
+		root,
+		&["projects", "untrack", "--workspace", "workspace", "./code"],
+	));
+	let inventory = workyard(
+		root,
+		&["projects", "list", "--workspace", "workspace", "--json"],
+	);
+	assert_ok(&inventory);
+	let inventory: Value = serde_json::from_slice(&inventory.stdout).unwrap();
+	assert_eq!(inventory["result"]["roots"].as_array().unwrap().len(), 2);
+	assert_eq!(
+		inventory["result"]["projects"][0]["reference"],
+		"standalone repo"
+	);
+}

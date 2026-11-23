@@ -23,5 +23,8 @@ pub use paths::{canonical_future, exists};
 pub use reader::Reader;
 pub use records::{OperationRecord, TaskRecord, task_filename};
 pub use store::{Store, TaskGuard};
-pub use workspace::{RootEdit, initialize_workspace, initialize_workspace_with_control};
+pub use workspace::{
+	InitOptions, RootEdit, initialize_workspace, initialize_workspace_with_control,
+	initialize_workspace_with_options,
+};
 pub use workyard_system::{Lock, LockMode};

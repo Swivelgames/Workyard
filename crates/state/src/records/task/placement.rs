@@ -2,7 +2,7 @@
 use super::{ParticipantRecord, TaskRecord};
 use crate::{damage::damaged, path::StoredPath};
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path};
+use std::path::{Component, Path, PathBuf};
 use workyard_core::{Participant, PlacementHint, Problem};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,9 +86,18 @@ pub(super) fn matches_workspace(
 	let previous = prior
 		.parent()
 		.ok_or_else(|| damaged("Invalid workspace marker."))?;
+	if prior.file_name() != state.file_name() {
+		return Ok(false);
+	}
+	if tasks.is_absolute()
+		&& let Some(detached) = crate::workspace::detached_tasks_path(state)?
+	{
+		let workspace = state.parent().expect("workspace marker");
+		return Ok(crate::canonical_future(&previous.join(&detached))? == tasks
+			&& crate::canonical_future(&workspace.join(detached))? == root);
+	}
 	let relative = tasks.strip_prefix(previous).unwrap_or(&tasks);
-	Ok(prior.file_name() == state.file_name()
-		&& !relative.is_absolute()
+	Ok(!relative.is_absolute()
 		&& root
 			.strip_prefix(state.parent().expect("workspace marker"))
 			.ok() == Some(relative))
@@ -98,6 +107,7 @@ pub(super) fn participant(
 	record: ParticipantRecord,
 	previous: &Path,
 	state: &Path,
+	detached_anchor: Option<(&Path, &Path)>,
 ) -> Result<Participant, Problem> {
 	let old_workspace = previous.parent().expect("validated workspace marker");
 	let workspace = state.parent().expect("workspace marker");
@@ -108,8 +118,15 @@ pub(super) fn participant(
 		.map_or_else(|| old_workspace.join(&p.source), |hint| hint.source.clone());
 	// Older local records may contain absolute paths. Re-anchor those paths
 	// before using the previous location as evidence for a verified link.
-	let at_workspace =
-		|path: &Path| workspace.join(path.strip_prefix(old_workspace).unwrap_or(path));
+	let at_workspace = |path: &Path| {
+		if let Some((old, new)) = detached_anchor
+			&& path.is_absolute()
+			&& let Ok(relative) = path.strip_prefix(old)
+		{
+			return new.join(relative);
+		}
+		workspace.join(path.strip_prefix(old_workspace).unwrap_or(path))
+	};
 	let source = at_workspace(&p.source);
 	// Keep a source that remained at the original location after moving just state and tasks.
 	p.source = if old_source != source && matches!(source.try_exists(), Ok(false)) {
@@ -120,4 +137,27 @@ pub(super) fn participant(
 	p.common_dir = at_workspace(&p.common_dir);
 	p.destination = at_workspace(&p.destination);
 	Ok(p)
+}
+
+pub(super) fn detached_anchor<'a>(
+	record: &TaskRecord,
+	previous: &'a Path,
+	current: &'a Path,
+) -> Result<Option<(&'a Path, &'a Path)>, Problem> {
+	let tasks: PathBuf = record.tasks_root.decode()?;
+	if previous == current || !tasks.is_absolute() {
+		return Ok(None);
+	}
+
+	// Absolute placements predate detached layouts. Rebase them only when the
+	// current layout explicitly declares the detached relationship.
+	if crate::workspace::detached_tasks_path(current)?.is_none() {
+		return Ok(None);
+	}
+	Ok(previous
+		.parent()
+		.expect("workspace marker")
+		.ancestors()
+		.zip(current.parent().expect("workspace marker").ancestors())
+		.find(|(old, _)| tasks.starts_with(old)))
 }

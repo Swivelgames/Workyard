@@ -4,7 +4,10 @@ mod layout;
 mod projects;
 pub use projects::RootEdit;
 
-pub use initialize::{initialize_workspace, initialize_workspace_with_control};
+pub use initialize::{
+	InitOptions, initialize_workspace, initialize_workspace_with_control,
+	initialize_workspace_with_options,
+};
 use layout::Layout;
 
 use crate::{Lock, canonical_future, damage::damaged};
@@ -65,6 +68,14 @@ impl Workspace {
 		}
 		Ok(())
 	}
+}
+
+pub(crate) fn detached_tasks_path(state: &Path) -> Result<Option<PathBuf>, Problem> {
+	let layout = Layout::read(state)?;
+	if layout.detached_tasks {
+		return layout.tasks_path().map(Some);
+	}
+	Ok(None)
 }
 
 pub(crate) fn checked_marker(state: &Path) -> Result<PathBuf, Problem> {

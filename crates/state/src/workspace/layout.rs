@@ -15,15 +15,34 @@ pub(super) struct Layout {
 	workspace_root: StoredPath,
 	tasks_dir: StoredPath,
 	project_roots: Vec<StoredPath>,
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub(super) detached_tasks: bool,
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub(super) tracked_only: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+	!*value
 }
 
 impl Layout {
-	pub fn new(workspace: &Path, tasks: &Path) -> Self {
+	pub fn new(
+		workspace: &Path,
+		tasks: &Path,
+		detached_tasks: bool,
+		tracked_only: bool,
+		project_roots: &BTreeSet<PathBuf>,
+	) -> Self {
 		Self {
 			version: 4,
 			workspace_root: workspace.into(),
 			tasks_dir: tasks.into(),
-			project_roots: vec![Path::new("projects").into()],
+			project_roots: project_roots
+				.iter()
+				.map(|path| path.as_path().into())
+				.collect(),
+			detached_tasks,
+			tracked_only,
 		}
 	}
 
@@ -68,7 +87,11 @@ impl Layout {
 		for root in roots {
 			let current = workspace.join(&root);
 			let old = previous.join(&root);
-			if root.is_absolute() || root == Path::new("projects") || crate::exists(&current)? {
+			if self.tracked_only
+				|| root.is_absolute()
+				|| root == Path::new("projects")
+				|| crate::exists(&current)?
+			{
 				located.insert(root);
 			} else if crate::exists(&old)? {
 				located.insert(old);
@@ -86,7 +109,6 @@ impl Layout {
 				let path = stored.decode()?;
 				if path.as_os_str().is_empty()
 					|| path.as_os_str().as_encoded_bytes().contains(&0)
-					|| path.components().any(|c| c == Component::ParentDir)
 					|| (!path.is_absolute()
 						&& path
 							.components()
@@ -103,13 +125,21 @@ impl Layout {
 		self.project_roots = roots.iter().map(|root| root.as_path().into()).collect();
 	}
 
+	pub(super) fn tasks_path(&self) -> Result<PathBuf, Problem> {
+		self.tasks_dir.decode()
+	}
+
 	pub fn tasks_root(&self, state: &Path) -> Result<PathBuf, Problem> {
 		let workspace = state.parent().expect("validated workspace marker");
-		resolve_tasks(workspace, &self.tasks_dir.decode()?)
+		resolve_tasks(workspace, &self.tasks_dir.decode()?, self.detached_tasks)
 	}
 }
 
-pub(super) fn resolve_tasks(workspace: &Path, tasks: &Path) -> Result<PathBuf, Problem> {
+pub(super) fn resolve_tasks(
+	workspace: &Path,
+	tasks: &Path,
+	detached: bool,
+) -> Result<PathBuf, Problem> {
 	if tasks.is_absolute()
 		|| tasks
 			.components()
@@ -121,13 +151,19 @@ pub(super) fn resolve_tasks(workspace: &Path, tasks: &Path) -> Result<PathBuf, P
 		));
 	}
 	let root = canonical_future(&workspace.join(tasks))?;
+	if detached {
+		if root.starts_with(workspace) || workspace.starts_with(&root) || touches_marker(&root) {
+			return Err(Problem::new(
+				ProblemCode::PathOverlap,
+				"Choose a detached tasks directory outside the workspace that does not contain it.",
+			));
+		}
+		return Ok(root);
+	}
+
 	let relative = root.strip_prefix(workspace).ok();
-	let allowed = relative.is_some_and(|path| {
-		!path.as_os_str().is_empty()
-			&& !path
-				.components()
-				.any(|part| part.as_os_str().eq_ignore_ascii_case(MARKER))
-	});
+	let allowed =
+		relative.is_some_and(|path| !path.as_os_str().is_empty() && !touches_marker(path));
 	if !allowed {
 		return Err(Problem::new(
 			ProblemCode::PathOverlap,
@@ -136,4 +172,9 @@ pub(super) fn resolve_tasks(workspace: &Path, tasks: &Path) -> Result<PathBuf, P
 	}
 
 	Ok(root)
+}
+
+fn touches_marker(path: &Path) -> bool {
+	path.components()
+		.any(|part| part.as_os_str().eq_ignore_ascii_case(MARKER))
 }

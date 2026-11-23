@@ -23,6 +23,19 @@ impl View<InitOutcome, ProblemOutcome, Progress> for InitView {
 			Ok(outcome) => {
 				let workspace = outcome.workspace.as_path();
 				layout(&mut terminal, workspace, outcome.tasks_root.as_path());
+				if !outcome.tasks_root.as_path().starts_with(workspace) {
+					separate(&mut terminal);
+					terminal.advice_at(
+						MessageScope::Workspace,
+						"Use --workspace on every command in this detached workspace.",
+						None,
+					);
+					if let Some(command) = commands::workspace_command("list", Some(workspace)) {
+						separate(&mut terminal);
+						terminal.command_at(MessageScope::Section, &command);
+					}
+					return self.output.stdout.write_all(terminal.output.as_bytes());
+				}
 
 				self.output.stdout.write_all(terminal.output.as_bytes())?;
 				terminal.output.clear();

@@ -3,7 +3,7 @@ use super::Layout;
 use crate::{Lock, Reader, Store, documents};
 use std::{
 	collections::BTreeSet,
-	path::{Path, PathBuf},
+	path::{Component, Path, PathBuf},
 };
 use workyard_core::{Control, Problem, ProblemCode};
 
@@ -17,6 +17,11 @@ pub enum RootEdit {
 }
 
 impl Reader {
+	/// Whether explicit participants must match a discovered project.
+	pub fn tracked_only(&self) -> Result<bool, Problem> {
+		Ok(Layout::read(self.state())?.tracked_only)
+	}
+
 	/// Absolute selection to retain for a deferred project registration.
 	pub fn project_registration_path(&self, path: &Path) -> Result<PathBuf, Problem> {
 		let workspace = self.state().parent().expect("workspace marker");
@@ -79,13 +84,28 @@ impl Store {
 		let mut changed = Vec::new();
 
 		for root in roots {
-			let updated = match edit {
-				RootEdit::Track => registered.insert(root.clone()),
-				RootEdit::Untrack => registered.remove(&root),
-			};
-			if updated {
-				changed.push(workspace.join(root));
+			let matches: Vec<_> = registered
+				.iter()
+				.filter(|stored| {
+					**stored == root
+						|| (stored.components().any(|part| part == Component::ParentDir)
+							&& registration(workspace, &workspace.join(stored))
+								.is_ok_and(|path| path == root))
+				})
+				.cloned()
+				.collect();
+			match edit {
+				RootEdit::Track if matches.is_empty() => {
+					registered.insert(root.clone());
+				}
+				RootEdit::Untrack if !matches.is_empty() => {
+					for stored in matches {
+						registered.remove(&stored);
+					}
+				}
+				_ => continue,
 			}
+			changed.push(workspace.join(root));
 		}
 		if !changed.is_empty() {
 			control.check()?;
@@ -97,23 +117,58 @@ impl Store {
 	}
 }
 
+pub(super) fn initial_roots(
+	workspace: &Path,
+	paths: &[&Path],
+) -> Result<Option<BTreeSet<PathBuf>>, Problem> {
+	if paths.is_empty() {
+		return Ok(None);
+	}
+
+	let roots = paths
+		.iter()
+		.map(|&path| {
+			if path.is_absolute() {
+				return RootEdit::Track.registration(workspace, path);
+			}
+			if path.as_os_str().is_empty()
+				|| path
+					.components()
+					.any(|part| matches!(part, Component::RootDir | Component::Prefix(_)))
+			{
+				return Err(Problem::new(
+					ProblemCode::InvalidInput,
+					"Supply a relative or absolute project path.",
+				));
+			}
+
+			let resolved = crate::canonical_future(&workspace.join(path))?;
+			validate_track_path(&resolved)?;
+			Ok(path.to_owned())
+		})
+		.collect::<Result<BTreeSet<_>, _>>()?;
+	Ok(Some(roots))
+}
+
 impl RootEdit {
 	fn registration(self, workspace: &Path, path: &Path) -> Result<PathBuf, Problem> {
 		if matches!(self, Self::Track) {
-			match std::fs::metadata(path) {
-				Ok(meta) if !meta.is_dir() => {
-					return Err(Problem::new(
-						ProblemCode::InvalidInput,
-						format!("Project root {path:?} must be a directory."),
-					));
-				}
-				Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
-					return Err(Problem::io(format!("Inspect project root {path:?}"), error));
-				}
-				_ => {}
-			}
+			validate_track_path(path)?;
 		}
 		registration(workspace, path)
+	}
+}
+
+fn validate_track_path(path: &Path) -> Result<(), Problem> {
+	match std::fs::metadata(path) {
+		Ok(meta) if !meta.is_dir() => Err(Problem::new(
+			ProblemCode::InvalidInput,
+			format!("Project root {path:?} must be a directory."),
+		)),
+		Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+			Err(Problem::io(format!("Inspect project root {path:?}"), error))
+		}
+		_ => Ok(()),
 	}
 }
 

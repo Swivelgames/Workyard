@@ -93,6 +93,7 @@ pub(crate) fn validate(
 
 pub(crate) fn decode(record: TaskRecord, root: &Path, state: &Path) -> Result<Task, Problem> {
 	let prior_state = record.state_dir.decode()?;
+	let detached_anchor = super::placement::detached_anchor(&record, &prior_state, state)?;
 	Ok(Task {
 		generation: record.generation,
 		removal: record.removal.as_ref().map(|r| r.decode()).transpose()?,
@@ -111,7 +112,7 @@ pub(crate) fn decode(record: TaskRecord, root: &Path, state: &Path) -> Result<Ta
 		participants: record
 			.participants
 			.into_iter()
-			.map(|p| super::placement::participant(p, &prior_state, state))
+			.map(|p| super::placement::participant(p, &prior_state, state, detached_anchor))
 			.collect::<Result<_, Problem>>()?,
 	})
 }

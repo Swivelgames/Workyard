@@ -5,7 +5,8 @@ use crate::{
 };
 use std::path::Path;
 use trine::{InvocationContext, NativePath};
-use workyard_core::{Control, Problem};
+use workyard_core::{Control, Problem, ProblemCode};
+use workyard_state::InitOptions;
 
 /// Initialize a workspace with the requested tasks directory.
 pub async fn init(
@@ -26,14 +27,31 @@ pub async fn init(
 			.unwrap_or(Path::new("."));
 
 		let workspace = workyard_state::canonical_future(directory)?;
-		let requested_tasks = input.tasks.as_ref().map(NativePath::as_path);
+		if input.tasks.is_some() && input.detached_tasks.is_some() {
+			return Err(Problem::new(
+				ProblemCode::InvalidInput,
+				"Use either --tasks or --detached-tasks.",
+			)
+			.into());
+		}
+		let requested_tasks = input
+			.tasks
+			.as_ref()
+			.or(input.detached_tasks.as_ref())
+			.map(NativePath::as_path);
 		if let Some(tasks) = requested_tasks {
 			skill::check_tasks(&workspace, tasks)?;
 		}
 
-		let tasks = workyard_state::initialize_workspace_with_control(
+		let track: Vec<_> = input.track.iter().map(NativePath::as_path).collect();
+		let tasks = workyard_state::initialize_workspace_with_options(
 			&workspace,
-			requested_tasks,
+			InitOptions {
+				tasks: requested_tasks,
+				detached_tasks: input.detached_tasks.is_some(),
+				tracked_only: input.tracked_only,
+				track: &track,
+			},
 			&control,
 		)
 		.await?;
