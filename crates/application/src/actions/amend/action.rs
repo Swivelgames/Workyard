@@ -36,7 +36,7 @@ async fn run(
 	let control = Control::new(move || cancellation.is_cancelled());
 	control.check().map_err(rejected)?;
 
-	let explicit_workspace = input.workspace.is_some();
+	let explicit_workspace = input.workspace.clone();
 	let prepared = input.prepare(&control).await.map_err(rejected)?;
 	let store = workyard_state::Store::open_existing(&prepared.state, None).map_err(rejected)?;
 
@@ -62,7 +62,10 @@ async fn run(
 		Err(problem) => rejected(problem),
 	};
 	outcome.removal = observer.into_report();
-	outcome.guide_retirement(&prepared.state, explicit_workspace);
+	outcome.guide_retirement(
+		&prepared.state,
+		explicit_workspace.as_ref().map(|path| path.as_path()),
+	);
 
 	if outcome.registration_problem.is_some()
 		|| outcome.operation.outcome == OperationOutcome::Failed

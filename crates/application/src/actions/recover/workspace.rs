@@ -63,6 +63,12 @@ impl PlacementReport {
 
 #[derive(Default, Serialize)]
 pub struct WorkspaceRecovery {
+	#[serde(skip)]
+	pub(crate) unresolved_locations: bool,
+	#[serde(skip)]
+	pub(crate) interrupted_removals: Vec<String>,
+	#[serde(skip)]
+	pub(crate) explicit_workspace: Option<NativePath>,
 	pub workspace: Option<NativePath>,
 	pub nothing_to_recover: bool,
 	pub participants: Vec<PlacementReport>,
@@ -84,6 +90,7 @@ impl WorkspaceRecovery {
 
 	pub fn finish(mut self, changed: bool) -> Result<Self, Self> {
 		if self.participants.iter().any(|row| row.problem.is_some()) {
+			self.unresolved_locations = true;
 			return Err(self.failed(Problem::new(
 				ProblemCode::RepositoryChanged,
 				"Some worktree locations remain unresolved.",

@@ -38,12 +38,18 @@ impl Workspace {
 		if let Some(requested) = requested_root
 			&& canonical_future(requested)? != root
 		{
-			return Err(Problem::new(
-				ProblemCode::WorkspaceBindingConflict,
-				format!(
-					"Workspace already uses tasks directory {root:?}. Requested {requested:?}."
-				),
+			let message = format!(
+				"Workspace already uses tasks directory {root:?}. Requested {requested:?}."
+			);
+			let mut problem = Problem::new(ProblemCode::WorkspaceBindingConflict, message);
+			let workspace = state.parent().expect("workspace marker has a parent");
+			problem.detail = Some(Box::new(
+				workyard_core::ProblemDetail::TaskDirectoryConflict {
+					workspace: workspace.into(),
+					current: root,
+				},
 			));
+			return Err(problem);
 		}
 		check_directories(state)?;
 		Ok(root)

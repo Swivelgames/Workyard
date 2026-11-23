@@ -4,6 +4,7 @@ mod cli;
 mod contract;
 mod input;
 mod prepare;
+mod retry;
 
 use crate::{contracts::Progress, presentation::cli::exit_status};
 use trine::{
@@ -36,7 +37,12 @@ pub(crate) fn build_entry() -> Result<CreateEntry, RegistrationError> {
 	Ok(Entry::new(handler)
 		.cli(
 			cli,
-			|output| Ok(cli::CreateView { output }),
+			|output| {
+				Ok(cli::CreateView {
+					output,
+					wrote_progress: false,
+				})
+			},
 			|result| exit_status::operation(result, |outcome| &outcome.operation),
 		)
 		.rpc(rpc)

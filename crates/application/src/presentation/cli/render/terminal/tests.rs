@@ -1,10 +1,10 @@
 use super::{Style, Terminal, Tone};
-use crate::presentation::cli::render::ParticipantRow;
+use crate::presentation::cli::render::{ParticipantRow, TaskTag};
 
 fn render(style: Style) -> String {
 	let mut terminal = Terminal::new(style);
 	terminal.heading("Workyard Status");
-	terminal.task("feat/payments", "healthy", Tone::Good);
+	terminal.task("feat/payments", TaskTag::Healthy, "");
 	terminal.participants(&[
 		ParticipantRow {
 			name: "界".into(),
@@ -47,7 +47,7 @@ fn styled_and_plain_tables_preserve_facts_and_escape_untrusted_controls() {
 	assert!(plain.contains("api\\u{1b}[31m\\n"));
 	let rows: Vec<_> = plain
 		.lines()
-		.filter(|line| line.starts_with("        "))
+		.filter(|line| line.starts_with("      "))
 		.collect();
 	let widths: Vec<_> = rows
 		.iter()

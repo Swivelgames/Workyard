@@ -1,41 +1,31 @@
 //! Task identity, condition and diagnostic context.
 use super::participants;
+use super::{MessageScope, TaskTag, Terminal};
 use crate::observation::{Condition, Provenance, TaskReport};
-use crate::presentation::cli::render::{Terminal, Tone};
 use std::path::Path;
 use workyard_core::OperationOutcome;
 
 pub(crate) fn render(
 	terminal: &mut Terminal,
 	task: &TaskReport,
-	root: Option<&Path>,
-	recovery_state: Option<&Path>,
-	detail: bool,
+	workspace: Option<&Path>,
+	tasks_root: Option<&Path>,
+	explicit_workspace: Option<&Path>,
 ) {
-	let tone = match task.condition {
-		Condition::Healthy => Tone::Good,
-		Condition::NeedsAttention => Tone::Attention,
-		Condition::Unknown => Tone::Neutral,
-	};
-	let label = if task.lifecycle == Some("retired") {
-		"retired"
-	} else if task.provenance == Provenance::Recorded
+	let tag = if task.provenance == Provenance::Recorded
+		&& task.lifecycle != Some("retired")
 		&& task.condition == Condition::Unknown
 		&& !task.busy
 		&& task.pending_participant.is_none()
 	{
-		"not inspected"
+		TaskTag::NotInspected
 	} else {
-		task.condition.label()
+		TaskTag::observed(task)
 	};
-	terminal.task(
-		task.name.as_deref().unwrap_or("unknown identity"),
-		label,
-		tone,
-	);
+	terminal.task(task.name.as_deref().unwrap_or("unknown identity"), tag, "");
 
 	if task.recorded.is_none() || !task.problems.is_empty() {
-		let path = root.map_or_else(
+		let path = workspace.map_or_else(
 			|| terminal.paths.root(task.record.as_path()),
 			|root| terminal.paths.within(root, task.record.as_path()),
 		);
@@ -43,14 +33,14 @@ pub(crate) fn render(
 	}
 
 	match task.provenance {
-		Provenance::Recorded => participants::recorded(terminal, task, root),
+		Provenance::Recorded => participants::recorded(terminal, task, workspace),
 		Provenance::Inspected => {
-			participants::inspected(terminal, task, root, recovery_state, detail)
+			participants::inspected(terminal, task, workspace, tasks_root, explicit_workspace)
 		}
 	}
 
 	render_coordination(terminal, task);
-	render_problems(terminal, task, detail);
+	render_problems(terminal, task, explicit_workspace);
 }
 
 fn render_coordination(terminal: &mut Terminal, task: &TaskReport) {
@@ -71,7 +61,7 @@ fn render_coordination(terminal: &mut Terminal, task: &TaskReport) {
 	}
 }
 
-fn render_problems(terminal: &mut Terminal, task: &TaskReport, detail: bool) {
+fn render_problems(terminal: &mut Terminal, task: &TaskReport, workspace: Option<&Path>) {
 	for problem in &task.problems {
 		terminal.problem(problem);
 	}
@@ -80,22 +70,27 @@ fn render_problems(terminal: &mut Terminal, task: &TaskReport, detail: bool) {
 		return;
 	};
 
-	if saved.problem.is_some() || (detail && saved.operation.outcome != OperationOutcome::Succeeded)
-	{
+	if task.condition == Condition::Healthy {
+		return;
+	}
+
+	if saved.problem.is_some() || saved.operation.outcome != OperationOutcome::Succeeded {
 		terminal.note(&format!(
 			"Recorded operation: {} ({})",
 			saved.operation.kind.unwrap_or("unknown"),
 			saved.operation.outcome.as_str()
 		));
 	}
-	if let Some(problem) = &saved.problem {
-		if task.condition == Condition::Healthy {
-			terminal.note(&format!(
-				"Historical diagnostic: {}: {}",
-				problem.code, problem.message
-			));
-		} else {
-			terminal.problem(problem);
-		}
+	if let Some(problem) = &saved.problem
+		&& !task.name.as_deref().is_some_and(|name| {
+			terminal.recorded_task_problem(
+				MessageScope::Task,
+				problem,
+				name,
+				workspace,
+				&saved.operation,
+			)
+		}) {
+		terminal.problem(problem);
 	}
 }

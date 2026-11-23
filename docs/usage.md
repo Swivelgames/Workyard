@@ -74,8 +74,11 @@ Pass `--no-fetch` to use locally available references. A local source branch kee
 its current tip. Explicit `--from origin/main` uses the remote-tracking source.
 When the repository has no default branch metadata, supply `--from`.
 
-`checkout` is `create --checkout`: existing local target branches are reused and
-remote-only targets become local tracking branches. Source checkouts never switch.
+`create` refuses the operation if the target branch exists in any selected
+repository. Use `checkout` to reuse local target branches, track remote-only
+targets, and create the branch in the remaining repositories. If the task
+already exists, the terminal shows its current status. Source checkouts stay
+on their current branches.
 Git's branch/worktree constraints and configuration still apply.
 
 ## State and partial results
@@ -203,11 +206,12 @@ workyard info
 workyard status feat/payments --workspace /workspace
 ```
 
-List inspects active tasks and presents a compact inventory: task name, condition
-and repository names. It also includes up to five recent closures. Status presents
-current participant detail for active tasks, including modified or missing worktrees;
-an explicit task selects that active record. Both retain actionable diagnostics for
-unresolved state. Neither prints a primary title or workspace metadata.
+List shows active tasks, their condition and repository names, followed by up to
+five recent closures. Status shows a table of participant names, backing repos
+and current worktree states for active tasks. Supply a task name to focus the
+report. Backing repository paths are relative to the workspace where possible.
+A note identifies any worktree outside its expected path. Status
+includes recovery guidance beneath the affected task when applicable.
 
 Use info for workspace context, including the tasks directory, state directory,
 discovery source and current record counts.

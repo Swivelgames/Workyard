@@ -162,7 +162,7 @@ def closed_stdin_case(binary):
 			stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
 			timeout=10)
 		assert result.returncode != 0
-		assert b"decision_required" in result.stdout, result.stdout
+		assert b"Removal needs confirmation: feat/task" in result.stdout, result.stdout
 		assert (root / "tasks/feat/task/api/file").read_text() == "dirty\n"
 		assert_healthy_retry(root, binary, before_state, True)
 

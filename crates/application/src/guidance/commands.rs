@@ -35,42 +35,47 @@ pub(crate) fn path(path: &Path) -> Option<String> {
 }
 
 pub(crate) fn activate_workspace(workspace: Option<&Path>) -> Option<String> {
-	let mut command = String::from("workyard recover --activate-here");
+	workspace_command("recover --activate-here", workspace)
+}
+
+pub(crate) fn workspace_status(workspace: Option<&Path>) -> Option<String> {
+	workspace_command("status", workspace)
+}
+
+pub(crate) fn workspace_command(action: &str, workspace: Option<&Path>) -> Option<String> {
+	let mut command = format!("workyard {action}");
 	if let Some(workspace) = workspace {
 		command.push_str(&format!(" --workspace={}", path(workspace)?));
 	}
 	Some(command)
 }
 
-pub(crate) fn workspace_status(state: Option<&Path>) -> Option<String> {
-	let mut command = String::from("workyard status");
-	if let Some(state) = state {
-		command.push_str(&format!(" --workspace={}", path(state.parent()?)?));
-	}
-	Some(command)
-}
-
-pub(crate) fn status(task: &str, state: Option<&Path>) -> Option<String> {
+pub(crate) fn status(task: &str, workspace: Option<&Path>) -> Option<String> {
 	Some(format!(
 		"{} -- {}",
-		workspace_status(state)?,
+		workspace_status(workspace)?,
 		argument(task)?
 	))
 }
 
-pub(crate) fn recover(task: &str, state: Option<&Path>) -> Option<String> {
-	task_command("recover", task, state)
+pub(crate) fn status_json(task: &str, workspace: Option<&Path>) -> Option<String> {
+	Some(format!(
+		"{} --json -- {}",
+		workspace_status(workspace)?,
+		argument(task)?
+	))
 }
 
-pub(crate) fn remove(task: &str, state: Option<&Path>) -> Option<String> {
-	task_command("remove", task, state)
+pub(crate) fn recover(task: &str, workspace: Option<&Path>) -> Option<String> {
+	task_command("recover", task, workspace)
 }
 
-fn task_command(action: &str, task: &str, state: Option<&Path>) -> Option<String> {
-	let mut command = format!("workyard {action}");
-	if let Some(state) = state {
-		command.push_str(&format!(" --workspace={}", path(state.parent()?)?));
-	}
+pub(crate) fn remove(task: &str, workspace: Option<&Path>) -> Option<String> {
+	task_command("remove", task, workspace)
+}
+
+fn task_command(action: &str, task: &str, workspace: Option<&Path>) -> Option<String> {
+	let mut command = workspace_command(action, workspace)?;
 	if task.starts_with('-') {
 		command.push_str(" --");
 	}
@@ -108,7 +113,7 @@ mod tests {
 	#[test]
 	fn status_keeps_option_like_paths_as_values() {
 		assert_eq!(
-			status("feat/example", Some(Path::new("-workspace/.workyard"))).unwrap(),
+			status("feat/example", Some(Path::new("-workspace"))).unwrap(),
 			"workyard status --workspace=-workspace -- feat/example"
 		);
 	}
@@ -118,7 +123,7 @@ mod tests {
 	fn non_unicode_paths_require_manual_native_quoting() {
 		use std::os::unix::ffi::OsStrExt;
 		let native = Path::new(std::ffi::OsStr::from_bytes(b"state-\xff"));
-		assert!(status("feat/example", Some(&native.join(".workyard"))).is_none());
+		assert!(status("feat/example", Some(native)).is_none());
 	}
 
 	#[cfg(windows)]

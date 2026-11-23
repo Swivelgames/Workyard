@@ -21,10 +21,16 @@ impl Paths {
 	pub fn root(&self, path: &Path) -> String {
 		let absolute = display(path);
 		let mut choices = vec![absolute];
-		if let Some(cwd) = &self.cwd
-			&& let Some(relative) = relative(cwd, path)
-		{
-			choices.push(display(&relative));
+		if let Some(cwd) = &self.cwd {
+			let from_cwd = relative(cwd, path);
+			#[cfg(windows)]
+			let from_cwd = from_cwd.or_else(|| {
+				let canonical = cwd.canonicalize().ok()?;
+				relative(&canonical, path)
+			});
+			if let Some(relative) = from_cwd {
+				choices.push(display(&relative));
+			}
 		}
 		if let Some(home) = &self.home
 			&& let Ok(suffix) = path.strip_prefix(home)

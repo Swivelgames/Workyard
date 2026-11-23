@@ -1,4 +1,4 @@
-use trine::InvocationContext;
+use trine::{InvocationContext, NativePath};
 use workyard_core::{Control, OperationOutcome, ProblemCode};
 use workyard_git::Runner;
 use workyard_state::Store;
@@ -8,7 +8,7 @@ use crate::{
 	execution::{Events, blocking_action},
 };
 
-use super::{CreateInput, CreateOutcome};
+use super::{CreateInput, CreateOutcome, contract::ExistingTaskPreview};
 
 /// Establish the task and its participant worktrees.
 pub async fn create(
@@ -26,10 +26,20 @@ async fn run(
 	let rejected = |problem| CreateOutcome::rejected(name.clone(), problem);
 
 	let cancellation = context.cancellation().clone();
-	let control = Control::new(move || cancellation.is_cancelled());
+	let control = Control::new({
+		let cancellation = cancellation.clone();
+		move || cancellation.is_cancelled()
+	});
 	control.check().map_err(rejected)?;
 
+	let checkout_hint = super::retry::checkout(&input);
+	let starting_branch_example = super::retry::starting_branch_example(&input);
+	let explicit_workspace = input.workspace.clone();
 	let request = input.prepare(&control).await.map_err(rejected)?;
+	let workspace = request
+		.state_dir
+		.parent()
+		.and_then(|path| NativePath::new(path).ok());
 	let store =
 		Store::open_existing(&request.state_dir, Some(&request.tasks_root)).map_err(rejected)?;
 	let runner = Runner::default();
@@ -48,6 +58,7 @@ async fn run(
 				crate::projects::register(&store, &result.task.admitted_roots(None), &control)
 					.await;
 			let mut outcome = CreateOutcome::from_task(result.task, result.record);
+			outcome.explicit_workspace = explicit_workspace;
 			outcome.operation = result.operation.into();
 			outcome.problem = result.problem.map(Into::into);
 			outcome.registration_problem = registration.map(Into::into);
@@ -60,7 +71,25 @@ async fn run(
 			}
 		}
 		Err(problem) if problem.code == ProblemCode::Cancelled => Ok(rejected(problem)),
-		Err(problem) => Err(rejected(problem)),
+		Err(problem) => {
+			let code = problem.code;
+			let mut outcome = rejected(problem);
+			match code {
+				ProblemCode::TaskExists => {
+					outcome.existing_task = Some(ExistingTaskPreview {
+						workspace,
+						cancellation,
+					});
+					outcome.explicit_workspace = explicit_workspace;
+				}
+				ProblemCode::BranchExists => outcome.checkout_hint = checkout_hint,
+				ProblemCode::DefaultBranchUnknown => {
+					outcome.starting_branch_example = starting_branch_example;
+				}
+				_ => {}
+			}
+			Err(outcome)
+		}
 	}
 }
 

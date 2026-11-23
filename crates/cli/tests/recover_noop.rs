@@ -60,10 +60,7 @@ fn healthy_dirty_task_noop_preserves_history_evidence_and_rejects_invalid_flags(
 	for _ in 0..2 {
 		let output = workyard(&root, &["recover", "feat/task"]);
 		assert_ok(&output);
-		assert_eq!(
-			String::from_utf8(output.stdout).unwrap(),
-			"Nothing to recover: feat/task\n"
-		);
+		assert_eq!(human_body(&output), "  Nothing to recover: feat/task\n");
 		assert_eq!(snapshot(&state), before);
 	}
 	let rejected = workyard(&root, &["recover", "feat/task", "--force"]);
@@ -105,7 +102,8 @@ fn repair_then_repeat_noop_preserves_success_despite_stale_failed_effect_provena
 	let before = snapshot(&state);
 	let repeated = workyard(&root, &["recover", "feat/task"]);
 	assert_ok(&repeated);
-	assert!(String::from_utf8_lossy(&repeated.stdout).contains("Nothing to recover"));
+	assert_eq!(human_body(&repeated), "  Nothing to recover: feat/task\n");
+	assert!(repeated.stderr.is_empty(), "{repeated:?}");
 	assert_eq!(snapshot(&state), before);
 }
 
@@ -162,7 +160,8 @@ fn repaired_git_move_is_real_metadata_work_then_becomes_noop() {
 	let before = snapshot(&state);
 	let repeated = workyard(&root, &["recover", "feat/task"]);
 	assert_ok(&repeated);
-	assert!(String::from_utf8_lossy(&repeated.stdout).contains("Nothing to recover"));
+	assert_eq!(human_body(&repeated), "  Nothing to recover: feat/task\n");
+	assert!(repeated.stderr.is_empty(), "{repeated:?}");
 	assert_eq!(snapshot(&state), before);
 }
 
@@ -199,6 +198,21 @@ fn recovery_repairs_unique_manually_renamed_task_child_and_preserves_membership(
 	let destination = root.join("tasks/feat/task/renamed");
 	fs::rename(root.join("tasks/feat/task/api"), &destination).unwrap();
 	fs::write(destination.join("file"), "authored edits").unwrap();
+
+	let output = workyard(&root, &["status", "feat/task"]);
+	assert_ok(&output);
+	let body = human_body(&output);
+	let relative = destination.strip_prefix(&root).unwrap();
+	assert!(
+		body.contains(&format!(
+			"api moved to {}. Git link needs repair.",
+			text(relative)
+		)),
+		"{body}"
+	);
+	assert!(body.contains("Try: workyard recover feat/task"), "{body}");
+	assert!(!body.contains(text(&root)), "{body}");
+	assert!(!body.contains("repository_changed"), "{body}");
 
 	assert_ok(&workyard(&root, &["recover", "feat/task"]));
 	let task = record(&root.join(".workyard"));

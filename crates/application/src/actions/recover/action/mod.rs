@@ -69,7 +69,11 @@ async fn run(
 	authority: Authority,
 	context: InvocationContext<Progress>,
 ) -> Result<RecoverOutcome, RecoverOutcome> {
-	let rejected = |problem| RecoverOutcome::rejected(name.clone(), problem);
+	let rejected = |problem| {
+		let mut outcome = RecoverOutcome::rejected(name.clone(), problem);
+		outcome.explicit_workspace = workspace.clone();
+		outcome
+	};
 	workyard_core::validate_task(&name).map_err(rejected)?;
 
 	let cancellation = context.cancellation().clone();
@@ -82,7 +86,7 @@ async fn run(
 	let runner = Runner::default();
 
 	// Participant-only recovery is authorized again under the core mutation lock.
-	match Route::select(&name, authority, &store).map_err(rejected)? {
+	let mut result = match Route::select(&name, authority, &store).map_err(rejected)? {
 		Route::Creation(scope) => {
 			creation::run(&name, scope, &runner, &control, context, &store).await
 		}
@@ -92,5 +96,10 @@ async fn run(
 		Route::Removal(options) => {
 			removal::run(&name, options, &runner, &control, context, &store).await
 		}
-	}
+	};
+	let outcome = match &mut result {
+		Ok(outcome) | Err(outcome) => outcome,
+	};
+	outcome.explicit_workspace = workspace;
+	result
 }

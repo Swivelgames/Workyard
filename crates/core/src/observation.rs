@@ -24,6 +24,8 @@ pub struct TaskSnapshot {
 pub struct GitFacts {
 	/// Verified common Git storage, not the linked worktree administration.
 	pub common_dir: Option<PathBuf>,
+	/// Source location verified against the participant's Git backing identity.
+	pub repository_source: Option<PathBuf>,
 	/// An observed condition can be known (such as absence) and still need a remedy.
 	pub problem: Option<Problem>,
 	/// Worktree location reported by Git, when available.

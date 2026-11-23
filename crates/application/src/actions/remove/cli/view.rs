@@ -1,7 +1,7 @@
 use super::super::RemoveOutcome;
 use crate::{
 	contracts::Progress,
-	presentation::cli::render::{MessageScope, Terminal, text},
+	presentation::cli::render::{MessageScope, Terminal, separate, text},
 };
 use std::io;
 use trine::{application::CliViewContext, view::View};
@@ -10,6 +10,7 @@ use workyard_core::OperationOutcome;
 pub struct RemoveView {
 	pub output: CliViewContext,
 	pub started: bool,
+	pub progress_open: bool,
 }
 
 impl View<RemoveOutcome, RemoveOutcome, Progress> for RemoveView {
@@ -21,56 +22,104 @@ impl View<RemoveOutcome, RemoveOutcome, Progress> for RemoveView {
 		request: trine::invocation::Confirmation,
 		cancellation: trine::Cancellation,
 	) -> io::Result<Option<bool>> {
-		self.output.confirm(&request, &cancellation)
+		let answer = self.output.confirm(&request, &cancellation)?;
+		if answer.is_some() {
+			// Trine has already separated the prompt from subsequent output.
+			self.progress_open = false;
+		}
+		Ok(answer)
 	}
 
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
 		let mut terminal = Terminal::for_output(&self.output.stderr);
 		if !self.started {
 			terminal.heading(&format!("Remove {}", text(&progress.task)));
+			separate(&mut terminal);
 			self.started = true;
 		}
 		terminal.progress(&progress);
-		self.output.stderr.write_all(terminal.output.as_bytes())
+		self.output.stderr.write_all(terminal.output.as_bytes())?;
+		self.progress_open = true;
+		Ok(())
 	}
 
 	async fn finish(&mut self, result: &Result<RemoveOutcome, RemoveOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
+
 		let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
+		if self.progress_open {
+			self.output.stderr.write_all(b"\n")?;
+		}
+
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		terminal.heading(&format!(
-			"Removal {}: {}",
-			outcome.operation.outcome.as_str(),
-			text(&outcome.task)
-		));
+		let decision_required = outcome.removal.decision.is_some()
+			&& outcome
+				.problem
+				.as_ref()
+				.is_some_and(|problem| problem.code == "decision_required");
+		if succeeded
+			&& outcome.lifecycle == Some("retired")
+			&& outcome.mutation_started == Some(false)
+		{
+			terminal.heading(&format!("Already retired: {}", outcome.task));
+			return self.output.stdout.write_all(terminal.output.as_bytes());
+		}
+
+		let title = if decision_required {
+			"Removal needs confirmation".into()
+		} else {
+			format!("Removal {}", outcome.operation.outcome.as_str())
+		};
+		terminal.heading(&format!("{title}: {}", outcome.task));
 
 		if outcome.mutation_started == Some(true) && !succeeded {
+			separate(&mut terminal);
 			partial_summary(&mut terminal, outcome);
 		}
 
 		if outcome.mutation_started == Some(false) && !succeeded {
-			terminal.hint_at(MessageScope::Workspace, "No worktrees changed.");
+			separate(&mut terminal);
+			terminal.hint_at(MessageScope::Section, "No worktrees changed.");
 		}
+
 		if succeeded {
-			terminal.hint_at(MessageScope::Workspace, "Branches and commits retained.");
+			separate(&mut terminal);
+			terminal.hint_at(MessageScope::Section, "Branches and commits retained.");
 		}
+
 		if let Some(problem) = &outcome.problem {
 			// The result already states ordinary cancellation; retain actionable errors.
-			if problem.code != "cancelled" {
-				terminal.problem_at(MessageScope::Workspace, problem);
+			if decision_required {
+				separate(&mut terminal);
+				terminal.hint_at(MessageScope::Section, &problem.remedy);
+			} else if problem.code != "cancelled" {
+				separate(&mut terminal);
+				terminal.problem_in_workspace(
+					MessageScope::Section,
+					problem,
+					outcome
+						.explicit_workspace
+						.as_ref()
+						.map(|path| path.as_path()),
+				);
 			}
 			if outcome.mutation_started == Some(true)
 				|| outcome.condition == Some(crate::contracts::Condition::NeedsAttention)
 			{
 				terminal.status_guidance(
 					&outcome.task,
-					outcome.state_dir.as_ref().map(|path| path.as_path()),
+					outcome
+						.explicit_workspace
+						.as_ref()
+						.map(|path| path.as_path()),
 				);
 			}
 		}
+
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
+
 		Ok(())
 	}
 }
@@ -80,16 +129,19 @@ fn partial_summary(terminal: &mut Terminal, outcome: &RemoveOutcome) {
 		.participants
 		.iter()
 		.partition(|participant| participant.phase == "removed");
+
 	for (label, participants) in [("Removed", removed), ("Remaining removal", remaining)] {
 		if participants.is_empty() {
 			continue;
 		}
+
 		let names = participants
 			.iter()
 			.map(|participant| text(&participant.name))
 			.collect::<Vec<_>>()
 			.join(", ");
-		terminal.hint_at(MessageScope::Workspace, &format!("{label}: {names}"));
+
+		terminal.hint_at(MessageScope::Section, &format!("{label}: {names}"));
 	}
 }
 
@@ -125,6 +177,7 @@ mod tests {
 				stderr: Output::new(io::sink()),
 			},
 			started: false,
+			progress_open: false,
 		};
 		let mut outcome = RemoveOutcome::rejected(
 			"feat/task".into(),
@@ -143,7 +196,7 @@ mod tests {
 		smol::block_on(view.finish(&Ok(outcome))).unwrap();
 		let output = String::from_utf8(capture.0.lock().unwrap().clone()).unwrap();
 		assert!(
-			output.contains("Removed: api\nRemaining removal: web\n"),
+			output.contains("Removed: api\n    Remaining removal: web\n"),
 			"{output}"
 		);
 		assert!(!output.contains("Repository"));

@@ -1,7 +1,7 @@
 use super::super::{RecoverOutcome, RecoveryOutcome};
 use crate::{
 	contracts::Progress,
-	presentation::cli::render::{MessageScope, Terminal, text},
+	presentation::cli::render::{MessageScope, Terminal, separate, text},
 };
 use std::io;
 use trine::{application::CliViewContext, view::View};
@@ -25,9 +25,13 @@ impl View<RecoveryOutcome, RecoveryOutcome, Progress> for RecoverView {
 	}
 
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
+		if progress.phase == "unchanged" {
+			return Ok(());
+		}
 		let mut terminal = Terminal::for_output(&self.output.stderr);
 		if !self.started {
-			terminal.heading(&format!("Recover {}", text(&progress.task)));
+			terminal.heading(&format!("Recover {}", progress.task));
+			separate(&mut terminal);
 			self.started = true;
 		}
 		terminal.progress(&progress);
@@ -41,6 +45,10 @@ impl View<RecoveryOutcome, RecoveryOutcome, Progress> for RecoverView {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
+		if self.started {
+			self.output.stderr.write_all(b"\n")?;
+		}
+
 		match outcome {
 			RecoveryOutcome::Task(task) => self.finish_outcome(task),
 			RecoveryOutcome::Workspace(workspace) => {
@@ -64,33 +72,68 @@ impl RecoverView {
 			));
 		}
 
-		terminal.removed_participants(&outcome.changes, &outcome.participants);
+		terminal.participant_changes(&outcome.changes, &outcome.participants);
 		if !succeeded {
 			if outcome.mutation_started == Some(false) {
-				terminal.hint_at(MessageScope::Workspace, "No worktrees changed.");
+				separate(&mut terminal);
+				terminal.hint_at(MessageScope::Section, "No worktrees changed.");
 			} else {
 				recorded_progress(&mut terminal, outcome);
 			}
 		}
 		if let Some(problem) = &outcome.registration_problem {
-			terminal.problem(problem);
+			separate(&mut terminal);
+			terminal.problem_at(MessageScope::Section, problem);
 		}
 		if let Some(problem) = &outcome.problem {
-			if problem.code != "cancelled" {
-				terminal.problem_at(MessageScope::Workspace, problem);
-			}
-			let needs_inspection = outcome.mutation_started == Some(true)
-				|| outcome.condition == Some(crate::contracts::Condition::NeedsAttention)
-				|| (outcome.mutation_started.is_none() && !outcome.participants.is_empty());
-			if needs_inspection {
-				terminal.status_guidance(
-					&outcome.task,
-					outcome.state_dir.as_ref().map(|path| path.as_path()),
-				);
-			}
+			render_failure(&mut terminal, outcome, problem);
 		}
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
 		Ok(())
+	}
+}
+
+fn render_failure(
+	terminal: &mut Terminal,
+	outcome: &RecoverOutcome,
+	problem: &crate::contracts::ProblemOutcome,
+) {
+	if problem.code != "cancelled" {
+		separate(terminal);
+		if let Some(occupied) = terminal.missing_worktree(MessageScope::Section, problem) {
+			if !occupied {
+				separate(terminal);
+				terminal.hint_at(MessageScope::Section, super::RESTORE_WORKTREE);
+			}
+			return;
+		}
+		let workspace = outcome
+			.explicit_workspace
+			.as_ref()
+			.map(|path| path.as_path());
+		if outcome.record.is_none()
+			|| !terminal.recorded_task_problem(
+				MessageScope::Section,
+				problem,
+				&outcome.task,
+				workspace,
+				&outcome.operation,
+			) {
+			terminal.problem_in_workspace(MessageScope::Section, problem, workspace);
+		}
+	}
+
+	let needs_inspection = outcome.mutation_started == Some(true)
+		|| outcome.condition == Some(crate::contracts::Condition::NeedsAttention)
+		|| (outcome.mutation_started.is_none() && !outcome.participants.is_empty());
+	if needs_inspection {
+		terminal.status_guidance(
+			&outcome.task,
+			outcome
+				.explicit_workspace
+				.as_ref()
+				.map(|path| path.as_path()),
+		);
 	}
 }
 
@@ -120,8 +163,9 @@ fn recorded_progress(terminal: &mut Terminal, outcome: &RecoverOutcome) {
 		.collect::<Vec<_>>()
 		.join(", ");
 	if !participants.is_empty() {
+		separate(terminal);
 		terminal.hint_at(
-			MessageScope::Workspace,
+			MessageScope::Section,
 			&format!("Recorded progress: {participants}"),
 		);
 	}

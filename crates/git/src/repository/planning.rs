@@ -34,7 +34,8 @@ impl Repository {
 			)
 			.remedy(
 				"Use `workyard checkout` or `workyard create --checkout` to permit branch reuse.",
-			));
+			)
+			.in_repository(&self.source));
 		}
 
 		if local {
@@ -77,8 +78,12 @@ impl Repository {
 			"Starting source {source:?} is unavailable in {:?}.",
 			self.source
 		);
-		Err(Problem::new(workyard_core::ProblemCode::SourceMissing, message)
-			.remedy("Supply an existing local --from/--repo-from branch, explicit commit, or explicit remote-qualified source such as origin/main."))
+		let mut problem = Problem::new(workyard_core::ProblemCode::SourceMissing, message)
+			.remedy("Supply an existing local --from/--repo-from branch, explicit commit, or explicit remote-qualified source such as origin/main.")
+			.in_repository(&self.source);
+		problem.detail =
+			from.map(|source| Box::new(workyard_core::ProblemDetail::StartingPoint(source.into())));
+		Err(problem)
 	}
 
 	async fn qualify_source(
@@ -137,7 +142,8 @@ impl Repository {
 			self.source
 		);
 		Err(Problem::new(workyard_core::ProblemCode::DefaultBranchUnknown, message)
-			.remedy("Supply --from or --repo-from explicitly; Workyard does not guess from the current checkout or main/master."))
+			.remedy("Supply --from or --repo-from explicitly; Workyard does not guess from the current checkout or main/master.")
+			.in_repository(&self.source))
 	}
 
 	async fn has_ref(
@@ -181,7 +187,7 @@ impl Repository {
 			.split(|byte| *byte == 0)
 			.any(|field| field == target.as_bytes())
 		{
-			return Err(Problem::new(
+			let mut problem = Problem::new(
 				workyard_core::ProblemCode::BranchInUse,
 				format!(
 					"Branch {task:?} is already checked out in {:?}.",
@@ -191,7 +197,9 @@ impl Repository {
 			.remedy(format!(
 				"Inspect `git -C {:?} worktree list --porcelain`; choose a free branch.",
 				self.source
-			)));
+			));
+			problem.repositories.push(self.source.clone());
+			return Err(problem);
 		}
 
 		Ok(())

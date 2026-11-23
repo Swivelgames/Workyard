@@ -1,6 +1,6 @@
 use super::{
+	cli::ListView,
 	contract::{Inventory, ListInput},
-	view::ListView,
 };
 use crate::{
 	contracts::{ProblemOutcome, Progress},
@@ -29,7 +29,7 @@ pub(super) fn build_entry() -> Result<ListEntry, RegistrationError> {
 
 	Ok(Entry::new(action)
 		.namespace(["projects"])
-		.cli(cli, |output| Ok(ListView(output)), exit_status::result)
+		.cli(cli, |output| Ok(ListView { output }), exit_status::result)
 		.rpc(rpc)
 		.mcp(mcp)
 		.mcp_observation())
@@ -51,7 +51,14 @@ async fn list(
 			});
 		};
 		let discovery = crate::projects::discover(&reader, &control).await?;
-		Ok(Inventory::from(discovery))
+		let mut inventory = Inventory::from(discovery);
+		inventory.explicit_workspace = input.workspace;
+		inventory.workspace = reader
+			.state()
+			.parent()
+			.and_then(|path| NativePath::new(path).ok());
+
+		Ok(inventory)
 	})
 	.await
 }

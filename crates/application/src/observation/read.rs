@@ -17,10 +17,13 @@ pub(crate) async fn read(
 		context,
 	)
 	.await;
-	result.map_err(|problem| Observation {
+	let mut observation = result.map_err(|problem| Observation {
 		problem: Some(problem.into()),
+		explicit_workspace: workspace.clone(),
 		..Observation::default()
-	})
+	})?;
+	observation.explicit_workspace = workspace;
+	Ok(observation)
 }
 
 async fn observe(

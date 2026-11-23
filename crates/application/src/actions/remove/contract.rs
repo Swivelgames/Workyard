@@ -8,6 +8,8 @@ use crate::contracts::{ProblemOutcome, removal};
 /// Retirement outcome, observed participants and any outstanding problems.
 #[derive(Serialize)]
 pub struct RemoveOutcome {
+	#[serde(skip)]
+	pub(crate) explicit_workspace: Option<NativePath>,
 	/// User-facing health classification for the observed task.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub condition: Option<crate::contracts::Condition>,
@@ -60,6 +62,7 @@ impl RemoveOutcome {
 			mutation_started: None,
 			removal: Default::default(),
 			operation: OperationReport::rejected(OperationKind::Remove, &problem),
+			explicit_workspace: None,
 			lifecycle: None,
 			task,
 			tasks_root: None,
@@ -79,6 +82,7 @@ impl RemoveOutcome {
 			mutation_started: None,
 			removal: Default::default(),
 			operation: task.operation.into(),
+			explicit_workspace: None,
 			lifecycle: Some(task.lifecycle.as_str()),
 			task: task.name,
 			tasks_root: Some(NativePath::new(task.root).expect("validated root path")),

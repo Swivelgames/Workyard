@@ -20,8 +20,10 @@ impl Plan {
 	) -> Result<Self, Problem> {
 		let mut plan = Self::default();
 		let mut projects = None;
+
 		for snapshot in reader.tasks(None)? {
 			control.check()?;
+
 			if let Some(problem) = snapshot.problems.into_iter().next() {
 				if let Some(task) = snapshot.task.or(snapshot.evidence) {
 					plan.unavailable_worktrees.extend(
@@ -35,10 +37,23 @@ impl Plan {
 					.push(PlacementReport::unresolved(snapshot.name, None, problem));
 				continue;
 			}
+
 			let Some(task) = snapshot.task else { continue };
 			if task.lifecycle == TaskLifecycle::Retired {
 				continue;
 			}
+
+			if !snapshot.busy
+				&& snapshot.pending.is_none()
+				&& task.removal.as_ref().is_some_and(|removal| {
+					removal
+						.participants
+						.iter()
+						.any(|participant| participant.phase == RemovalPhase::Removed)
+				}) {
+				report.interrupted_removals.push(task.name.clone());
+			}
+
 			for (index, participant) in task.participants.into_iter().enumerate() {
 				let removed = task.removal.as_ref().is_some_and(|removal| {
 					removal.participants[index].phase == RemovalPhase::Removed
@@ -58,6 +73,7 @@ impl Plan {
 				plan.record(&task.name, task.generation, participant, result, report);
 			}
 		}
+
 		Ok(plan)
 	}
 
@@ -100,6 +116,7 @@ impl Plan {
 		report: &mut WorkspaceRecovery,
 	) -> bool {
 		let mut changed = false;
+
 		for selected in self.selected {
 			let row = &mut report.participants[selected.row];
 			match selected
@@ -127,6 +144,7 @@ impl Plan {
 				}
 			}
 		}
+
 		changed
 	}
 }

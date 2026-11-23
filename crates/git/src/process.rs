@@ -41,7 +41,13 @@ impl CommandOutput {
 			`git -C {directory:?} worktree list --porcelain`. \
 			Preserve successful worktrees and resolve the reported Git problem."
 		);
-		Problem::new(workyard_core::ProblemCode::GitFailed, message).remedy(remedy)
+		let mut problem = Problem::new(workyard_core::ProblemCode::GitFailed, message)
+			.remedy(remedy)
+			.in_repository(directory);
+		problem.detail = Some(Box::new(workyard_core::ProblemDetail::GitDiagnostic(
+			diagnostic.into_owned(),
+		)));
+		problem
 	}
 }
 

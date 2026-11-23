@@ -21,6 +21,10 @@ pub enum Provenance {
 pub struct SavedTask {
 	/// Recorded locations of the backing repositories.
 	pub backing_repositories: std::collections::BTreeMap<String, NativePath>,
+	#[serde(skip)]
+	pub(crate) repository_sources: std::collections::BTreeMap<String, NativePath>,
+	#[serde(skip)]
+	pub(crate) removed: std::collections::BTreeSet<String>,
 	/// Current membership lifecycle of the task.
 	pub lifecycle: &'static str,
 	/// Invocation history tracked separately from task lifecycle.
@@ -33,7 +37,16 @@ pub struct SavedTask {
 
 impl From<Task> for SavedTask {
 	fn from(task: Task) -> Self {
+		let removed = task
+			.removal
+			.as_ref()
+			.into_iter()
+			.flat_map(|removal| task.participants.iter().zip(&removal.participants))
+			.filter(|(_, progress)| progress.phase == workyard_core::RemovalPhase::Removed)
+			.map(|(participant, _)| participant.name.clone())
+			.collect();
 		Self {
+			removed,
 			backing_repositories: task
 				.participants
 				.iter()
@@ -41,6 +54,16 @@ impl From<Task> for SavedTask {
 					(
 						participant.name.clone(),
 						NativePath::new(&participant.common_dir).expect("recorded backing path"),
+					)
+				})
+				.collect(),
+			repository_sources: task
+				.participants
+				.iter()
+				.map(|participant| {
+					(
+						participant.name.clone(),
+						NativePath::new(&participant.source).expect("recorded repository source"),
 					)
 				})
 				.collect(),
@@ -120,6 +143,8 @@ impl From<TaskInspection> for TaskReport {
 /// Workspace-scoped result of a task query.
 #[derive(Serialize, Default)]
 pub struct Observation {
+	#[serde(skip)]
+	pub(crate) explicit_workspace: Option<NativePath>,
 	/// Directory holding authoritative Workyard state.
 	pub state_dir: Option<NativePath>,
 	/// Directory containing the task workspaces.

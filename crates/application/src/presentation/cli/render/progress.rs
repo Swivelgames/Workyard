@@ -1,5 +1,5 @@
 //! Progress presentation policy, separate from the terminal buffer.
-use super::{Terminal, Tone, text};
+use super::{MessageScope, Terminal};
 use crate::contracts::Progress;
 use std::fmt::Write;
 
@@ -21,35 +21,17 @@ impl Terminal {
 			writeln!(self.output, "    Discarded changes cannot be restored.").unwrap();
 			return;
 		}
-		if event.action == "recover" || (event.action == "remove" && event.phase == "removed") {
-			let phase = match event.phase.as_str() {
-				"completed" => "recovery step finished",
-				"worktree_created" => "worktree created",
-				"repairing_worktree_link" => "repairing Git worktree link",
-				"updating_worktree_location" => "updating saved worktree location",
-				phase => phase,
-			};
-			writeln!(
-				self.output,
-				"    {}: {}",
-				text(&event.participant),
-				text(phase)
-			)
-			.unwrap();
-			return;
-		}
-		writeln!(
-			self.output,
-			"{} · {}: {}",
-			self.style.paint(&text(event.action), Tone::Section),
-			self.style.paint(&text(&event.participant), Tone::Identity),
-			text(match event.phase.as_str() {
-				"worktree_created" => "worktree created",
-				"not_started" => "not started",
-				"completed" => "finished",
-				phase => phase,
-			})
-		)
-		.expect("string output");
+		let phase = match (event.action, event.phase.as_str()) {
+			("recover", "completed") => "recovery step finished",
+			(_, "completed") => "finished",
+			(_, "repairing_worktree_link") => "repairing Git worktree link",
+			(_, "updating_worktree_location") => "updating saved worktree location",
+			(_, phase) => phase,
+		};
+		let phase = phase.replace('_', " ");
+		self.note_at(
+			MessageScope::Section,
+			&format!("{}: {phase}", event.participant),
+		);
 	}
 }

@@ -27,7 +27,7 @@ pub use model::*;
 pub use observation::*;
 pub use paths::*;
 pub use ports::*;
-pub use problem::{Problem, ProjectRemedy, WorktreeLocations};
+pub use problem::{Problem, ProblemDetail, ProjectRemedy, WorktreeLocations};
 pub use problem_code::ProblemCode;
 pub use recover::{RecoveryScope, recover, recover_with_scope};
 pub use remove::{recover_removal, remove, retire};

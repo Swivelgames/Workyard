@@ -23,6 +23,31 @@ pub struct WorktreeLocations {
 	pub candidate: PathBuf,
 }
 
+/// Additional facts that a presenter can use without parsing diagnostic prose.
+#[derive(Clone, Debug)]
+pub enum ProblemDetail {
+	/// Captured Git diagnostics, separate from the command invocation.
+	GitDiagnostic(String),
+	/// User-supplied starting point that a repository could not resolve.
+	StartingPoint(String),
+	/// A previously admitted worktree could not be located.
+	MissingWorktree {
+		/// Name by which the task identifies this worktree.
+		participant: String,
+		/// Worktree location currently expected by Workyard.
+		expected: PathBuf,
+		/// Whether the expected path is occupied by an unverified entry.
+		occupied: bool,
+	},
+	/// An initialized workspace is already configured to use a different task directory.
+	TaskDirectoryConflict {
+		/// Workspace containing the configured tasks directory.
+		workspace: PathBuf,
+		/// Configured tasks directory.
+		current: PathBuf,
+	},
+}
+
 /// Classified failure with diagnostic text and optional recovery guidance.
 #[derive(Clone, Debug)]
 pub struct Problem {
@@ -36,6 +61,10 @@ pub struct Problem {
 	pub remedy: String,
 	/// Structured project selection or naming guidance.
 	pub project_remedy: Option<Box<ProjectRemedy>>,
+	/// Repositories affected by this diagnostic, for presentation by native path.
+	pub repositories: Vec<PathBuf>,
+	/// Additional presentation facts available for this failure.
+	pub detail: Option<Box<ProblemDetail>>,
 }
 
 impl Problem {
@@ -47,12 +76,20 @@ impl Problem {
 			remedy: String::new(),
 			project_remedy: None,
 			worktree_locations: None,
+			repositories: Vec::new(),
+			detail: None,
 		}
 	}
 
 	/// Attach a suggested next step for the caller.
 	pub fn remedy(mut self, remedy: impl Into<String>) -> Self {
 		self.remedy = remedy.into();
+		self
+	}
+
+	/// Identify the repository associated with a diagnostic.
+	pub fn in_repository(mut self, path: &std::path::Path) -> Self {
+		self.repositories.push(path.into());
 		self
 	}
 

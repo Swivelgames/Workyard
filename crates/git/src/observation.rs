@@ -1,7 +1,9 @@
 //! Git-current inspection without index refresh or lifecycle adoption decisions.
 use crate::{Runner, output::path_line, process::args, worktree_path::registered_path};
 use std::path::{Path, PathBuf};
-use workyard_core::{Control, GitFacts, ObservationGit, Participant, Phase, Problem, ProblemCode};
+use workyard_core::{
+	Control, GitFacts, ObservationGit, Participant, Phase, Problem, ProblemCode, ProblemDetail,
+};
 
 struct RegisteredWorktree {
 	path: PathBuf,
@@ -40,21 +42,19 @@ impl Observation<'_> {
 		} else {
 			self.locate_backing(participant, control).await?
 		};
-		let current = self
+		let current = match self
 			.find_participant(&repository, participant, control)
-			.await?;
-		let Some(current) = current else {
-			if participant.worktree_identity.is_some()
-				&& let Ok(placement) = self
-					.runner
-					.inspect_placement(participant, None, control)
-					.await && placement.needs_repair
-			{
-				return Err(placement.diagnostic());
+			.await
+		{
+			Ok(Some(current)) => current,
+			Ok(None) => return self.inspect_unresolved(participant, None, control).await,
+			Err(problem) => {
+				return self
+					.inspect_unresolved(participant, Some(problem), control)
+					.await;
 			}
-			control.check()?;
-			return missing_participant(participant);
 		};
+
 		if participant.worktree_identity.is_some() && current.path != participant.destination {
 			let preview = self
 				.runner
@@ -64,7 +64,53 @@ impl Observation<'_> {
 				return Err(preview.diagnostic());
 			}
 		}
-		self.inspect_worktree(current, control).await
+		self.inspect_worktree(current, repository, control).await
+	}
+
+	/// Recheck placement without losing the diagnostic from the original lookup.
+	async fn inspect_unresolved(
+		&self,
+		participant: &Participant,
+		original: Option<Problem>,
+		control: &Control,
+	) -> Result<GitFacts, Problem> {
+		let detail = if participant.worktree_identity.is_some() {
+			match self
+				.runner
+				.inspect_placement(participant, None, control)
+				.await
+			{
+				Ok(placement) if placement.needs_repair && original.is_none() => {
+					return Err(placement.diagnostic());
+				}
+				Err(problem) => problem.detail.filter(|detail| {
+					matches!(detail.as_ref(), ProblemDetail::MissingWorktree { .. })
+				}),
+				_ => None,
+			}
+		} else {
+			None
+		};
+
+		if let Some(mut problem) = original {
+			if detail.is_some() {
+				problem.detail = detail;
+			}
+			return Err(problem);
+		}
+
+		// A missing placement reported by Git is still a successful observation.
+		// Keep its structured diagnostic and attach the location details for display.
+		if detail.is_none() {
+			control.check()?;
+		}
+		let mut facts = missing_participant(participant)?;
+		if let Some(problem) = &mut facts.problem
+			&& detail.is_some()
+		{
+			problem.detail = detail;
+		}
+		Ok(facts)
 	}
 
 	async fn find_participant(
@@ -81,6 +127,7 @@ impl Observation<'_> {
 				control,
 			)
 			.await?;
+
 		let mut current = None;
 		for field in output.split(|byte| *byte == 0) {
 			control.check()?;
@@ -90,6 +137,7 @@ impl Observation<'_> {
 			let path = crate::output::path_field(bytes)
 				.map_err(|_| changed("Invalid Git worktree path."))?;
 			let path = registered_path(path, &participant.destination);
+
 			// Unrelated prunable or inaccessible registrations cannot establish this
 			// participant's identity and must not hide a reachable matching worktree.
 			match path.try_exists() {
@@ -99,6 +147,7 @@ impl Observation<'_> {
 				}
 				Ok(false) | Err(_) => continue,
 			}
+
 			let candidate = match self.registered_worktree(&path, control).await {
 				Ok(candidate) => candidate,
 				Err(problem) if problem.code == ProblemCode::Cancelled => return Err(problem),
@@ -114,6 +163,7 @@ impl Observation<'_> {
 			if !matches {
 				continue;
 			}
+
 			if workyard_system::directory_identity(&candidate.common)?
 				!= participant.backing_identity
 			{
@@ -125,6 +175,7 @@ impl Observation<'_> {
 				));
 			}
 		}
+
 		Ok(current)
 	}
 
@@ -148,6 +199,7 @@ impl Observation<'_> {
 	async fn inspect_worktree(
 		&self,
 		current: RegisteredWorktree,
+		repository: PathBuf,
 		control: &Control,
 	) -> Result<GitFacts, Problem> {
 		let branch = self
@@ -162,6 +214,7 @@ impl Observation<'_> {
 			.map_err(|_| changed("Invalid Git branch output."))?
 			.trim_end_matches(['\r', '\n'])
 			.to_owned();
+
 		let status = self
 			.runner
 			.checked(
@@ -186,8 +239,10 @@ impl Observation<'_> {
 			.await?;
 		let operation_in_progress =
 			crate::operations::operations_present(&current.git_dir, &current.common)?;
+
 		Ok(GitFacts {
 			common_dir: Some(current.common),
+			repository_source: Some(repository),
 			problem: None,
 			path: Some(current.path),
 			branch: Some(branch),
@@ -263,6 +318,7 @@ fn missing_participant(participant: &Participant) -> Result<GitFacts, Problem> {
 	};
 	Ok(GitFacts {
 		common_dir: None,
+		repository_source: None,
 		problem,
 		path: None,
 		branch: None,

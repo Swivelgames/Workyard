@@ -1,5 +1,5 @@
 mod support;
-use std::{fs, process::Command};
+use std::{fs, path::Path, process::Command};
 use support::*;
 
 #[test]
@@ -82,7 +82,8 @@ fn existing_paths_and_branch_conflicts_leave_other_repos_untouched() {
 		],
 	);
 	assert!(!output.status.success());
-	assert!(String::from_utf8_lossy(&output.stdout).contains("task_exists"));
+	let body = human_body(&output);
+	assert!(body.contains("Task directory already exists"), "{body}");
 }
 
 #[test]
@@ -116,12 +117,42 @@ fn checkout_reuses_local_branch_without_resetting_its_history() {
 #[test]
 fn missing_default_requires_an_explicit_source() {
 	let fixture = tempfile::tempdir().unwrap();
-	let api = repo(fixture.path(), "api");
-	let root = fixture.path().join("workspace");
-	init_workspace(&root);
-	let output = workyard(&root, &["create", "feat/new", "--repo", text(&api)]);
-	assert!(!output.status.success());
-	assert!(String::from_utf8_lossy(&output.stdout).contains("default_branch_unknown"));
+	let root = fixture.path();
+	init_workspace(root);
+	let projects = root.join("projects");
+	fs::create_dir_all(&projects).unwrap();
+	repo(&projects, "api");
+	repo(&projects, "infra");
+
+	for action in ["create", "checkout"] {
+		let output = workyard(root, &[action, "fix/foobar", "api", "infra"]);
+		assert!(!output.status.success());
+		let body = human_body(&output);
+		let api = Path::new("projects").join("api");
+
+		assert_eq!(
+			body,
+			format!(
+				"  Could not start fix/foobar\n\n    Could not determine a starting branch in {}.\n    Choose a branch with --from, or --repo-from for one repo.\n\n  For example, if your starting branch is main\n\n    workyard {action} --from=main fix/foobar api infra\n",
+				text(&api)
+			)
+		);
+
+		let output = workyard(root, &[action, "--json", "fix/foobar", "api", "infra"]);
+		assert!(!output.status.success());
+		let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+		assert_eq!(
+			report["result"]["problem"]["code"],
+			"default_branch_unknown"
+		);
+		assert!(
+			report["result"]["problem"]["message"]
+				.as_str()
+				.unwrap()
+				.contains("No usable local repository-default branch metadata")
+		);
+	}
+	assert!(!root.join("tasks/fix/foobar").exists());
 }
 
 #[test]
@@ -373,7 +404,10 @@ fn repeating_create_reports_existing_task_without_mutating_it() {
 	let before = record(&root.join(".workyard"));
 	let output = workyard(&root, &args);
 	assert!(!output.status.success());
-	assert!(String::from_utf8_lossy(&output.stdout).contains("task_exists"));
+	let body = human_body(&output);
+	assert!(body.contains("Task already exists"), "{body}");
+	assert!(body.contains("[healthy]"), "{body}");
+	assert!(body.contains("Name  Repo"), "{body}");
 	assert_eq!(record(&root.join(".workyard")), before);
 }
 
@@ -433,7 +467,10 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 	fs::set_permissions(&tasks, fs::Permissions::from_mode(0o700)).unwrap();
 	assert!(!output.status.success());
 	let summary = String::from_utf8_lossy(&output.stdout);
-	assert!(summary.contains("publication_uncertain"), "{summary}");
+	assert!(
+		summary.contains("Could not confirm that the latest state was saved."),
+		"{summary}"
+	);
 	assert!(summary.contains("creation recorded"), "{summary}");
 	assert!(root.join("tasks/feat/publication/api/.git").exists());
 	assert!(!root.join("tasks/feat/publication/web").exists());

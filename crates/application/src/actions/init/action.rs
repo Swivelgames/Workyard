@@ -13,13 +13,18 @@ pub async fn init(
 	context: InvocationContext<Progress>,
 ) -> Result<InitOutcome, ProblemOutcome> {
 	blocking_action(async move {
-		let control = Control::new(move || context.cancellation().is_cancelled());
+		let cancellation = context.cancellation().clone();
+		let control = Control::new({
+			let cancellation = cancellation.clone();
+			move || cancellation.is_cancelled()
+		});
 
 		let directory = input
 			.directory
 			.as_ref()
 			.map(NativePath::as_path)
 			.unwrap_or(Path::new("."));
+
 		let workspace = workyard_state::canonical_future(directory)?;
 		let tasks = workyard_state::initialize_workspace_with_control(
 			&workspace,
@@ -29,6 +34,7 @@ pub async fn init(
 		.await?;
 
 		Ok(InitOutcome {
+			cancellation,
 			workspace: NativePath::new(workspace).expect("workspace path"),
 			tasks_root: NativePath::new(tasks).expect("tasks root path"),
 		})

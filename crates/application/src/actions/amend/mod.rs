@@ -32,7 +32,12 @@ pub(crate) fn build_entry() -> Result<AmendEntry, RegistrationError> {
 	Entry::new(handler)
 		.cli(
 			cli,
-			|output| Ok(cli::AmendView { output }),
+			|output| {
+				Ok(cli::AmendView {
+					output,
+					progress_open: false,
+				})
+			},
 			|result| exit_status::operation(result, |outcome| &outcome.operation),
 		)
 		.rpc(rpc)

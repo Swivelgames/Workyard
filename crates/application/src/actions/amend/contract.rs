@@ -45,7 +45,11 @@ impl AmendOutcome {
 		}
 	}
 
-	pub(super) fn guide_retirement(&mut self, state: &std::path::Path, explicit_workspace: bool) {
+	pub(super) fn guide_retirement(
+		&mut self,
+		state: &std::path::Path,
+		explicit_workspace: Option<&std::path::Path>,
+	) {
 		let Some(problem) = self
 			.problem
 			.as_mut()
@@ -53,8 +57,7 @@ impl AmendOutcome {
 		else {
 			return;
 		};
-		let scope = explicit_workspace.then_some(state);
-		if let Some(command) = crate::guidance::commands::remove(&self.task, scope) {
+		if let Some(command) = crate::guidance::commands::remove(&self.task, explicit_workspace) {
 			problem.remedy = format!("To retire the task, run {command}");
 		}
 		self.state_dir = NativePath::new(state.to_path_buf()).ok();

@@ -1,6 +1,6 @@
 use super::{
+	cli::RootsView,
 	contract::{RootChanges, RootsInput},
-	view::RootsView,
 };
 use crate::{
 	contracts::{ProblemOutcome, Progress},
@@ -82,7 +82,14 @@ async fn update(
 			.into_iter()
 			.map(NativePath::into_path_buf)
 			.collect();
-		let changed = store.edit_project_roots(edit, &paths, &control).await?;
+		let changed = store
+			.edit_project_roots(edit, &paths, &control)
+			.await
+			.map_err(|problem| {
+				let mut problem = ProblemOutcome::from(problem);
+				problem.explicit_workspace = input.workspace;
+				problem
+			})?;
 		Ok(RootChanges {
 			changed: changed
 				.into_iter()

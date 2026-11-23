@@ -14,11 +14,26 @@ fn default_root_populates_later_and_task_actions_share_project_selection() {
 	assert_eq!(empty["roots"][0]["status"], "missing");
 	assert!(!projects.exists());
 
+	let listed = workyard(root, &["projects", "list"]);
+	assert_ok(&listed);
+	let body = crate::support::human_body(&listed);
+	assert!(body.starts_with("  No projects found\n"), "{body}");
+	assert!(body.contains("Add repositories under projects/"), "{body}");
+	assert!(!body.contains("[missing]"), "{body}");
+	assert!(!projects.exists());
+
 	fs::create_dir(&projects).unwrap();
 	let api = repo(&projects, "api");
 	let web = repo(&projects, "web");
 	let populated = inventory(root);
 	assert_eq!(references(&populated), ["api", "web"]);
+	let listed = workyard(root, &["projects", "list"]);
+	assert_ok(&listed);
+	let body = crate::support::human_body(&listed);
+	assert!(
+		body.contains("    projects/\n      api\n      web\n"),
+		"{body}"
+	);
 	assert_eq!(
 		invoke(root, &["projects", "list"], json!({}))["result"],
 		populated

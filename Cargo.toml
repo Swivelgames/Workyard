@@ -15,7 +15,7 @@ workyard-core = { path = "crates/core" }
 workyard-git = { path = "crates/git" }
 workyard-state = { path = "crates/state" }
 workyard-application = { path = "crates/application" }
-trine = "=0.0.1"
+trine = { git = "https://github.com/Swivelgames/trine.git", rev = "92ca868ee7fd595bc30d439a7baccb5126fd56aa" }
 smol = "2.0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

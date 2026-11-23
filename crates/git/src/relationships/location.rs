@@ -3,7 +3,7 @@ use super::changed;
 use super::pointer::{absolute, matches_pointer, read_path};
 use crate::worktree_path::same_path;
 use std::path::{Path, PathBuf};
-use workyard_core::{Participant, Problem, Repository};
+use workyard_core::{Participant, Problem, ProblemDetail, Repository};
 
 struct Registration {
 	tree: PathBuf,
@@ -158,9 +158,20 @@ fn resolve(
 			registered.to_owned()
 		}
 		None => {
-			return Err(changed(
+			let mut problem = changed(
 				"The participant worktree is missing. Restore it or supply its actual location through Git repair before retrying.",
-			));
+			);
+			let occupied = match expected.symlink_metadata() {
+				Ok(_) => true,
+				Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+				Err(error) => return Err(Problem::io("Inspect expected worktree path", error)),
+			};
+			problem.detail = Some(Box::new(ProblemDetail::MissingWorktree {
+				participant: participant.name.clone(),
+				expected: expected.clone(),
+				occupied,
+			}));
+			return Err(problem);
 		}
 	};
 	let destination = destination

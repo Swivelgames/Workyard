@@ -17,19 +17,10 @@ pub(crate) fn init_guidance(workspace: Option<&Path>) -> String {
 }
 
 pub(crate) fn empty_workspace(workspace: Option<&Path>) -> String {
-	let selection = match workspace {
-		None => String::new(),
-		Some(directory) => match commands::path(directory) {
-			Some(path) => format!(" --workspace={path}"),
-			None => {
-				return "No tasks found. Run workyard create from the selected workspace directory."
-					.into();
-			}
-		},
+	let Some(command) = commands::workspace_command("create", workspace) else {
+		return "No tasks found. Run workyard create from the selected workspace directory.".into();
 	};
-	format!(
-		"No tasks found. Get started: workyard create{selection} --repo /path/to/repo feat/example"
-	)
+	format!("No tasks found. Get started: {command} --repo /path/to/repo feat/example")
 }
 
 #[cfg(test)]

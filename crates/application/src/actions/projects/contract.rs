@@ -54,6 +54,10 @@ pub(super) struct Project {
 
 #[derive(Default, Serialize)]
 pub(super) struct Inventory {
+	#[serde(skip)]
+	pub explicit_workspace: Option<NativePath>,
+	#[serde(skip)]
+	pub workspace: Option<NativePath>,
 	pub roots: Vec<Root>,
 	pub projects: Vec<Project>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -74,6 +78,8 @@ impl From<workyard_git::projects::Discovery> for Inventory {
 		projects.sort_by(|a, b| a.reference.as_path().cmp(b.reference.as_path()));
 
 		Self {
+			explicit_workspace: None,
+			workspace: None,
 			roots,
 			projects,
 			guidance: None,

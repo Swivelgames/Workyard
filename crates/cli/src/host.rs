@@ -3,15 +3,17 @@ use clap::{Arg, Command, error::ErrorKind};
 use std::ffi::OsString;
 use trine::{
 	Cancellation,
-	application::{Application, CliViewContext},
+	application::{Application, CliViewContext, Output},
 	cli::{Parsed, completion, output_mode::json_requested},
 	error::{Failure, FailureKind},
 	mcp, rpc,
 };
 
 pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8, Failure> {
-	let application = workyard_application::application()
+	let mut application = workyard_application::application()
 		.map_err(|error| Failure::message(FailureKind::ContractViolation, error.to_string()))?;
+	application.cli_heading(heading(&output.stdout));
+
 	let mut command = command(&application);
 	if completion::requested() {
 		let bytes = std::env::current_dir()
@@ -56,6 +58,17 @@ pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8
 		}
 		_ => run_action(&application, arguments, output),
 	}
+}
+
+fn heading(output: &Output) -> String {
+	let version = env!("CARGO_PKG_VERSION");
+	let no_color = std::env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty());
+	let dumb = std::env::var_os("TERM").is_some_and(|value| value == "dumb");
+	if !output.is_terminal() || no_color || dumb {
+		return format!("\n  🔨 Workyard (v{version})\n");
+	}
+
+	format!("\n  \x1b[33m🔨 \x1b[1mWorkyard\x1b[0m \x1b[36m(v{version})\x1b[0m\n")
 }
 
 fn command(application: &Application) -> Command {

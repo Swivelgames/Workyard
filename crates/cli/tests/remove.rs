@@ -65,7 +65,9 @@ fn clean_removal_preserves_branches_retires_and_allows_a_new_incarnation() {
 		record(&workspace.root.join(".workyard"))["lifecycle"],
 		"retired"
 	);
-	assert_ok(&workyard(&workspace.root, &["remove", "feat/task"]));
+	let retired = workyard(&workspace.root, &["remove", "feat/task"]);
+	assert_ok(&retired);
+	assert_eq!(human_body(&retired), "  Already retired: feat/task\n");
 	assert!(
 		!workyard(&workspace.root, &["recover", "feat/task", "--undo"])
 			.status
@@ -95,7 +97,7 @@ fn yes_never_discards_files_and_force_includes_ignored_files() {
 		"inspect all before removing any"
 	);
 	assert!(workspace.tree("web").join("ignored").exists());
-	assert!(String::from_utf8_lossy(&rejected.stdout).contains("decision_required"));
+	assert!(String::from_utf8_lossy(&rejected.stdout).contains("Removal needs confirmation"));
 	assert_ok(&workyard(
 		&workspace.root,
 		&["remove", "feat/task", "--force"],
@@ -216,12 +218,27 @@ fn recovery_continues_partial_removal_without_replaying_successes() {
 		record(&workspace.root.join(".workyard"))["lifecycle"],
 		"active"
 	);
+	let status = workyard(&workspace.root, &["status", "feat/task"]);
+	assert_ok(&status);
+	let body = human_body(&status);
+	let row = body
+		.lines()
+		.find(|line| line.trim_start().starts_with("api "))
+		.unwrap();
+	assert!(row.ends_with("removed"), "{body}");
+
+	let locations = workyard(&workspace.root, &["recover"]);
+	assert_ok(&locations);
+	let body = human_body(&locations);
+	assert!(
+		body.contains("No workspace location repairs needed"),
+		"{body}"
+	);
+	assert!(body.contains("workyard recover feat/task"), "{body}");
+
 	let recovered = workyard(&workspace.root, &["recover", "feat/task"]);
 	assert_ok(&recovered);
-	assert_eq!(
-		String::from_utf8(recovered.stdout).unwrap(),
-		"Recovery succeeded: feat/task\n"
-	);
+	assert_eq!(human_body(&recovered), "  Recovery succeeded: feat/task\n");
 	let progress = String::from_utf8(recovered.stderr).unwrap();
 	assert!(progress.contains("Recover feat/task\n"), "{progress}");
 	assert!(progress.contains("    web: removed"), "{progress}");
@@ -256,10 +273,7 @@ fn undo_requires_lost_changes_acknowledgement_and_uses_retained_branch_tip() {
 		&["recover", "feat/task", "--undo", "--yes"],
 	);
 	assert_ok(&restored);
-	assert_eq!(
-		String::from_utf8(restored.stdout).unwrap(),
-		"Recovery succeeded: feat/task\n"
-	);
+	assert_eq!(human_body(&restored), "  Recovery succeeded: feat/task\n");
 	let progress = String::from_utf8(restored.stderr).unwrap();
 	assert!(progress.contains("    api: restored"), "{progress}");
 	assert!(!progress.contains("recover ·"), "{progress}");
@@ -279,10 +293,7 @@ fn undo_requires_lost_changes_acknowledgement_and_uses_retained_branch_tip() {
 	] {
 		let repeated = workyard(&workspace.root, &arguments);
 		assert_ok(&repeated);
-		assert_eq!(
-			String::from_utf8(repeated.stdout).unwrap(),
-			"Nothing to recover: feat/task\n"
-		);
+		assert_eq!(human_body(&repeated), "  Nothing to recover: feat/task\n");
 		assert_eq!(durable_task_bytes(&workspace.root), before);
 	}
 	assert!(workspace.tree("web").exists());
@@ -441,7 +452,7 @@ fn noninteractive_decision_requirement_does_not_become_task_failure() {
 
 	assert!(!output.status.success());
 	let text = String::from_utf8(output.stdout).unwrap();
-	assert!(text.contains("decision_required"), "{text}");
+	assert!(text.contains("Removal needs confirmation"), "{text}");
 	assert!(text.contains("No worktrees changed."), "{text}");
 	assert!(!text.contains("needs attention"), "{text}");
 	assert!(!text.contains("removal unconfirmed"), "{text}");

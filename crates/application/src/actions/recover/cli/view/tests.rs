@@ -72,7 +72,7 @@ fn successful_creation_removal_and_undo_do_not_claim_historical_work_changed() {
 		let mut result = outcome(&phases);
 		result.operation.outcome = OperationOutcome::Succeeded;
 		result.problem = None;
-		assert_eq!(render(result), "Recovery succeeded: feat/task\n");
+		assert_eq!(render(result), "  Recovery succeeded: feat/task\n");
 	}
 }
 
@@ -112,7 +112,7 @@ fn no_effect_decline_preserves_prior_attention_without_repeating_status() {
 	result.condition = Some(crate::contracts::Condition::NeedsAttention);
 	let output = render(result);
 	assert!(
-		output.contains("Recovery cancelled: feat/task\nNo worktrees changed."),
+		output.contains("Recovery cancelled: feat/task\n\n    No worktrees changed."),
 		"{output}"
 	);
 	assert!(output.contains("Inspect: workyard status"), "{output}");
@@ -126,9 +126,6 @@ fn unavailable_effect_knowledge_does_not_claim_nothing_changed() {
 	result.operation.outcome = OperationOutcome::Failed;
 	result.problem = Some(Problem::new(ProblemCode::DamagedState, "Cannot read task").into());
 	let output = render(result);
-	assert!(
-		output.contains("damaged_state: Cannot read task"),
-		"{output}"
-	);
+	assert!(output.contains("Cannot read task"), "{output}");
 	assert!(!output.contains("No worktrees changed"), "{output}");
 }

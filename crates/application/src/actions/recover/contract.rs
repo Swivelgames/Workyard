@@ -8,6 +8,8 @@ use crate::contracts::{ProblemOutcome, removal};
 /// Result of reconciling a single task and its participants.
 #[derive(Serialize)]
 pub struct RecoverOutcome {
+	#[serde(skip)]
+	pub(crate) explicit_workspace: Option<NativePath>,
 	/// Failure to record a project root after participant work succeeded.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub registration_problem: Option<ProblemOutcome>,
@@ -73,6 +75,7 @@ impl RecoverOutcome {
 			mutation_started: None,
 			removal: Default::default(),
 			operation: OperationReport::rejected(OperationKind::Recover, &problem),
+			explicit_workspace: None,
 			lifecycle: None,
 			task,
 			tasks_root: None,
@@ -95,6 +98,7 @@ impl RecoverOutcome {
 			mutation_started: None,
 			removal: Default::default(),
 			operation: task.operation.into(),
+			explicit_workspace: None,
 			lifecycle: Some(task.lifecycle.as_str()),
 			task: task.name,
 			tasks_root: Some(NativePath::new(task.root).expect("validated root path")),

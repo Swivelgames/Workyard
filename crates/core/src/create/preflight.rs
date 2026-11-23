@@ -48,6 +48,7 @@ pub(crate) async fn validate_plans(
 		crate::SourceResolution::FetchPending
 	};
 	let mut branch_conflicts = Vec::new();
+	let mut conflicting_repositories = Vec::new();
 
 	for (repository, participant) in repositories.iter().zip(&task.participants) {
 		let plan = runner
@@ -63,18 +64,21 @@ pub(crate) async fn validate_plans(
 		match plan {
 			Ok(_) => {}
 			Err(problem) if problem.code == crate::ProblemCode::BranchExists => {
-				branch_conflicts.push(problem.message)
+				branch_conflicts.push(problem.message);
+				conflicting_repositories.push(repository.source.clone());
 			}
 			Err(problem) => return Err(problem),
 		}
 	}
 
 	if !branch_conflicts.is_empty() {
-		return Err(Problem::new(
+		let mut problem = Problem::new(
 			crate::ProblemCode::BranchExists,
 			branch_conflicts.join("\n"),
 		)
-		.remedy("Use checkout or create --checkout to permit reuse of existing branches."));
+		.remedy("Use checkout or create --checkout to permit reuse of existing branches.");
+		problem.repositories = conflicting_repositories;
+		return Err(problem);
 	}
 
 	Ok(())

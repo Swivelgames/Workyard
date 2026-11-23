@@ -39,6 +39,8 @@ pub struct ParticipantReport {
 	pub name: String,
 	/// Location of the backing Git repository.
 	pub backing_repo: Option<NativePath>,
+	#[serde(skip)]
+	pub(crate) repository_source: Option<NativePath>,
 	/// Assessment of the current worktree from inspection.
 	pub state: ParticipantState,
 	/// Worktree location stored in task state.
@@ -62,6 +64,7 @@ impl From<ParticipantInspection> for ParticipantReport {
 		let mut participant = Self {
 			name: inspection.participant.name,
 			backing_repo: None,
+			repository_source: None,
 			state: ParticipantState::Unavailable,
 			recorded_path: NativePath::new(inspection.participant.destination)
 				.expect("participant path"),
@@ -77,6 +80,9 @@ impl From<ParticipantInspection> for ParticipantReport {
 				participant.backing_repo = facts
 					.common_dir
 					.map(|path| NativePath::new(path).expect("Git common path"));
+				participant.repository_source = facts
+					.repository_source
+					.map(|path| NativePath::new(path).expect("Git repository source"));
 				participant.state = if facts.path.is_none() {
 					ParticipantState::Missing
 				} else if facts.conflicted {

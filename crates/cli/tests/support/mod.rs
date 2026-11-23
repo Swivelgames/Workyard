@@ -48,6 +48,15 @@ pub fn workyard(root: &Path, args: &[&str]) -> Output {
 		.unwrap()
 }
 
+#[allow(dead_code)]
+pub fn human_body(output: &Output) -> &str {
+	let stdout = std::str::from_utf8(&output.stdout).expect("UTF-8 terminal output");
+	let heading = concat!("\n  🔨 Workyard (v", env!("CARGO_PKG_VERSION"), ")\n\n");
+	stdout
+		.strip_prefix(heading)
+		.expect("shared Workyard heading")
+}
+
 pub fn init_workspace(root: &Path) {
 	fs::create_dir_all(root).unwrap();
 	assert_ok(&workyard(root, &["init"]));

@@ -45,5 +45,6 @@ pub(super) async fn run(
 		Ok(changed) => changed,
 		Err(problem) => return Err(report.failed(problem)),
 	};
+	report.explicit_workspace = input.workspace;
 	report.finish(changed || remembered)
 }

@@ -15,15 +15,13 @@ pub use action::status;
 pub use contract::StatusOutcome;
 pub use input::StatusInput;
 
-use contract::PresentedStatus;
-
-type StatusEntry = Entry<StatusInput, PresentedStatus, PresentedStatus, Progress>;
+type StatusEntry = Entry<StatusInput, StatusOutcome, StatusOutcome, Progress>;
 
 pub(crate) fn build_entry() -> Result<StatusEntry, RegistrationError> {
 	let handler = Action::new(
 		"status",
 		"Check participant worktrees for changes or problems",
-		action::present,
+		action::status,
 	)?;
 	let cli = CliBinding::new(cli::bindings());
 	let rpc = StructuredBinding::serde();

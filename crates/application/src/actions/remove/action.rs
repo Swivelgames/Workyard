@@ -29,7 +29,11 @@ async fn run(
 	context: InvocationContext<Progress>,
 ) -> Result<RemoveOutcome, RemoveOutcome> {
 	let input = request.input;
-	let rejected = |problem| RemoveOutcome::rejected(input.task.clone(), problem);
+	let rejected = |problem| {
+		let mut outcome = RemoveOutcome::rejected(input.task.clone(), problem);
+		outcome.explicit_workspace = input.workspace.clone();
+		outcome
+	};
 	workyard_core::validate_task(&input.task).map_err(rejected)?;
 
 	let cancellation = context.cancellation().clone();
@@ -62,6 +66,7 @@ async fn run(
 		Err(problem) => rejected(problem),
 	};
 	outcome.removal = observer.into_report();
+	outcome.explicit_workspace = input.workspace;
 	if outcome.operation.outcome == OperationOutcome::Failed
 		&& outcome
 			.problem

@@ -1,20 +1,23 @@
 //! Output buffer and basic scoped text operations.
 use super::{Style, Tone, paths, text};
-use crate::contracts::ProblemOutcome;
-use std::{fmt::Write, path::Path};
+use std::fmt::Write;
 use trine::application::Output;
 
 #[derive(Clone, Copy)]
 pub(crate) enum MessageScope {
 	Workspace,
+	Section,
 	Task,
+	Detail,
 }
 
 impl MessageScope {
-	fn indent(self) -> &'static str {
+	pub(super) fn indent(self) -> &'static str {
 		match self {
-			Self::Workspace => "",
-			Self::Task => "        ",
+			Self::Workspace => "  ",
+			Self::Section => "    ",
+			Self::Task => "      ",
+			Self::Detail => "        ",
 		}
 	}
 }
@@ -44,40 +47,8 @@ impl Terminal {
 	pub fn heading(&mut self, title: &str) {
 		writeln!(
 			self.output,
-			"{}",
+			"  {}",
 			self.style.paint(&text(title), Tone::Section)
-		)
-		.expect("string output");
-	}
-
-	pub fn workspace(&mut self, root: Option<&Path>, state: Option<&Path>) {
-		if let Some(root) = root {
-			let root_label = self.paths.root(root);
-			writeln!(
-				self.output,
-				"  Root:  {}",
-				self.style.paint(&root_label, Tone::Identity)
-			)
-			.expect("string output");
-			if let Some(state) = state {
-				writeln!(
-					self.output,
-					"  State: {}",
-					self.style
-						.paint(&self.paths.within(root, state), Tone::Identity)
-				)
-				.expect("string output");
-			}
-			self.output.push('\n');
-		}
-	}
-
-	pub fn task(&mut self, name: &str, condition: &str, tone: Tone) {
-		writeln!(
-			self.output,
-			"    {} [{}]",
-			self.style.paint(&text(name), Tone::Identity),
-			self.style.paint(&text(condition), tone)
 		)
 		.expect("string output");
 	}
@@ -86,7 +57,7 @@ impl Terminal {
 		self.note_at(MessageScope::Task, note);
 	}
 
-	fn note_at(&mut self, scope: MessageScope, note: &str) {
+	pub fn note_at(&mut self, scope: MessageScope, note: &str) {
 		writeln!(self.output, "{}{}", scope.indent(), text(note)).expect("string output");
 	}
 
@@ -95,43 +66,15 @@ impl Terminal {
 	}
 
 	pub fn hint_at(&mut self, scope: MessageScope, hint: &str) {
-		writeln!(
-			self.output,
-			"{}{}",
-			scope.indent(),
-			self.style.paint(&text(hint), Tone::Hint)
-		)
-		.expect("string output");
+		self.advice_at(scope, hint, Some(Tone::Hint));
 	}
 
-	pub fn problem(&mut self, problem: &ProblemOutcome) {
-		self.problem_at(MessageScope::Task, problem);
-	}
-
-	pub fn problem_at(&mut self, scope: MessageScope, problem: &ProblemOutcome) {
-		self.note_at(
-			scope,
-			&format!(
-				"{}: {}",
-				problem.code,
-				problem.message.lines().next().unwrap_or("")
-			),
-		);
-		for line in problem.message.lines().skip(1) {
-			self.note_at(scope, line);
-		}
-		for candidate in &problem.candidates {
-			let label = paths::display(candidate.as_path());
-			writeln!(self.output, "{}    {label}", scope.indent()).expect("string output");
-		}
-		for line in problem.remedy.lines() {
-			self.hint_at(scope, line);
-		}
-	}
-
-	pub fn participant_problem(&mut self, participant: &str, problem: &ProblemOutcome) {
-		self.note(&format!("{participant}:"));
-		self.problem(problem);
+	pub fn advice_at(&mut self, scope: MessageScope, advice: &str, fallback: Option<Tone>) {
+		let advice = text(advice);
+		let styled = self.style.command_references(&advice).unwrap_or_else(|| {
+			fallback.map_or_else(|| advice.clone(), |tone| self.style.paint(&advice, tone))
+		});
+		writeln!(self.output, "{}{styled}", scope.indent()).expect("string output");
 	}
 }
 

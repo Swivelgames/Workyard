@@ -8,7 +8,7 @@ use std::{
 	path::Path,
 	process::{Command, Stdio},
 };
-use support::{assert_ok, repo, text, workyard};
+use support::{assert_ok, human_body, repo, text, workyard};
 
 #[test]
 fn bare_init_targets_cwd_and_repeating_preserves_workspace_state() {
@@ -16,7 +16,18 @@ fn bare_init_targets_cwd_and_repeating_preserves_workspace_state() {
 	let root = fixture.path();
 	let first = workyard(root, &["init"]);
 	assert_ok(&first);
-	assert!(String::from_utf8_lossy(&first.stdout).contains("Workspace ready"));
+	let body = human_body(&first);
+	assert!(
+		body.starts_with("  Workspace initialized\n\n    .workyard/\n    tasks/\n"),
+		"{body}"
+	);
+	assert!(body.contains("workyard projects track ./repos\n"), "{body}");
+	assert!(
+		body.contains("workyard projects track ./repos/api ./repos/web"),
+		"{body}"
+	);
+	assert!(!body.contains("Found "), "{body}");
+	assert!(!body.contains('\t'), "{body}");
 	assert!(root.join("tasks").is_dir());
 	assert!(!root.join("projects").exists());
 
@@ -27,6 +38,53 @@ fn bare_init_targets_cwd_and_repeating_preserves_workspace_state() {
 	assert_ok(&workyard(root, &["init", "."]));
 	assert_eq!(fs::read(record).unwrap(), prior);
 	assert_eq!(fs::read(root.join("tasks/notes")).unwrap(), b"keep me");
+}
+
+#[test]
+fn init_previews_existing_projects_and_uses_their_references_in_examples() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path().join("workspace");
+	let projects = workspace.join("projects");
+	fs::create_dir_all(&projects).unwrap();
+	for name in ["zeta", "infra", "api", "docs", "web"] {
+		repo(&projects, name);
+	}
+
+	let output = workyard(
+		fixture.path(),
+		&["init", "workspace", "--tasks", "dev/trees"],
+	);
+	assert_ok(&output);
+	let body = human_body(&output);
+	let tasks = Path::new("dev").join("trees");
+	let preview_path = Path::new("projects").join("api");
+
+	assert!(
+		body.contains("Workspace initialized at workspace"),
+		"{body}"
+	);
+	assert!(body.contains(&format!("    {}/", text(&tasks))), "{body}");
+	assert!(body.contains("Found 5 projects"), "{body}");
+	assert!(
+		body.contains(&format!("    {}/", text(&preview_path))),
+		"{body}"
+	);
+	assert!(body.contains("… and 1 more"), "{body}");
+	assert!(!body.contains("zeta"), "{body}");
+	assert!(
+		body.contains("Run these commands from the workspace directory."),
+		"{body}"
+	);
+	assert!(
+		body.contains("workyard create feat/my-feature api docs"),
+		"{body}"
+	);
+	assert!(
+		body.contains("workyard checkout feat/my-feature api docs"),
+		"{body}"
+	);
+	assert!(workspace.join("dev/trees").is_dir());
+	assert!(!workspace.join("dev/trees/feat").exists());
 }
 
 #[test]
@@ -94,6 +152,13 @@ fn conflicting_reinit_fails_without_reconfiguring_the_workspace() {
 	assert_ok(&workyard(root, &["init", "--tasks", "worktrees"]));
 	let record = root.join(".workyard/workspace.json");
 	let original = fs::read(&record).unwrap();
+
+	let mismatch = workyard(root, &["init", "--tasks", "other"]);
+	assert!(!mismatch.status.success());
+	assert_eq!(
+		human_body(&mismatch),
+		"  Could not initialize workspace\n\n    The tasks directory is already set to worktrees.\n    Drop --tasks to keep the existing layout.\n"
+	);
 
 	let mismatch = workyard(root, &["init", "--tasks", "other", "--json"]);
 	assert!(!mismatch.status.success());

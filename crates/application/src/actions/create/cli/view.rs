@@ -1,14 +1,15 @@
 use super::super::CreateOutcome;
 use crate::{
 	contracts::Progress,
-	presentation::cli::render::{Terminal, Tone},
+	presentation::cli::render::{MessageScope, TaskTag, Terminal, Tone, separate},
 };
-use std::io;
+use std::{fmt::Write, io};
 use trine::{application::CliViewContext, view::View};
 use workyard_core::OperationOutcome;
 
 pub struct CreateView {
 	pub output: CliViewContext,
+	pub wrote_progress: bool,
 }
 
 impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
@@ -16,65 +17,101 @@ impl View<CreateOutcome, CreateOutcome, Progress> for CreateView {
 	type Error = io::Error;
 
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
+		let activity = match progress.phase.as_str() {
+			"fetching" => "fetching",
+			"creating" => "creating worktree",
+			_ => return Ok(()),
+		};
+
 		let mut terminal = Terminal::for_output(&self.output.stderr);
-		terminal.progress(&progress);
-		self.output.stderr.write_all(terminal.output.as_bytes())
+		terminal.note_at(
+			MessageScope::Section,
+			&format!("{}: {activity}", progress.participant),
+		);
+		self.output.stderr.write_all(terminal.output.as_bytes())?;
+		self.wrote_progress = true;
+		Ok(())
 	}
 
 	async fn finish(&mut self, result: &Result<CreateOutcome, CreateOutcome>) -> io::Result<()> {
 		let outcome = match result {
 			Ok(outcome) | Err(outcome) => outcome,
 		};
+
+		if self.wrote_progress {
+			self.output.stderr.write_all(b"\n")?;
+		}
+
 		let mut terminal = Terminal::for_output(&self.output.stdout);
-		let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
-		terminal.operation_result("Creation", outcome.operation.outcome);
-		terminal.workspace(
-			outcome.tasks_root.as_ref().map(|path| path.as_path()),
-			outcome.state_dir.as_ref().map(|path| path.as_path()),
-		);
-		let condition = if outcome.lifecycle.is_none() {
-			"not inspected"
-		} else if outcome
-			.participants
-			.iter()
-			.all(|participant| participant.phase == "completed")
+
+		if outcome.lifecycle.is_none()
+			&& let Some(problem) = &outcome.problem
 		{
-			"active"
+			super::rejection::render(&mut terminal, outcome, problem).await;
 		} else {
-			"needs attention"
-		};
-		terminal.task(
-			&outcome.task,
-			condition,
-			if condition == "active" {
-				Tone::Good
-			} else {
-				Tone::Attention
-			},
-		);
-		terminal.operation_participants(
-			&outcome.participants,
-			outcome.tasks_root.as_ref().map(|path| path.as_path()),
-			&outcome.task,
-			if succeeded {
-				"created"
-			} else {
-				"creation recorded"
-			},
-		);
-		if let Some(problem) = &outcome.registration_problem {
-			terminal.problem(problem);
+			render_admitted(&mut terminal, outcome);
 		}
-		if let Some(problem) = &outcome.problem {
-			terminal.problem(problem);
-			if problem.remedy.trim().is_empty() {
-				terminal.status_guidance(
-					&outcome.task,
-					outcome.state_dir.as_ref().map(|path| path.as_path()),
-				);
-			}
+
+		self.output.stdout.write_all(terminal.output.as_bytes())
+	}
+}
+
+fn render_admitted(terminal: &mut Terminal, outcome: &CreateOutcome) {
+	let succeeded = outcome.operation.outcome == OperationOutcome::Succeeded;
+	let (title, tone) = match outcome.operation.outcome {
+		OperationOutcome::Succeeded => ("Task ready", Tone::SuccessTitle),
+		OperationOutcome::Cancelled => ("Task setup cancelled", Tone::Neutral),
+		_ => ("Task setup needs attention", Tone::Attention),
+	};
+	let title = terminal.style.paint(title, tone);
+	writeln!(terminal.output, "  {title}\n").expect("string output");
+
+	let tag = if outcome
+		.participants
+		.iter()
+		.all(|participant| participant.phase == "completed")
+	{
+		TaskTag::Active
+	} else {
+		TaskTag::NeedsAttention
+	};
+	terminal.task(&outcome.task, tag, "");
+	if !outcome.participants.is_empty() {
+		separate(terminal);
+	}
+	terminal.operation_participants(
+		&outcome.participants,
+		outcome.tasks_root.as_ref().map(|path| path.as_path()),
+		&outcome.task,
+		if succeeded {
+			"created"
+		} else {
+			"creation recorded"
+		},
+	);
+
+	if let Some(problem) = &outcome.registration_problem {
+		separate(terminal);
+		terminal.problem_at(MessageScope::Section, problem);
+	}
+
+	if let Some(problem) = &outcome.problem {
+		separate(terminal);
+		let workspace = outcome
+			.explicit_workspace
+			.as_ref()
+			.map(|path| path.as_path());
+		if !terminal.recorded_task_problem(
+			MessageScope::Section,
+			problem,
+			&outcome.task,
+			workspace,
+			&outcome.operation,
+		) {
+			terminal.problem_at(MessageScope::Section, problem);
 		}
-		self.output.stdout.write_all(terminal.output.as_bytes())?;
-		Ok(())
+		if problem.code != "cancelled" && !succeeded {
+			terminal.status_guidance(&outcome.task, workspace);
+		}
 	}
 }

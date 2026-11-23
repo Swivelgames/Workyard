@@ -139,7 +139,7 @@ fn completed_ancestor_task_blocks_descendant_destination_even_without_task_recor
 			],
 		);
 		assert!(!output.status.success());
-		assert!(String::from_utf8_lossy(&output.stdout).contains("path_overlap"));
+		assert!(String::from_utf8_lossy(&output.stdout).contains("overlaps"));
 		assert!(!root.join("tasks/feat/one/api/child").exists());
 		assert!(git(&web, &["branch", "--list", "feat/one/api/child"]).is_empty());
 	}
@@ -287,6 +287,7 @@ impl workyard_core::Observer for MutatingObserver {
 #[test]
 fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation() {
 	use workyard_core::{Control, CreateRequest, OperationOutcome, ProblemCode, RepositoryInput};
+
 	for (mutation, expected) in [
 		(
 			MutationDuringProgress::ReplaceRepository,
@@ -308,6 +309,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 		let root = root.canonicalize().unwrap();
 		let state = root.join(".workyard");
 		let store = workyard_state::Store::open_existing(&state, None).unwrap();
+
 		let observer = MutatingObserver {
 			mutation,
 			source: api.clone(),
@@ -330,6 +332,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 			remote: None,
 			from: Some("main".into()),
 		};
+
 		let result = smol::block_on(workyard_core::create(
 			request,
 			&workyard_git::Runner::default(),
@@ -338,6 +341,7 @@ fn creating_progress_cannot_leave_stale_repository_ref_or_destination_validation
 			&store,
 		))
 		.unwrap();
+
 		let task = result.task;
 		assert_eq!(task.operation.outcome, OperationOutcome::Failed);
 		assert_eq!(task.problem.unwrap().code, expected);

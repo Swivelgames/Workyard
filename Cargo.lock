@@ -1065,8 +1065,7 @@ dependencies = [
 [[package]]
 name = "trine"
 version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "318ff89db2de58997689b17eaab23ec61b399198b885aa344ffc2a2878b549f7"
+source = "git+https://github.com/Swivelgames/trine.git?rev=92ca868ee7fd595bc30d439a7baccb5126fd56aa#92ca868ee7fd595bc30d439a7baccb5126fd56aa"
 dependencies = [
  "async-channel",
  "async-io",

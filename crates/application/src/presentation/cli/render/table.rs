@@ -8,10 +8,9 @@ pub(crate) struct ParticipantRow {
 	pub tone: Tone,
 }
 
-/// Locations and backing storage are explicit columns, separate from membership.
-pub(crate) struct LocatedParticipantRow {
+/// A task participant and its backing repository.
+pub(crate) struct StatusParticipantRow {
 	pub participant: ParticipantRow,
-	pub location: String,
 	pub backing: String,
 }
 
@@ -20,6 +19,7 @@ impl Terminal {
 		if rows.is_empty() {
 			return;
 		}
+
 		let rows: Vec<_> = rows
 			.iter()
 			.map(|row| ParticipantRow {
@@ -28,24 +28,27 @@ impl Terminal {
 				tone: row.tone,
 			})
 			.collect();
+
 		let width = rows
 			.iter()
 			.map(|row| row.name.width())
 			.max()
 			.unwrap_or(0)
 			.max("Repository".len());
+
 		writeln!(
 			self.output,
-			"        {}{}  {}",
+			"      {}{}  {}",
 			self.style.paint("Repository", Tone::Header),
 			" ".repeat(width - "Repository".len()),
 			self.style.paint("State", Tone::Header)
 		)
 		.expect("string output");
+
 		for row in rows {
 			writeln!(
 				self.output,
-				"        {}{}  {}",
+				"      {}{}  {}",
 				self.style.paint(&row.name, Tone::Section),
 				" ".repeat(width - row.name.width()),
 				self.style.paint(&row.state, row.tone)
@@ -56,56 +59,50 @@ impl Terminal {
 }
 
 impl Terminal {
-	pub fn located_participants(&mut self, rows: &[LocatedParticipantRow]) {
+	pub fn status_participants(&mut self, rows: &[StatusParticipantRow]) {
 		if rows.is_empty() {
 			return;
 		}
-		let columns = ["Participant", "Location", "Backing repo", "State"];
+
+		let columns = ["Name", "Repo", "State"];
 		let values: Vec<_> = rows
 			.iter()
 			.map(|row| {
 				[
 					text(&row.participant.name),
-					text(&row.location),
 					text(&row.backing),
 					text(&row.participant.state),
 				]
 			})
 			.collect();
+
 		let mut widths = columns.map(str::len);
 		for row in &values {
-			for (index, value) in row.iter().enumerate() {
-				widths[index] = widths[index].max(value.width());
+			for (width, value) in widths.iter_mut().zip(row) {
+				*width = (*width).max(value.width());
 			}
 		}
-		for (index, value) in columns.iter().enumerate() {
-			if index == 0 {
-				self.output.push_str("        ");
-			}
-			self.output.push_str(&self.style.paint(value, Tone::Header));
-			if index < 3 {
+
+		self.output.push('\n');
+		self.status_row(&columns, &widths, [Tone::Header; 3]);
+		for (row, facts) in values.iter().zip(rows) {
+			self.status_row(
+				&row.each_ref().map(String::as_str),
+				&widths,
+				[Tone::Section, Tone::Identity, facts.participant.tone],
+			);
+		}
+	}
+
+	fn status_row(&mut self, values: &[&str; 3], widths: &[usize; 3], tones: [Tone; 3]) {
+		self.output.push_str("      ");
+		for (index, value) in values.iter().enumerate() {
+			self.output.push_str(&self.style.paint(value, tones[index]));
+			if index + 1 < values.len() {
 				self.output
 					.push_str(&" ".repeat(widths[index] - value.width() + 2));
 			}
 		}
 		self.output.push('\n');
-		for (row, facts) in values.iter().zip(rows) {
-			self.output.push_str("        ");
-			for (index, value) in row.iter().enumerate() {
-				self.output.push_str(&self.style.paint(
-					value,
-					if index == 3 {
-						facts.participant.tone
-					} else {
-						Tone::Neutral
-					},
-				));
-				if index < 3 {
-					self.output
-						.push_str(&" ".repeat(widths[index] - value.width() + 2));
-				}
-			}
-			self.output.push('\n');
-		}
 	}
 }

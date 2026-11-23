@@ -1,19 +1,19 @@
-use super::{ParticipantRow, Terminal, Tone};
+use super::{MessageScope, ParticipantRow, TaskTag, Terminal, Tone};
 use crate::contracts::ParticipantOutcome;
 use std::path::Path;
-use workyard_core::OperationOutcome;
 
 impl Terminal {
-	pub fn status_guidance(&mut self, task: &str, state: Option<&Path>) {
-		if let Some(command) = crate::guidance::commands::status(task, state) {
-			self.hint(&format!("Inspect: {command}"));
+	pub fn status_guidance(&mut self, task: &str, workspace: Option<&Path>) {
+		if let Some(command) = crate::guidance::commands::status(task, workspace) {
+			self.hint_at(MessageScope::Section, &format!("Inspect: {command}"));
 		} else {
-			self.hint("Inspect with workyard status, supplying the task and --workspace using your shell's native-path quoting.");
+			let hint = if workspace.is_some() {
+				"Inspect with workyard status in the selected workspace."
+			} else {
+				"Inspect the task with workyard status."
+			};
+			self.hint_at(MessageScope::Section, hint);
 		}
-	}
-
-	pub fn operation_result(&mut self, label: &str, outcome: OperationOutcome) {
-		self.heading(&format!("{label} {}", outcome.as_str()));
 	}
 
 	pub fn operation_participants(
@@ -29,21 +29,23 @@ impl Terminal {
 		let rows = participants
 			.iter()
 			.map(|participant| {
-				let state = match participant.phase.as_str() {
-					"completed" => completed_label,
-					"present" => "present",
-					"removed" => "removed",
-					"restored" => "restored",
-					"restoration_unconfirmed" => "restoration unconfirmed",
-					"worktree_created" => "worktree created (recorded)",
-					"not_started" | "fetching" => "creation unconfirmed",
-					_ => "needs attention",
+				let (state, tone) = match participant.phase.as_str() {
+					"completed" => (completed_label, Tone::Neutral),
+					"present" => ("present", Tone::Neutral),
+					"removed" => ("removed", Tone::Neutral),
+					"restored" => ("restored", Tone::Neutral),
+					"restoration_unconfirmed" => ("restoration unconfirmed", Tone::Neutral),
+					"worktree_created" => ("worktree created (recorded)", Tone::Neutral),
+					"not_started" => ("not started", Tone::Neutral),
+					"fetching" => ("fetch unconfirmed", Tone::Neutral),
+					"creating" => ("creation unconfirmed", Tone::Neutral),
+					_ => TaskTag::NeedsAttention.appearance(),
 				};
 
 				ParticipantRow {
 					name: participant.name.clone(),
 					state: state.into(),
-					tone: Tone::Neutral,
+					tone,
 				}
 			})
 			.collect::<Vec<_>>();

@@ -35,6 +35,7 @@ pub(crate) fn build_entry() -> Result<RemoveEntry, RegistrationError> {
 				Ok(cli::RemoveView {
 					output,
 					started: false,
+					progress_open: false,
 				})
 			},
 			|result| exit_status::operation(result, |outcome| &outcome.operation),

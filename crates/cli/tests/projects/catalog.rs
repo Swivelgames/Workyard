@@ -112,3 +112,56 @@ fn qualified_paths_and_linked_aliases_complete_even_with_shorter_display_names()
 		);
 	}
 }
+
+#[test]
+fn human_inventory_groups_selectors_under_the_most_specific_tracked_root() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path();
+	init_workspace(workspace);
+	let projects = workspace.join("projects");
+	let billing = projects.join("billing");
+	let absent = projects.join("new");
+	fs::create_dir_all(&billing).unwrap();
+	repo(&projects, "infra");
+	repo(&billing, "api");
+	assert_ok(&workyard(
+		workspace,
+		&["projects", "track", text(&billing), text(&absent)],
+	));
+
+	let output = workyard(&workspace.join("tasks"), &["projects", "list"]);
+	assert_ok(&output);
+	let body = crate::support::human_body(&output);
+	let billing = std::path::Path::new("projects").join("billing");
+	let absent = std::path::Path::new("projects").join("new");
+	assert!(body.contains("  Project list\n\n"), "{body}");
+	assert!(body.contains("    projects/\n      infra\n"), "{body}");
+	assert!(
+		body.contains(&format!("    {}/\n      api\n", text(&billing))),
+		"{body}"
+	);
+	assert_eq!(body.matches("      api\n").count(), 1, "{body}");
+	assert!(
+		body.contains(&format!("    {}/ [missing]\n", text(&absent))),
+		"{body}"
+	);
+
+	let listed = inventory(workspace);
+	assert_eq!(references(&listed), ["api", "infra"]);
+	assert!(listed.get("workspace").is_none());
+}
+
+#[test]
+fn empty_human_inventory_aligns_guidance_and_indents_the_command() {
+	let fixture = tempfile::tempdir().unwrap();
+	let workspace = fixture.path();
+	init_workspace(workspace);
+	assert_ok(&workyard(workspace, &["projects", "untrack", "projects"]));
+
+	let output = workyard(workspace, &["projects", "list"]);
+	assert_ok(&output);
+	assert_eq!(
+		crate::support::human_body(&output),
+		"  No projects found\n\n  Track a project directory\n\n    workyard projects track <path>\n"
+	);
+}

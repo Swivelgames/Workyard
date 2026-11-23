@@ -18,7 +18,8 @@ impl Repository {
 			.checked(&repository.source, &args(&["remote"]), control)
 			.await?;
 		let remotes: Vec<_> = utf8(&output)?.lines().map(str::to_owned).collect();
-		repository.remote = choose_remote(&remotes, requested_remote)?;
+		repository.remote = choose_remote(&remotes, requested_remote)
+			.map_err(|problem| problem.in_repository(&repository.source))?;
 		Ok(repository)
 	}
 

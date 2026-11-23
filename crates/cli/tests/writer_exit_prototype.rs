@@ -128,7 +128,7 @@ impl Fixture {
 		let result = self.recover();
 		assert!(!result.status.success());
 		assert!(
-			String::from_utf8_lossy(&result.stdout).contains("resource_busy"),
+			String::from_utf8_lossy(&result.stdout).contains("cannot confirm Git finished"),
 			"{result:?}"
 		);
 		assert_eq!(fs::read(self.effects()).unwrap(), before);

@@ -1,8 +1,8 @@
 //! Workspace project inventory and discovery-root management.
+mod cli;
 mod contract;
 mod list;
 mod roots;
-mod view;
 
 use trine::{RegistrationError, application::Application};
 

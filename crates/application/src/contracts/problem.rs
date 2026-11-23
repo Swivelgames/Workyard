@@ -32,6 +32,12 @@ pub struct ProblemOutcome {
 	/// An explicit name or selector that can resolve the conflict.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub suggested_override: Option<SuggestedOverride>,
+	#[serde(skip)]
+	pub(crate) repositories: Vec<std::path::PathBuf>,
+	#[serde(skip)]
+	pub(crate) detail: Option<Box<workyard_core::ProblemDetail>>,
+	#[serde(skip)]
+	pub(crate) explicit_workspace: Option<NativePath>,
 }
 
 impl From<Problem> for ProblemOutcome {
@@ -48,6 +54,9 @@ impl From<Problem> for ProblemOutcome {
 			remedy: problem.remedy,
 			candidates: Vec::new(),
 			suggested_override: None,
+			repositories: problem.repositories,
+			detail: problem.detail,
+			explicit_workspace: None,
 		};
 		let Some(detail) = problem.project_remedy else {
 			return outcome;

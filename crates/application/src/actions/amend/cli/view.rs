@@ -1,7 +1,7 @@
 use super::super::AmendOutcome;
 use crate::{
 	contracts::Progress,
-	presentation::cli::render::{MessageScope, Terminal, text},
+	presentation::cli::render::{MessageScope, Terminal, separate, text},
 };
 use std::io;
 use trine::{application::CliViewContext, view::View};
@@ -9,6 +9,7 @@ use workyard_core::OperationOutcome;
 
 pub struct AmendView {
 	pub output: CliViewContext,
+	pub progress_open: bool,
 }
 
 impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
@@ -20,13 +21,19 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 		request: trine::invocation::Confirmation,
 		cancellation: trine::Cancellation,
 	) -> io::Result<Option<bool>> {
-		self.output.confirm(&request, &cancellation)
+		let answer = self.output.confirm(&request, &cancellation)?;
+		if answer.is_some() {
+			self.progress_open = false;
+		}
+		Ok(answer)
 	}
 
 	async fn progress(&mut self, progress: Progress) -> io::Result<()> {
 		let mut terminal = Terminal::for_output(&self.output.stderr);
 		terminal.progress(&progress);
-		self.output.stderr.write_all(terminal.output.as_bytes())
+		self.output.stderr.write_all(terminal.output.as_bytes())?;
+		self.progress_open = true;
+		Ok(())
 	}
 
 	async fn finish(&mut self, result: &Result<AmendOutcome, AmendOutcome>) -> io::Result<()> {
@@ -38,6 +45,11 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 			.changes
 			.iter()
 			.all(|change| change.kind == "unchanged");
+
+		if self.progress_open {
+			self.output.stderr.write_all(b"\n")?;
+		}
+
 		let mut terminal = Terminal::for_output(&self.output.stdout);
 		if succeeded && unchanged {
 			terminal.heading(&format!("No changes needed: {}", text(&outcome.task)));
@@ -48,8 +60,9 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 				text(&outcome.task)
 			));
 		}
+
 		if succeeded {
-			terminal.removed_participants(&outcome.changes, &outcome.participants);
+			terminal.participant_changes(&outcome.changes, &outcome.participants);
 		} else if !unchanged {
 			let changed = outcome
 				.changes
@@ -58,17 +71,24 @@ impl View<AmendOutcome, AmendOutcome, Progress> for AmendView {
 				.map(|change| format!("{} ({})", text(&change.participant), change.kind))
 				.collect::<Vec<_>>()
 				.join(", ");
+			separate(&mut terminal);
 			terminal.hint_at(
-				MessageScope::Workspace,
+				MessageScope::Section,
 				&format!("Changes retained: {changed}"),
 			);
 		}
+
 		if let Some(problem) = &outcome.registration_problem {
-			terminal.problem(problem);
+			separate(&mut terminal);
+			terminal.problem_at(MessageScope::Section, problem);
 		}
-		if let Some(problem) = &outcome.problem {
-			terminal.problem_at(MessageScope::Workspace, problem);
+		if let Some(problem) = &outcome.problem
+			&& problem.code != "cancelled"
+		{
+			separate(&mut terminal);
+			terminal.problem_at(MessageScope::Section, problem);
 		}
+
 		self.output.stdout.write_all(terminal.output.as_bytes())?;
 		Ok(())
 	}

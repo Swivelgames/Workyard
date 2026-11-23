@@ -19,7 +19,7 @@ impl Terminal {
 		for path in &disclosure.dirty_paths {
 			writeln!(
 				self.output,
-				"        Would discard: {}",
+				"      Would discard: {}",
 				paths::display(path.as_path())
 			)
 			.unwrap();

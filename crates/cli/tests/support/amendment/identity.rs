@@ -47,7 +47,7 @@ fn task_contention_and_uncertain_writers_reject_even_noop_amend() {
 		let _guard = store.admit("feat/task").unwrap();
 		let output = workyard(&root, &["amend", "feat/task", "--repo", text(&api)]);
 		assert!(!output.status.success());
-		assert!(String::from_utf8_lossy(&output.stdout).contains("resource_busy"));
+		assert!(String::from_utf8_lossy(&output.stdout).contains("lock"));
 	}
 	assert_eq!(before, state_bytes(&root));
 	assert_ok(&workyard(

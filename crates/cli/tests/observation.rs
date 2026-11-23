@@ -189,6 +189,18 @@ fn repaired_moves_and_renamed_branch_report_actual_identity_location() {
 	let root = fixture.path().join("workspace");
 	init_workspace(&root);
 	create(&root, &source, "feat/task");
+	let normal = workyard(&root, &["status", "feat/task"]);
+	assert_ok(&normal);
+	let normal = human_body(&normal);
+	assert!(normal.starts_with("  Task status\n\n"), "{normal}");
+	assert!(normal.contains("Name  Repo"), "{normal}");
+	assert!(
+		normal.contains(text(&Path::new("..").join("api"))),
+		"{normal}"
+	);
+	assert!(!normal.contains("Location"), "{normal}");
+	assert!(!normal.contains(".git"), "{normal}");
+
 	let moved = fixture.path().join("moved");
 	git(
 		&source,
@@ -214,6 +226,16 @@ fn repaired_moves_and_renamed_branch_report_actual_identity_location() {
 		result["result"]["tasks"][0]["current"][0]["branch"],
 		"feat/renamed"
 	);
+	let cli = workyard(&root, &["status", "feat/task"]);
+	assert_ok(&cli);
+	let body = human_body(&cli);
+	assert!(!body.contains("Location"), "{body}");
+	assert!(body.contains("api is at "), "{body}");
+	assert!(
+		body.contains(text(&Path::new("..").join("moved"))),
+		"{body}"
+	);
+	assert!(body.contains("api branch: feat/renamed"), "{body}");
 	assert_eq!(before, snapshot(fixture.path()));
 }
 
@@ -562,6 +584,13 @@ fn missing_member_is_distinct_from_unavailable_identity_and_remains_managed() {
 	assert_eq!(task["current"][0]["name"], "infra");
 	assert_eq!(task["current"][0]["state"], "missing");
 	assert_eq!(task["current"][0]["problem"]["code"], "repository_changed");
+	let cli = workyard(&root, &["status"]);
+	assert_ok(&cli);
+	let body = human_body(&cli);
+	assert!(body.contains("missing"), "{body}");
+	assert!(body.contains("repair its Git link if it moved"), "{body}");
+	assert!(!body.contains("Try: workyard recover"), "{body}");
+	assert!(!body.contains("Location"), "{body}");
 	assert_eq!(before, snapshot(fixture.path()));
 
 	fs::create_dir(&tree).unwrap();
@@ -666,14 +695,14 @@ fn command_roles_keep_inventory_compact_status_active_and_info_read_only() {
 	);
 	let listing = workyard(&root, &["list"]);
 	assert_ok(&listing);
-	let listing = String::from_utf8(listing.stdout).unwrap();
+	let listing = human_body(&listing);
 	assert!(listing.contains("feat/active [healthy]  api"), "{listing}");
 	assert!(!listing.contains("Repository  State"));
 	assert!(listing.contains("Recently closed tasks"));
 
 	let status = workyard(&root, &["status"]);
 	assert_ok(&status);
-	let status = String::from_utf8(status.stdout).unwrap();
+	let status = human_body(&status);
 	assert!(status.contains("modified"), "{status}");
 	assert!(!status.contains("closed/"));
 	for output in [&listing, &status] {
@@ -752,7 +781,71 @@ fn info_preserves_absent_and_damaged_state_while_list_keeps_diagnostics_compact(
 	let output = String::from_utf8(output.stdout).unwrap();
 	assert!(output.contains("[needs attention]"), "{output}");
 	assert!(output.contains("State record:"), "{output}");
-	assert!(output.contains("Inspect: workyard status"), "{output}");
+	assert!(output.contains("Inspect: workyard status\n"), "{output}");
+	assert!(!output.contains("--workspace"), "{output}");
 	assert!(!output.contains("Invalid JSON"), "{output}");
+
+	let info = workyard(&root, &["info"]);
+	assert_ok(&info);
+	assert!(!human_body(&info).contains("--workspace"), "{info:?}");
+
+	for command in ["list", "info"] {
+		let explicit = workyard(fixture.path(), &[command, "--workspace", "workspace"]);
+		assert_ok(&explicit);
+		let body = human_body(&explicit);
+		assert!(
+			body.contains("workyard status --workspace=workspace"),
+			"{body}"
+		);
+	}
 	assert_eq!(before, snapshot(fixture.path()));
+}
+
+#[test]
+fn status_displays_the_checkout_when_git_storage_is_separate() {
+	let fixture = tempfile::tempdir().unwrap();
+	let root = fixture.path().canonicalize().unwrap();
+	init_workspace(&root);
+
+	let source = root.join("projects/api");
+	let storage = root.join("storage");
+	let common = storage.join(".git");
+	fs::create_dir_all(&source).unwrap();
+	fs::create_dir(&storage).unwrap();
+	git(
+		&source,
+		&["init", "-b", "main", "--separate-git-dir", text(&common)],
+	);
+	git(
+		&source,
+		&[
+			"-c",
+			"user.name=Fixture",
+			"-c",
+			"user.email=fixture@example.invalid",
+			"commit",
+			"--allow-empty",
+			"-m",
+			"fixture",
+		],
+	);
+	create(&root, &source, "feat/separate");
+
+	let output = workyard(&root.join("tasks"), &["status", "feat/separate"]);
+	assert_ok(&output);
+	let body = human_body(&output);
+	let row = body
+		.lines()
+		.find(|line| line.trim_start().starts_with("api "))
+		.unwrap_or_else(|| panic!("missing API row: {body}"));
+	assert!(
+		row.contains(text(&Path::new("projects").join("api"))),
+		"{row}"
+	);
+	assert!(!row.contains("storage"), "{row}");
+
+	let status = rpc(&root, "status", json!({"task":"feat/separate"}));
+	let current = &status["result"]["tasks"][0]["current"][0];
+	assert_eq!(current["backing_repo"], json!(common));
+	assert!(current.get("repository_source").is_none());
 }

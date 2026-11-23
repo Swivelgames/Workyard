@@ -73,11 +73,11 @@ fn healthy_recovery_preserves_commits_and_reconstructs_missing_record() {
 		let output = workyard(cwd, &["recover", "feat/task"]);
 		assert_ok(&output);
 		assert_eq!(
-			String::from_utf8(output.stdout).unwrap(),
+			human_body(&output),
 			if index == 0 {
-				"Recovery succeeded: feat/task\n"
+				"  Recovery succeeded: feat/task\n"
 			} else {
-				"Nothing to recover: feat/task\n"
+				"  Nothing to recover: feat/task\n"
 			}
 		);
 		let saved = record(&root.join(".workyard"));
@@ -637,15 +637,33 @@ fn missing_completed_participant_never_claims_current_availability() {
 	create(&root, &api, "feat/task");
 	fs::remove_dir_all(root.join("tasks/feat/task/infra")).unwrap();
 
-	let output = workyard(&root, &["recover", "feat/task"]);
-	assert!(!output.status.success());
-	let output = String::from_utf8(output.stdout).unwrap();
-	assert!(output.contains("Recovery failed"), "{output}");
-	assert!(!output.contains("Recorded progress"), "{output}");
-	assert!(!output.contains("available"), "{output}");
-	assert!(output.contains("workyard status"), "{output}");
-	assert!(output.contains("--workspace"), "{output}");
-	assert!(output.contains("feat/task"), "{output}");
+	let expected = text(&Path::new("tasks").join("feat").join("task").join("infra")).to_owned();
+	let advice = "Restore the worktree in place, or repair its Git link if it moved.";
+
+	let named = workyard(&root, &["recover", "feat/task"]);
+	assert!(!named.status.success());
+	assert_eq!(
+		human_body(&named),
+		format!(
+			"  Recovery failed: feat/task\n\n    infra [missing]  {expected}\n\n    {advice}\n"
+		)
+	);
+
+	let workspace = workyard(&root, &["recover"]);
+	assert!(!workspace.status.success());
+	assert_eq!(
+		human_body(&workspace),
+		format!(
+			"  Workspace recovery needs attention\n\n    feat/task\n      infra [missing]  {expected}\n\n    {advice}\n"
+		)
+	);
+
+	let structured = workyard(&root, &["recover", "feat/task", "--json"]);
+	assert!(!structured.status.success());
+	let response: serde_json::Value = serde_json::from_slice(&structured.stdout).unwrap();
+	let problem = &response["result"]["problem"];
+	assert_eq!(problem["code"], "repository_changed");
+	assert!(problem.get("detail").is_none());
 
 	let status = workyard(&root, &["status"]);
 	let status = String::from_utf8(status.stdout).unwrap();
@@ -654,24 +672,27 @@ fn missing_completed_participant_never_claims_current_availability() {
 		"{status}"
 	);
 	assert!(
-		status.contains("Try: workyard recover feat/task"),
+		status.contains("repair its Git link if it moved"),
 		"{status}"
 	);
-	assert!(!status.contains("git worktree repair"), "{status}");
+	assert!(!status.contains("Try: workyard recover"), "{status}");
 
-	let in_workspace = workyard(&root, &["status", "--workspace", "."]);
-	assert_ok(&in_workspace);
-	let in_workspace = String::from_utf8(in_workspace.stdout).unwrap();
-	assert!(
-		in_workspace.contains("Try: workyard recover --workspace=. feat/task"),
-		"{in_workspace}"
-	);
-
-	let explicit = workyard(fixture.path(), &["status", "--workspace", text(&root)]);
-	assert_ok(&explicit);
-	let explicit = String::from_utf8(explicit.stdout).unwrap();
-	assert!(
-		explicit.contains("Try: workyard recover --workspace=workspace feat/task"),
-		"{explicit}"
+	let occupied = root.join("tasks/feat/task/infra");
+	fs::create_dir(&occupied).unwrap();
+	fs::write(occupied.join("keep"), "unrelated").unwrap();
+	for args in [&["recover"][..], &["recover", "feat/task"]] {
+		let output = workyard(&root, args);
+		assert!(!output.status.success());
+		let body = human_body(&output);
+		assert!(body.contains("infra [path occupied]"), "{body}");
+		assert!(body.contains("Keep the files at this path"), "{body}");
+		assert!(!body.contains("Restore the worktree in place"), "{body}");
+	}
+	let status = workyard(&root, &["status", "feat/task"]);
+	assert_ok(&status);
+	assert!(human_body(&status).contains("is occupied"));
+	assert_eq!(
+		fs::read_to_string(occupied.join("keep")).unwrap(),
+		"unrelated"
 	);
 }
