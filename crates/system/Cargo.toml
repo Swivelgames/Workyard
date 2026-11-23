@@ -1,6 +1,8 @@
 [package]
 name = "workyard-system"
 description = "Native file identity and workspace locks for Workyard"
+keywords = ["file-identity", "file-locking", "filesystem"]
+categories = ["filesystem", "concurrency"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true

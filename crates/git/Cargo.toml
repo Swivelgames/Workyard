@@ -1,6 +1,8 @@
 [package]
 name = "workyard-git"
 description = "Git worktree inspection and process supervision for Workyard"
+keywords = ["git", "worktree", "subprocess", "process-supervision"]
+categories = ["development-tools"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true

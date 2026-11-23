@@ -1,6 +1,8 @@
 [package]
 name = "workyard-state"
 description = "Workspace storage, task records and recovery evidence for Workyard"
+keywords = ["worktree", "workspace", "persistence", "recovery"]
+categories = ["filesystem", "development-tools"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true

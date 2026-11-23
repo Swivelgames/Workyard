@@ -1,6 +1,8 @@
 [package]
 name = "workyard-application"
 description = "Task actions and interface contracts for Workyard"
+keywords = ["git", "worktree", "workspace", "mcp", "json-rpc"]
+categories = ["development-tools", "command-line-interface"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
