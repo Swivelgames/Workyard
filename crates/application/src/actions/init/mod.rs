@@ -3,6 +3,7 @@ mod action;
 mod cli;
 mod contract;
 mod input;
+mod skill;
 
 use crate::{
 	contracts::{ProblemOutcome, Progress},

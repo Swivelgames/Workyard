@@ -11,6 +11,7 @@ publish.workspace = true
 workyard-core.workspace = true
 workyard-git.workspace = true
 workyard-state.workspace = true
+atomicwrites.workspace = true
 trine = { workspace = true, features = ["cli-confirmation"] }
 serde.workspace = true
 serde_json.workspace = true

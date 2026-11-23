@@ -42,6 +42,7 @@ fn init_reuses_the_selected_layout_and_rejects_conflicting_tasks_directories() {
 		json!(workspace.join("dev/worktrees"))
 	);
 	assert!(workspace.join("dev/worktrees").is_dir());
+	assert!(workspace.join(".agents/skills/workyard/SKILL.md").is_file());
 	assert!(!root.join(".workyard").exists());
 
 	let manifest = workspace.join(".workyard/workspace.json");

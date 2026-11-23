@@ -29,6 +29,10 @@ Task commands find the nearest ancestor workspace or accept `--workspace <direct
 Only init creates workspace state. For example, `workyard list --workspace my-other-workspace`
 shows tasks in that workspace from outside its directory.
 
+Init installs the bundled agent skill at `.agents/skills/workyard/SKILL.md`.
+Re-running init restores a missing skill and preserves any existing edits.
+If your agent does not discover that directory automatically, point it at the file.
+
 ## Selecting projects
 
 `workyard projects list` shows the available references and their registered roots.

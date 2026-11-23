@@ -1,11 +1,11 @@
-use super::{InitInput, InitOutcome};
+use super::{InitInput, InitOutcome, skill};
 use crate::{
 	contracts::{ProblemOutcome, Progress},
 	execution::blocking_action,
 };
 use std::path::Path;
 use trine::{InvocationContext, NativePath};
-use workyard_core::Control;
+use workyard_core::{Control, Problem};
 
 /// Initialize a workspace with the requested tasks directory.
 pub async fn init(
@@ -26,12 +26,25 @@ pub async fn init(
 			.unwrap_or(Path::new("."));
 
 		let workspace = workyard_state::canonical_future(directory)?;
+		let requested_tasks = input.tasks.as_ref().map(NativePath::as_path);
+		if let Some(tasks) = requested_tasks {
+			skill::check_tasks(&workspace, tasks)?;
+		}
+
 		let tasks = workyard_state::initialize_workspace_with_control(
 			&workspace,
-			input.tasks.as_ref().map(NativePath::as_path),
+			requested_tasks,
 			&control,
 		)
 		.await?;
+
+		skill::install(&workspace).map_err(|error| {
+			Problem::io(
+				format!("Workspace is ready. Could not install {}", skill::LOCATION),
+				error,
+			)
+			.remedy("Check the skill path and rerun workyard init for the same workspace.")
+		})?;
 
 		Ok(InitOutcome {
 			cancellation,
