@@ -1,11 +1,12 @@
 [package]
-name = "workyard-cli"
+name = "workyard"
 description = "Manage Git worktrees across repositories from a single task workspace"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 clap = { version = "4.5", default-features = false, features = ["std", "help", "usage", "error-context", "string"] }
@@ -21,10 +22,6 @@ serde_json.workspace = true
 [[bin]]
 name = "workyard"
 path = "src/main.rs"
-
-[[example]]
-name = "process_prototype"
-path = "../../examples/process_prototype.rs"
 
 [dev-dependencies.process-wrap]
 workspace = true

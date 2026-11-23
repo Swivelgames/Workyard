@@ -1,11 +1,19 @@
 # Workyard
 
 <picture>
-	<source media="(prefers-color-scheme: dark)" srcset="assets/workyard-dark.png">
-	<img src="assets/workyard-light.png" alt="Workyard">
+	<source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Swivelgames/Workyard/main/assets/workyard-dark.png">
+	<img src="https://raw.githubusercontent.com/Swivelgames/Workyard/main/assets/workyard-light.png" alt="Workyard">
 </picture>
 
 **Work on one feature across several Git repositories.** Give the task a branch name, pick the projects, and Workyard puts a linked worktree for each one in the same task directory. Your main clones stay available for other work.
+
+## Install
+
+With Rust and Git on your PATH, run this command from any directory.
+
+```sh
+cargo install --locked workyard
+```
 
 ## Start a task
 
@@ -37,17 +45,7 @@ Track a directory of clones once to select projects by name. A new workspace alr
 
 Add `--json` for a structured CLI result. Launch `workyard rpc` for local JSON-RPC clients or `workyard mcp` for agents. Both communicate over stdio. Shell completion suggests tasks, tracked projects, and Git references as you type.
 
-See the [command guide](docs/usage.md) for branch selection, removal consent, moving a workspace, recovery, shell setup, and protocol examples.
-
-## Build from source
-
-With Rust and Git installed, clone and build the executable:
-
-```sh
-git clone https://github.com/Swivelgames/Workyard.git
-cd Workyard
-cargo install --locked --path crates/cli
-```
+See the [command guide](https://github.com/Swivelgames/Workyard/blob/main/docs/usage.md) for branch selection, removal consent, moving a workspace, recovery, shell setup, and protocol examples.
 
 ## License
 

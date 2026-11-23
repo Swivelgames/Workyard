@@ -31,11 +31,11 @@ path for the invocation. This uses local source with the committed lockfile:
 cargo --config 'paths = ["/absolute/path/to/trine"]' build --locked --bin workyard
 ```
 
-The release build uses Trine 0.0.1 from crates.io. If a local change alters
+The release build uses the crates.io version of Trine recorded in Cargo.lock. If a local change alters
 Trine’s dependencies, use a temporary Cargo patch for crates.io and regenerate
 the lockfile locally for the experiment.
 
-The earlier process-wrap experiment remains `examples/process_prototype.rs`.
+The earlier process-wrap experiment remains `crates/cli/examples/process_prototype.rs`.
 Production supervision uses native groups/jobs so cancellation and full managed-tree
 completion remain observable independently of the root process's exit.
 

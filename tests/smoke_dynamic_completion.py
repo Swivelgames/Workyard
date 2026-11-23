@@ -1,4 +1,4 @@
-"""Live Bash/Zsh completion and optional Fish checks after cargo build -p workyard-cli."""
+"""Live Bash/Zsh completion and optional Fish checks after cargo build -p workyard."""
 import os
 import pty
 import select

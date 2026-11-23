@@ -2,7 +2,6 @@ use serde_json::Value;
 use std::{fs, path::Path, process::Command};
 
 const INSTALLED_SKILL: &str = ".agents/skills/workyard/SKILL.md";
-const BUNDLED_SKILL: &[u8] = include_bytes!("../../application/skills/workyard/SKILL.md");
 
 fn invoke(root: &Path, args: &[&str], exit: i32) -> Value {
 	let output = Command::new(env!("CARGO_BIN_EXE_workyard"))
@@ -19,7 +18,7 @@ fn init_installs_the_bundled_skill_and_preserves_local_edits() {
 	let fixture = tempfile::tempdir().unwrap();
 	let parent = fixture.path();
 	let workspace = parent.join("workspace");
-	let sibling = workspace.join(".agents/skills/sniff/SKILL.md");
+	let sibling = workspace.join(".agents/skills/swiss/SKILL.md");
 	fs::create_dir_all(sibling.parent().unwrap()).unwrap();
 	fs::write(&sibling, b"other product's skill").unwrap();
 
@@ -29,7 +28,8 @@ fn init_installs_the_bundled_skill_and_preserves_local_edits() {
 		0,
 	);
 	let installed = workspace.join(INSTALLED_SKILL);
-	assert_eq!(fs::read(&installed).unwrap(), BUNDLED_SKILL);
+	let original = fs::read_to_string(&installed).unwrap();
+	assert!(original.lines().any(|line| line == "name: workyard"));
 	assert!(!parent.join(".agents").exists());
 	assert!(!workspace.join(".agent").exists());
 
@@ -40,7 +40,7 @@ fn init_installs_the_bundled_skill_and_preserves_local_edits() {
 
 	fs::remove_file(&installed).unwrap();
 	invoke(&workspace, &["--json", "init"], 0);
-	assert_eq!(fs::read(&installed).unwrap(), BUNDLED_SKILL);
+	assert_eq!(fs::read_to_string(&installed).unwrap(), original);
 }
 
 #[test]
@@ -63,10 +63,7 @@ fn blocked_skill_install_preserves_the_workspace_and_can_be_retried() {
 
 	fs::remove_file(&blocker).unwrap();
 	invoke(workspace, &["--json", "init"], 0);
-	assert_eq!(
-		fs::read(workspace.join(INSTALLED_SKILL)).unwrap(),
-		BUNDLED_SKILL
-	);
+	assert!(workspace.join(INSTALLED_SKILL).is_file());
 }
 
 #[cfg(unix)]

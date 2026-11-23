@@ -1064,8 +1064,9 @@ dependencies = [
 
 [[package]]
 name = "trine"
-version = "0.0.1"
-source = "git+https://github.com/Swivelgames/trine.git?rev=92ca868ee7fd595bc30d439a7baccb5126fd56aa#92ca868ee7fd595bc30d439a7baccb5126fd56aa"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f589f5fe2340e89199d4fe555dbe3a312a09c069b9f289548ac22d47de0d40c7"
 dependencies = [
  "async-channel",
  "async-io",
@@ -1346,6 +1347,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "workyard"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "ctrlc",
+ "process-wrap",
+ "serde_json",
+ "smol",
+ "tempfile",
+ "trine",
+ "workyard-application",
+ "workyard-core",
+ "workyard-git",
+ "workyard-state",
+]
+
+[[package]]
 name = "workyard-application"
 version = "0.1.0"
 dependencies = [
@@ -1359,23 +1377,6 @@ dependencies = [
  "tempfile",
  "trine",
  "unicode-width",
- "workyard-core",
- "workyard-git",
- "workyard-state",
-]
-
-[[package]]
-name = "workyard-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
- "ctrlc",
- "process-wrap",
- "serde_json",
- "smol",
- "tempfile",
- "trine",
- "workyard-application",
  "workyard-core",
  "workyard-git",
  "workyard-state",
