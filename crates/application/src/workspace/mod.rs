@@ -8,7 +8,7 @@ pub(crate) fn required(workspace: Option<&Path>) -> Result<PathBuf, Problem> {
 	workyard_state::find_state(&cwd, workspace)?.ok_or_else(|| {
 		Problem::new(
 			ProblemCode::WorkspaceNotFound,
-			"No Workyard workspace found.",
+			format!("No {} workspace found.", crate::identity::Identity::name()),
 		)
 		.remedy(crate::guidance::workspace::init_guidance(workspace))
 	})

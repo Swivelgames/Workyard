@@ -16,17 +16,23 @@ pub(crate) fn run(mut arguments: Vec<OsString>, output: CliViewContext) -> Resul
 	let settings = presentation::load(&application, &arguments)
 		.map_err(|error| Failure::new(FailureKind::InvalidInput, error))?;
 	if arguments.len() == 1 {
-		let title = settings
-			.and_then(|identity| identity.display_name.clone())
-			.unwrap_or_else(|| format!("workyard {}", env!("CARGO_PKG_VERSION")));
-		write(&output, format!("{title}\n").as_bytes())?;
+		if settings
+			.and_then(|identity| identity.display_name.as_ref())
+			.is_none()
+		{
+			write(
+				&output,
+				concat!("workyard ", env!("CARGO_PKG_VERSION"), "\n").as_bytes(),
+			)?;
+		}
 		arguments.push("--help".into());
 	}
-	let heading = settings
-		.and_then(|identity| identity.display_name.as_deref())
-		.map(|name| format!("\n  {name}\n"))
-		.unwrap_or_else(|| heading(&output.stdout));
-	application.cli_heading(heading);
+	if settings
+		.and_then(|identity| identity.display_name.as_ref())
+		.is_none()
+	{
+		application.cli_heading(heading(&output.stdout));
+	}
 
 	let mut command = presentation::configure_help(command(&application));
 	if completion::requested() {

@@ -3,7 +3,11 @@ use crate::guidance::commands;
 use std::path::Path;
 
 pub(crate) fn missing_state(workspace: Option<&Path>) -> String {
-	format!("No Workyard workspace found. {}", init_guidance(workspace))
+	format!(
+		"No {} workspace found. {}",
+		crate::identity::Identity::name(),
+		init_guidance(workspace)
+	)
 }
 
 pub(crate) fn init_guidance(workspace: Option<&Path>) -> String {

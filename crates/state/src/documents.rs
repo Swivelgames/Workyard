@@ -49,7 +49,9 @@ pub(crate) fn read_versioned_json(
 			workyard_core::ProblemCode::IncompatibleState,
 			format!("Unsupported state version at {path:?}."),
 		)
-		.remedy("Use a compatible Workyard version; do not delete or reset the state."));
+		.remedy(
+			"Use a version that supports this workspace format; do not delete or reset the state.",
+		));
 	}
 
 	let version = value["version"].as_u64().expect("validated version");

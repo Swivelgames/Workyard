@@ -40,6 +40,11 @@ fn hidden_settings_survive_reinitialization_and_shape_cli_help() {
 	run(root, &["init"]);
 	assert_eq!(std::fs::read(&saved).unwrap(), original);
 
+	let init_help = run(root, &["init", "--help"]);
+	assert!(
+		init_help.contains("Initialize the Example workspace"),
+		"{init_help}"
+	);
 	let help = run(root, &["list", "--help"]);
 	assert!(help.contains("Usage: example task list"), "{help}");
 	assert!(!help.contains("--workspace"), "{help}");
@@ -48,7 +53,7 @@ fn hidden_settings_survive_reinitialization_and_shape_cli_help() {
 	assert!(!result.contains("example task"));
 
 	let listing = run(root, &["list", "--workspace", "."]);
-	assert!(listing.contains("  Example\n"), "{listing}");
+	assert!(!listing.contains("  Example\n"), "{listing}");
 	assert!(
 		listing.contains("example task create feat/example <project>"),
 		"{listing}"

@@ -141,9 +141,11 @@ impl Repository {
 			"No usable local repository-default branch metadata in {:?}.",
 			self.source
 		);
-		Err(Problem::new(workyard_core::ProblemCode::DefaultBranchUnknown, message)
-			.remedy("Supply --from or --repo-from explicitly; Workyard does not guess from the current checkout or main/master.")
-			.in_repository(&self.source))
+		Err(
+			Problem::new(workyard_core::ProblemCode::DefaultBranchUnknown, message)
+				.remedy("Supply --from or --repo-from explicitly.")
+				.in_repository(&self.source),
+		)
 	}
 
 	async fn has_ref(

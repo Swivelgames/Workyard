@@ -14,7 +14,7 @@ impl<G: RecoveryGit, S: RecoveryState, O: Observer> Recovery<'_, G, S, O> {
 				"Participant {name:?} has native Git locks or an unfinished Git operation."
 			);
 			return Err(Problem::new(ProblemCode::ResourceBusy, message)
-				.remedy("Inspect git status, finish or abort the Git operation manually, and wait for native writers to stop. Workyard never removes Git locks."));
+				.remedy("Inspect git status, finish or abort the Git operation manually, and wait for native writers to stop. Git locks must be released by their owner."));
 		}
 
 		let repository = observed.repository;

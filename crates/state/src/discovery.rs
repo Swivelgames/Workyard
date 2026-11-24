@@ -5,11 +5,8 @@ use workyard_core::{Problem, ProblemCode};
 /// Locate the workspace marker for the requested placement.
 pub fn discover_state(start: &Path, workspace: Option<&Path>) -> Result<PathBuf, Problem> {
 	find_state(start, workspace)?.ok_or_else(|| {
-		Problem::new(
-			ProblemCode::WorkspaceNotFound,
-			"No Workyard workspace found.",
-		)
-		.remedy("Run workyard init in the workspace directory to get started.")
+		Problem::new(ProblemCode::WorkspaceNotFound, "No workspace found.")
+			.remedy("Run workyard init in the workspace directory to get started.")
 	})
 }
 

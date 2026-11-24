@@ -56,7 +56,7 @@ fn render_coordination(terminal: &mut Terminal, task: &TaskReport) {
 			.map(|participant| participant.name.clone())
 			.unwrap_or_else(|| format!("index {index}"));
 		terminal.note(&format!(
-			"{name}: a step has an unconfirmed outcome. Check that Workyard and Git have stopped before attempting recovery."
+			"{name}: a step has an unconfirmed outcome. Check that {} and Git have stopped before attempting recovery.", crate::identity::Identity::name()
 		));
 	}
 }

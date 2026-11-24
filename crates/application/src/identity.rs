@@ -99,6 +99,13 @@ impl Identity {
 		Ok(CLI.get_or_init(|| settings))
 	}
 
+	/// Product name used in human-facing descriptions and diagnostics.
+	pub fn name() -> &'static str {
+		CLI.get()
+			.and_then(|identity| identity.display_name.as_deref())
+			.unwrap_or("Workyard")
+	}
+
 	/// Visible command prefix for this invocation.
 	pub fn prefix() -> &'static str {
 		CLI.get()
