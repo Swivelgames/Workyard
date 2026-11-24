@@ -9,6 +9,7 @@ mod application;
 mod contracts;
 mod execution;
 mod guidance;
+pub mod identity;
 pub mod observation;
 mod presentation;
 mod projects;

@@ -8,6 +8,10 @@ use trine::NativePath;
 pub struct InitInput {
 	/// Workspace directory (defaults to the current directory).
 	pub directory: Option<NativePath>,
+	/// Optional heading for an embedding application.
+	pub display_name: Option<String>,
+	/// Display-only command prefix for help and suggestions.
+	pub invocation_prefix: Option<String>,
 	/// Tasks directory relative to the workspace (defaults to tasks).
 	pub tasks: Option<NativePath>,
 	/// Tasks directory outside the workspace, expressed relative to it.

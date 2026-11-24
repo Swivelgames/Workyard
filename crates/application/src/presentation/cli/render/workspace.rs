@@ -25,7 +25,11 @@ pub(crate) fn guidance(
 
 	if let Some(guidance) = guidance {
 		for line in guidance.lines() {
-			terminal.hint_at(MessageScope::Workspace, line);
+			if line.is_empty() {
+				separate(terminal);
+			} else {
+				terminal.hint_at(MessageScope::Workspace, line);
+			}
 		}
 	}
 

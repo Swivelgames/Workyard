@@ -20,6 +20,14 @@ pub async fn init(
 			move || cancellation.is_cancelled()
 		});
 
+		let identity = crate::identity::Identity {
+			display_name: input.display_name,
+			invocation_prefix: input.invocation_prefix,
+		};
+		identity.validate().map_err(|error| {
+			workyard_core::Problem::new(ProblemCode::InvalidInput, error.to_string())
+		})?;
+
 		let directory = input
 			.directory
 			.as_ref()
@@ -55,6 +63,10 @@ pub async fn init(
 			&control,
 		)
 		.await?;
+
+		identity
+			.save(&workspace)
+			.map_err(|error| Problem::io("Save workspace presentation", error))?;
 
 		skill::install(&workspace).map_err(|error| {
 			Problem::io(

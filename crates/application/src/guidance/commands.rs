@@ -43,7 +43,11 @@ pub(crate) fn workspace_status(workspace: Option<&Path>) -> Option<String> {
 }
 
 pub(crate) fn workspace_command(action: &str, workspace: Option<&Path>) -> Option<String> {
-	let mut command = format!("workyard {action}");
+	let prefix = crate::identity::Identity::prefix();
+	let mut command = format!("{prefix} {action}");
+	if crate::identity::Identity::managed() {
+		return Some(command);
+	}
 	if let Some(workspace) = workspace {
 		command.push_str(&format!(" --workspace={}", path(workspace)?));
 	}

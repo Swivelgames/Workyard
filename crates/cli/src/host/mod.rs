@@ -8,13 +8,27 @@ use trine::{
 	error::{Failure, FailureKind},
 	mcp, rpc,
 };
+mod presentation;
 
-pub(crate) fn run(arguments: Vec<OsString>, output: CliViewContext) -> Result<u8, Failure> {
+pub(crate) fn run(mut arguments: Vec<OsString>, output: CliViewContext) -> Result<u8, Failure> {
 	let mut application = workyard_application::application()
 		.map_err(|error| Failure::message(FailureKind::ContractViolation, error.to_string()))?;
-	application.cli_heading(heading(&output.stdout));
+	let settings = presentation::load(&application, &arguments)
+		.map_err(|error| Failure::new(FailureKind::InvalidInput, error))?;
+	if arguments.len() == 1 {
+		let title = settings
+			.and_then(|identity| identity.display_name.clone())
+			.unwrap_or_else(|| format!("workyard {}", env!("CARGO_PKG_VERSION")));
+		write(&output, format!("{title}\n").as_bytes())?;
+		arguments.push("--help".into());
+	}
+	let heading = settings
+		.and_then(|identity| identity.display_name.as_deref())
+		.map(|name| format!("\n  {name}\n"))
+		.unwrap_or_else(|| heading(&output.stdout));
+	application.cli_heading(heading);
 
-	let mut command = command(&application);
+	let mut command = presentation::configure_help(command(&application));
 	if completion::requested() {
 		let bytes = std::env::current_dir()
 			.ok()

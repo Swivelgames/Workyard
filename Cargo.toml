@@ -3,18 +3,18 @@ members = ["crates/core", "crates/git", "crates/state", "crates/application", "c
 resolver = "3"
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Swivelgames/Workyard"
 publish = ["crates-io"]
 
 [workspace.dependencies]
-workyard-system = { version = "0.1.1", path = "crates/system" }
-workyard-core = { version = "0.1.1", path = "crates/core" }
-workyard-git = { version = "0.1.1", path = "crates/git" }
-workyard-state = { version = "0.1.1", path = "crates/state" }
-workyard-application = { version = "0.1.1", path = "crates/application" }
+workyard-system = { version = "0.1.2", path = "crates/system" }
+workyard-core = { version = "0.1.2", path = "crates/core" }
+workyard-git = { version = "0.1.2", path = "crates/git" }
+workyard-state = { version = "0.1.2", path = "crates/state" }
+workyard-application = { version = "0.1.2", path = "crates/application" }
 trine = "0.0.2"
 smol = "2.0.2"
 serde = { version = "1", features = ["derive"] }

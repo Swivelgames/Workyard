@@ -7,6 +7,12 @@ pub(crate) fn missing_state(workspace: Option<&Path>) -> String {
 }
 
 pub(crate) fn init_guidance(workspace: Option<&Path>) -> String {
+	if crate::identity::Identity::managed() {
+		return format!(
+			"Retry {} list to prepare the workspace.",
+			crate::identity::Identity::prefix()
+		);
+	}
 	let target = workspace.and_then(commands::path);
 	let command = match (workspace, target) {
 		(None, _) => "workyard init".to_owned(),
@@ -17,6 +23,12 @@ pub(crate) fn init_guidance(workspace: Option<&Path>) -> String {
 }
 
 pub(crate) fn empty_workspace(workspace: Option<&Path>) -> String {
+	if crate::identity::Identity::managed() {
+		let prefix = crate::identity::Identity::prefix();
+		return format!(
+			"No tasks found. To create one, run\n\n  {prefix} create feat/example <project>"
+		);
+	}
 	let Some(command) = commands::workspace_command("create", workspace) else {
 		return "No tasks found. Run workyard create from the selected workspace directory.".into();
 	};

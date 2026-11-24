@@ -42,8 +42,8 @@ impl Style {
 		let mut output = String::new();
 		let mut written = 0;
 
-		for (start, character) in line.char_indices() {
-			if start < written || !matches!(character, 'w' | 'g') {
+		for (start, _) in line.char_indices() {
+			if start < written {
 				continue;
 			}
 			if start > 0 && !line[..start].ends_with(before_command) {
@@ -67,7 +67,14 @@ impl Style {
 
 	fn command_prefix(self, line: &str) -> Option<(usize, String)> {
 		let (program, action) = command_head(line)?;
-		let mut styled = self.paint(program, Tone::Hint);
+		let mut styled = self.paint(
+			if program == "workyard" {
+				crate::identity::Identity::prefix()
+			} else {
+				program
+			},
+			Tone::Hint,
+		);
 		let mut length = program.len();
 		if let Some(action) = action {
 			styled.push(' ');
@@ -79,7 +86,13 @@ impl Style {
 }
 
 fn command_head(tail: &str) -> Option<(&str, Option<&str>)> {
-	let (program, actions) = if tail.starts_with("workyard ") {
+	let prefix = crate::identity::Identity::prefix();
+	let (program, actions) = if tail
+		.strip_prefix(prefix)
+		.is_some_and(|rest| rest.starts_with(' '))
+	{
+		(prefix, WORKYARD_ACTIONS)
+	} else if tail.starts_with("workyard ") {
 		("workyard", WORKYARD_ACTIONS)
 	} else if tail.starts_with("git ") {
 		("git", GIT_ACTIONS)

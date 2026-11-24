@@ -13,16 +13,8 @@ use trine::{
 };
 
 fn main() -> ExitCode {
-	let mut arguments: Vec<OsString> = std::env::args_os().collect();
+	let arguments: Vec<OsString> = std::env::args_os().collect();
 	let output = CliViewContext::default();
-	if arguments.len() == 1 {
-		let version = format!("workyard {}\n", env!("CARGO_PKG_VERSION"));
-		if output.stdout.write_all(version.as_bytes()).is_err() {
-			return ExitCode::FAILURE;
-		}
-		arguments.push("--help".into());
-	}
-
 	// Protocol clients own stdout even when startup fails before Clap finishes parsing.
 	let command = arguments.iter().skip(1).find(|arg| *arg != "--json");
 	let json = json_requested(&arguments) && command.is_none_or(|arg| arg != "mcp" && arg != "rpc");

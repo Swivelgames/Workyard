@@ -13,12 +13,17 @@ pub(super) fn starting_branch_example(input: &CreateInput) -> Option<String> {
 }
 
 fn command(input: &CreateInput, action: &str, from: Option<&str>) -> Option<String> {
-	let mut command = format!("workyard {action}");
-	for (flag, value) in [
-		("--workspace", native(input.workspace.as_ref())?),
-		("--remote", input.remote.as_deref()),
-		("--from", from),
-	] {
+	let prefix = crate::identity::Identity::prefix();
+	let mut command = format!("{prefix} {action}");
+	if !crate::identity::Identity::managed() {
+		option(
+			&mut command,
+			"--workspace",
+			native(input.workspace.as_ref())?,
+		)?;
+	}
+
+	for (flag, value) in [("--remote", input.remote.as_deref()), ("--from", from)] {
 		option(&mut command, flag, value)?;
 	}
 	if input.no_fetch {

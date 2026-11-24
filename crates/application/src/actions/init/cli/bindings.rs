@@ -2,6 +2,8 @@ use trine::cli::Bindings;
 
 pub(in super::super) fn bindings() -> Bindings {
 	Bindings::new()
+		.option("display_name", "display-name")
+		.option("invocation_prefix", "invocation-prefix")
 		.positional("directory")
 		.native_path("directory")
 		.option("tasks", "tasks")
