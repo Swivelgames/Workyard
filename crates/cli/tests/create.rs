@@ -486,3 +486,45 @@ fn real_git_success_survives_post_checkout_publication_failure() {
 	assert_eq!(evidence["task"]["participants"][0]["phase"], "completed");
 	assert!(evidence["pending"].is_null());
 }
+
+#[test]
+fn repository_default_controls_new_branches_and_explicit_sources_override_it() {
+	let fixture = tempfile::tempdir().unwrap();
+	let root = fixture.path();
+	init_workspace(root);
+	let api = repo(root, "api");
+	git(&api, &["switch", "-c", "release"]);
+	git(&api, &["commit", "--allow-empty", "-m", "release tip"]);
+	let release = git(&api, &["rev-parse", "HEAD"]);
+	git(&api, &["switch", "main"]);
+	git(
+		&api,
+		&["config", "--local", "workyard.defaultBranch", "release"],
+	);
+
+	assert_ok(&workyard(root, &["create", "first", "--repo", text(&api)]));
+	assert_eq!(git(&api, &["rev-parse", "first"]), release);
+
+	git(
+		&api,
+		&["config", "--local", "workyard.defaultBranch", "missing"],
+	);
+	let missing = workyard(root, &["create", "second", "--repo", text(&api)]);
+	assert!(!missing.status.success());
+	assert!(human_body(&missing).contains("Starting point \"missing\""));
+	assert_ok(&workyard(
+		root,
+		&["create", "second", "--repo", text(&api), "--from", "main"],
+	));
+	assert_eq!(
+		git(&api, &["rev-parse", "second"]),
+		git(&api, &["rev-parse", "main"])
+	);
+
+	git(&api, &["branch", "existing", "release"]);
+	assert_ok(&workyard(
+		root,
+		&["checkout", "existing", "--repo", text(&api)],
+	));
+	assert_eq!(git(&api, &["rev-parse", "existing"]), release);
+}

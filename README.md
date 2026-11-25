@@ -25,7 +25,7 @@ workyard projects track /repos/api /repos/web
 workyard create feat/payments api web
 ```
 
-Workyard uses each clone’s default branch as its starting point. For a local repository without default-branch metadata, supply a starting branch such as `--from main`.
+Workyard uses each clone’s default branch as its starting point. Set a repository-specific default with `git config --local workyard.defaultBranch release` in the clone. Workyard starts new branches from the local `release` tip. An explicit `--from` or `--repo-from` takes precedence. For a local repository without default-branch metadata, supply a starting branch such as `--from main`.
 
 Open `tasks/feat/payments/` in your editor. Its `api/` and `web/` directories are ordinary Git worktrees on `feat/payments`. Commit and test in each repository as usual. Use `workyard checkout` when you want to reuse existing branches.
 

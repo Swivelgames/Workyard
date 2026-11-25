@@ -92,32 +92,34 @@ impl Repository {
 		from: Option<&str>,
 		control: &Control,
 	) -> Result<(String, bool), Problem> {
-		let source = match from {
-			Some(source) => source.to_owned(),
-			None => self.default_branch(runner, control).await?,
+		let Some(source) = from else {
+			return Ok((self.default_branch(runner, control).await?, false));
 		};
 		// Resolve unqualified branch names as local refs before Git's generic
 		// revision parser. Explicit remote-qualified/commit inputs retain meaning.
 		let remotes = runner
 			.checked(&self.source, &args(&["remote"]), control)
 			.await?;
-		let explicit_remote = from.is_some()
-			&& utf8(&remotes)?
-				.lines()
-				.any(|remote| source.starts_with(&format!("{remote}/")));
+		let explicit_remote = utf8(&remotes)?
+			.lines()
+			.any(|remote| source.starts_with(&format!("{remote}/")));
 		let local_source = format!("refs/heads/{source}");
 		let source = if explicit_remote {
 			format!("refs/remotes/{source}")
 		} else if self.has_ref(runner, &local_source, control).await? {
 			local_source
 		} else {
-			source
+			source.to_owned()
 		};
 
 		Ok((source, explicit_remote))
 	}
 
 	async fn default_branch(&self, runner: &Runner, control: &Control) -> Result<String, Problem> {
+		if let Some(reference) = self.configured_default(runner, control).await? {
+			return Ok(reference);
+		}
+
 		if let Some(remote) = &self.remote {
 			let reference = format!("refs/remotes/{remote}/HEAD");
 			let output = runner
@@ -146,6 +148,41 @@ impl Repository {
 				.remedy("Supply --from or --repo-from explicitly.")
 				.in_repository(&self.source),
 		)
+	}
+
+	/// A configured default names a local branch, even if it resembles a remote ref.
+	async fn configured_default(
+		&self,
+		runner: &Runner,
+		control: &Control,
+	) -> Result<Option<String>, Problem> {
+		let query = ["config", "--local", "--get", "workyard.defaultBranch"];
+		let config = runner.git(&self.source, &query, control).await?;
+		match config.status.code() {
+			Some(1) => return Ok(None),
+			Some(0) => {}
+			_ => return Err(config.problem(&self.source, &args(&query))),
+		}
+
+		let branch = utf8(&config.stdout)?.trim_end_matches(['\r', '\n']);
+		let reference = format!("refs/heads/{branch}");
+		if self.has_ref(runner, &reference, control).await? {
+			return Ok(Some(reference));
+		}
+
+		let mut problem = Problem::new(
+			workyard_core::ProblemCode::SourceMissing,
+			format!(
+				"Configured default branch {branch:?} is missing in {:?}.",
+				self.source
+			),
+		)
+		.remedy("Choose an existing branch with --from or --repo-from.")
+		.in_repository(&self.source);
+		problem.detail = Some(Box::new(workyard_core::ProblemDetail::StartingPoint(
+			branch.into(),
+		)));
+		Err(problem)
 	}
 
 	async fn has_ref(
