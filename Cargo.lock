@@ -1348,7 +1348,7 @@ dependencies = [
 
 [[package]]
 name = "workyard"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "clap",
  "clap_lex",
@@ -1366,7 +1366,7 @@ dependencies = [
 
 [[package]]
 name = "workyard-application"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "atomicwrites",
  "libc",
@@ -1385,14 +1385,14 @@ dependencies = [
 
 [[package]]
 name = "workyard-core"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "smol",
 ]
 
 [[package]]
 name = "workyard-git"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "cap-primitives",
  "dunce",
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "workyard-state"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "atomicwrites",
  "serde",
@@ -1422,7 +1422,7 @@ dependencies = [
 
 [[package]]
 name = "workyard-system"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "smol",
  "tempfile",
